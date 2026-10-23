@@ -71,13 +71,33 @@ header {
     align-items: center;
     margin-bottom: 14px;
     border-bottom: 1px solid #f3f4f6;
-    padding-bottom: 8px;
+    padding-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
 }
-.topic-title {
+.selector-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.selector-label {
     font-size: 0.85rem;
     font-weight: 700;
     text-transform: uppercase;
     color: #4b5563;
+}
+select {
+    font-size: 0.9rem;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background-color: #fff;
+    color: #1f2937;
+    font-weight: 500;
+    outline: none;
+}
+select:focus {
+    border-color: #2563eb;
 }
 .session-stats {
     font-size: 0.8rem;
@@ -99,7 +119,7 @@ input[type="number"] {
     padding: 8px 12px;
     border: 1px solid #d1d5db;
     border-radius: 6px;
-    width: 140px;
+    width: 150px;
 }
 button {
     background-color: #2563eb;

@@ -28,14 +28,23 @@
         <main>
             <div class="card">
                 <div class="topic-header">
-                    <span class="topic-title">Unit 3: Normal Probability Calculations</span>
+                    <div class="selector-group">
+                        <label for="topic-select" class="selector-label">Skill:</label>
+                        <select id="topic-select" onchange="onTopicChange()">
+                            <option value="random">Mixed Practice (All Normal Skills)</option>
+                            <option value="between">Area Between: P(x₁ &lt; X &lt; x₂)</option>
+                            <option value="left_tail">Left-Tail: P(X &lt; x)</option>
+                            <option value="right_tail">Right-Tail: P(X &gt; x)</option>
+                            <option value="inverse">Inverse Normal: Find Cutoff Value (x)</option>
+                        </select>
+                    </div>
                     <span id="session-stats" class="session-stats">Attempts: 0 | Accuracy: 0%</span>
                 </div>
 
                 <div id="problem-prompt" class="prompt">Loading problem...</div>
 
                 <div class="input-row">
-                    <label for="answer-input"><strong>Answer:</strong></label>
+                    <label for="answer-input"><strong id="input-label">Answer:</strong></label>
                     <input type="number" step="any" id="answer-input" placeholder="e.g. 0.4532" autocomplete="off">
                     <button id="submit-btn" onclick="submitAnswer()">Submit Answer</button>
                     <button id="next-btn" onclick="loadProblem()" style="display: none;">Next Problem &rarr;</button>
@@ -57,16 +66,16 @@
     </div>
 
     <script>
-        const STORAGE_KEY = 'komore_normal_unit3_state';
+        const STORAGE_KEY = 'komore_unit3_state_v2';
         let currentProblem = null;
 
-        // Local state schema
         let state = {
             streak: 0,
             targetMastery: 5,
             totalAttempted: 0,
             totalCorrect: 0,
-            mastered: false
+            mastered: false,
+            selectedTopic: 'random'
         };
 
         function loadSavedState() {
@@ -78,6 +87,7 @@
             } catch (e) {
                 console.warn('localStorage not accessible, using in-memory state');
             }
+            document.getElementById('topic-select').value = state.selectedTopic || 'random';
             updateStatsUI();
         }
 
@@ -98,6 +108,12 @@
                 state.mastered = false;
                 saveState();
             }
+        }
+
+        function onTopicChange() {
+            state.selectedTopic = document.getElementById('topic-select').value;
+            saveState();
+            loadProblem();
         }
 
         function updateStatsUI() {
@@ -141,31 +157,49 @@
             const width = 600;
             const baselineY = 175;
             const peakHeight = 140;
-
             const zMin = -3.5;
             const zMax = 3.5;
 
             function zToX(z) {
                 return ((z - zMin) / (zMax - zMin)) * (width - 80) + 40;
             }
-
             function gaussian(z) {
                 return Math.exp(-0.5 * z * z);
             }
-
             function zToY(z) {
                 return baselineY - gaussian(z) * peakHeight;
             }
 
-            const z1 = Math.max(zMin, Math.min(plotData.z1, zMax));
-            const z2 = Math.max(zMin, Math.min(plotData.z2, zMax));
-            
-            let shadeD = `M ${zToX(z1)} ${baselineY}`;
+            // Determine shading intervals based on problem type
+            let startZ = zMin;
+            let endZ = zMax;
+
+            if (plotData.type === 'between') {
+                startZ = Math.max(zMin, Math.min(plotData.z1, zMax));
+                endZ = Math.max(zMin, Math.min(plotData.z2, zMax));
+            } else if (plotData.type === 'left_tail') {
+                startZ = zMin;
+                endZ = Math.max(zMin, Math.min(plotData.z, zMax));
+            } else if (plotData.type === 'right_tail') {
+                startZ = Math.max(zMin, Math.min(plotData.z, zMax));
+                endZ = zMax;
+            } else if (plotData.type === 'inverse') {
+                if (plotData.is_top) {
+                    startZ = Math.max(zMin, Math.min(plotData.z, zMax));
+                    endZ = zMax;
+                } else {
+                    startZ = zMin;
+                    endZ = Math.max(zMin, Math.min(plotData.z, zMax));
+                }
+            }
+
+            // Draw Shaded Path
+            let shadeD = `M ${zToX(startZ)} ${baselineY}`;
             const step = 0.05;
-            for (let z = z1; z <= z2; z += step) {
+            for (let z = startZ; z <= endZ; z += step) {
                 shadeD += ` L ${zToX(z)} ${zToY(z)}`;
             }
-            shadeD += ` L ${zToX(z2)} ${zToY(z2)} L ${zToX(z2)} ${baselineY} Z`;
+            shadeD += ` L ${zToX(endZ)} ${zToY(endZ)} L ${zToX(endZ)} ${baselineY} Z`;
 
             const shadePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
             shadePath.setAttribute("d", shadeD);
@@ -173,6 +207,7 @@
             shadePath.setAttribute("opacity", "0.65");
             svg.appendChild(shadePath);
 
+            // Draw Bell Curve Outline
             let curveD = `M ${zToX(zMin)} ${baselineY}`;
             for (let z = zMin; z <= zMax; z += step) {
                 curveD += ` L ${zToX(z)} ${zToY(z)}`;
@@ -186,6 +221,7 @@
             curvePath.setAttribute("stroke-width", "2.5");
             svg.appendChild(curvePath);
 
+            // Baseline
             const axisLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
             axisLine.setAttribute("x1", "20");
             axisLine.setAttribute("y1", baselineY);
@@ -195,6 +231,7 @@
             axisLine.setAttribute("stroke-width", "1.5");
             svg.appendChild(axisLine);
 
+            // Mean vertical dashed line
             const meanLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
             meanLine.setAttribute("x1", zToX(0));
             meanLine.setAttribute("y1", baselineY);
@@ -239,9 +276,16 @@
                 }
             }
 
-            addTick(0, `Mean = ${plotData.mu}`, "z = 0");
-            addTick(plotData.z1, `x1 = ${plotData.x1}`, `z = ${plotData.z1}`, true);
-            addTick(plotData.z2, `x2 = ${plotData.x2}`, `z = ${plotData.z2}`, true);
+            addTick(0, `μ = ${plotData.mu}`, "z = 0");
+
+            if (plotData.type === 'between') {
+                addTick(plotData.z1, `x₁ = ${plotData.x1}`, `z = ${plotData.z1}`, true);
+                addTick(plotData.z2, `x₂ = ${plotData.x2}`, `z = ${plotData.z2}`, true);
+            } else if (plotData.type === 'left_tail' || plotData.type === 'right_tail') {
+                addTick(plotData.z, `x = ${plotData.x}`, `z = ${plotData.z}`, true);
+            } else if (plotData.type === 'inverse') {
+                addTick(plotData.z, `Cutoff x = ${plotData.x}`, `z = ${plotData.z}`, true);
+            }
         }
 
         async function loadProblem() {
@@ -255,8 +299,12 @@
             input.value = '';
 
             try {
-                const res = await fetch('/api/problem/normal');
+                const topic = state.selectedTopic || 'random';
+                const res = await fetch(`/api/problem/normal?topic=${encodeURIComponent(topic)}`);
                 currentProblem = await res.json();
+
+                document.getElementById('input-label').innerText = currentProblem.input_label || "Answer:";
+                input.placeholder = currentProblem.placeholder || "e.g. 0.4532";
 
                 const promptEl = document.getElementById('problem-prompt');
                 promptEl.innerHTML = currentProblem.prompt;
