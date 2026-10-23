@@ -49,7 +49,15 @@ def generate_normal_problem():
         "prompt": f"A continuous random variable \\(X\\) is normally distributed with mean \\(\\mu = {mu}\\) and standard deviation \\(\\sigma = {sigma}\\). Find \\(P({x1} < X < {x2})\\). Round your answer to four decimal places.",
         "expected_answers": [prob_table, prob_exact],
         "tolerance": 0.005,
-        "solution": solution_latex
+        "solution": solution_latex,
+        "plot_data": {
+            "mu": mu,
+            "sigma": sigma,
+            "z1": calc_z1,
+            "z2": calc_z2,
+            "x1": x1,
+            "x2": x2
+        }
     }
 
 def verify_normal_answer(user_val: float, expected_answers: list[float], tolerance: float) -> bool:

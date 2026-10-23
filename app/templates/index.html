@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -36,6 +36,12 @@
 
             <div id="solution-card" class="card solution" style="display: none;">
                 <h3>Step-by-Step Worked Solution</h3>
+                
+                <!-- Dynamic SVG Shaded Curve -->
+                <div class="graph-container">
+                    <svg id="normal-curve-svg" viewBox="0 0 600 220" preserveAspectRatio="xMidYMid meet"></svg>
+                </div>
+
                 <div id="solution-content"></div>
             </div>
         </main>
@@ -55,6 +61,121 @@
                     throwOnError: false
                 });
             }
+        }
+
+        function drawNormalDistribution(plotData) {
+            const svg = document.getElementById('normal-curve-svg');
+            svg.innerHTML = '';
+
+            const width = 600;
+            const baselineY = 175;
+            const peakHeight = 140;
+
+            const zMin = -3.5;
+            const zMax = 3.5;
+
+            function zToX(z) {
+                return ((z - zMin) / (zMax - zMin)) * (width - 80) + 40;
+            }
+
+            function gaussian(z) {
+                return Math.exp(-0.5 * z * z);
+            }
+
+            function zToY(z) {
+                return baselineY - gaussian(z) * peakHeight;
+            }
+
+            // 1. Shaded area path between z1 and z2
+            const z1 = Math.max(zMin, Math.min(plotData.z1, zMax));
+            const z2 = Math.max(zMin, Math.min(plotData.z2, zMax));
+            
+            let shadeD = `M ${zToX(z1)} ${baselineY}`;
+            const step = 0.05;
+            for (let z = z1; z <= z2; z += step) {
+                shadeD += ` L ${zToX(z)} ${zToY(z)}`;
+            }
+            shadeD += ` L ${zToX(z2)} ${zToY(z2)} L ${zToX(z2)} ${baselineY} Z`;
+
+            const shadePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            shadePath.setAttribute("d", shadeD);
+            shadePath.setAttribute("fill", "#93c5fd");
+            shadePath.setAttribute("opacity", "0.65");
+            svg.appendChild(shadePath);
+
+            // 2. Bell curve outline
+            let curveD = `M ${zToX(zMin)} ${baselineY}`;
+            for (let z = zMin; z <= zMax; z += step) {
+                curveD += ` L ${zToX(z)} ${zToY(z)}`;
+            }
+            curveD += ` L ${zToX(zMax)} ${baselineY}`;
+
+            const curvePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            curvePath.setAttribute("d", curveD);
+            curvePath.setAttribute("fill", "none");
+            curvePath.setAttribute("stroke", "#1e40af");
+            curvePath.setAttribute("stroke-width", "2.5");
+            svg.appendChild(curvePath);
+
+            // 3. Baseline horizontal axis
+            const axisLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            axisLine.setAttribute("x1", "20");
+            axisLine.setAttribute("y1", baselineY);
+            axisLine.setAttribute("x2", width - 20);
+            axisLine.setAttribute("y2", baselineY);
+            axisLine.setAttribute("stroke", "#4b5563");
+            axisLine.setAttribute("stroke-width", "1.5");
+            svg.appendChild(axisLine);
+
+            // 4. Mean vertical marker
+            const meanLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            meanLine.setAttribute("x1", zToX(0));
+            meanLine.setAttribute("y1", baselineY);
+            meanLine.setAttribute("x2", zToX(0));
+            meanLine.setAttribute("y2", zToY(0));
+            meanLine.setAttribute("stroke", "#9ca3af");
+            meanLine.setAttribute("stroke-dasharray", "4 4");
+            svg.appendChild(meanLine);
+
+            // 5. Boundary ticks & labels
+            function addTick(z, label, subLabel, isBold = false) {
+                const x = zToX(z);
+                const tick = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                tick.setAttribute("x1", x);
+                tick.setAttribute("y1", baselineY);
+                tick.setAttribute("x2", x);
+                tick.setAttribute("y2", baselineY + 6);
+                tick.setAttribute("stroke", isBold ? "#1e40af" : "#6b7280");
+                tick.setAttribute("stroke-width", isBold ? "2" : "1");
+                svg.appendChild(tick);
+
+                const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                txt.setAttribute("x", x);
+                txt.setAttribute("y", baselineY + 19);
+                txt.setAttribute("text-anchor", "middle");
+                txt.setAttribute("font-size", "12");
+                txt.setAttribute("font-family", "inherit");
+                txt.setAttribute("fill", isBold ? "#1e40af" : "#374151");
+                if (isBold) txt.setAttribute("font-weight", "bold");
+                txt.textContent = label;
+                svg.appendChild(txt);
+
+                if (subLabel) {
+                    const subTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                    subTxt.setAttribute("x", x);
+                    subTxt.setAttribute("y", baselineY + 33);
+                    subTxt.setAttribute("text-anchor", "middle");
+                    subTxt.setAttribute("font-size", "11");
+                    subTxt.setAttribute("font-family", "inherit");
+                    subTxt.setAttribute("fill", "#6b7280");
+                    subTxt.textContent = subLabel;
+                    svg.appendChild(subTxt);
+                }
+            }
+
+            addTick(0, `Mean = ${plotData.mu}`, "z = 0");
+            addTick(plotData.z1, `x1 = ${plotData.x1}`, `z = ${plotData.z1}`, true);
+            addTick(plotData.z2, `x2 = ${plotData.x2}`, `z = ${plotData.z2}`, true);
         }
 
         async function loadProblem() {
@@ -110,6 +231,8 @@
                 
                 const solCard = document.getElementById('solution-card');
                 const solContent = document.getElementById('solution-content');
+                
+                drawNormalDistribution(currentProblem.plot_data);
                 solContent.innerHTML = currentProblem.solution;
                 triggerKaTeX(solContent);
                 solCard.style.display = 'block';
