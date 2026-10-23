@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stats Mastery Engine</title>
+    <!-- KaTeX CDN -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Stats Mastery Engine</h1>
+            <div class="mastery-badge">
+                Mastery: <span id="streak-count">0</span> / 5
+            </div>
+        </header>
+
+        <main>
+            <div class="card">
+                <div class="topic-title">Unit 3: Normal Probability Calculations</div>
+                <div id="problem-prompt" class="prompt">Loading problem...</div>
+
+                <div class="input-row">
+                    <label for="answer-input"><strong>Answer:</strong></label>
+                    <input type="number" step="any" id="answer-input" placeholder="e.g. 0.4532" autocomplete="off">
+                    <button id="submit-btn" onclick="submitAnswer()">Submit Answer</button>
+                    <button id="next-btn" onclick="loadProblem()" style="display: none;">Next Problem &rarr;</button>
+                </div>
+
+                <div id="feedback-banner" style="display: none;"></div>
+            </div>
+
+            <div id="solution-card" class="card solution" style="display: none;">
+                <h3>Step-by-Step Worked Solution</h3>
+                <div id="solution-content"></div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let currentProblem = null;
+        let streak = 0;
+
+        function triggerKaTeX(element) {
+            if (window.renderMathInElement) {
+                renderMathInElement(element, {
+                    delimiters: [
+                        { left: '$$', right: '$$', display: true },
+                        { left: '\\(', right: '\\)', display: false }
+                    ],
+                    throwOnError: false
+                });
+            }
+        }
+
+        async function loadProblem() {
+            document.getElementById('feedback-banner').style.display = 'none';
+            document.getElementById('solution-card').style.display = 'none';
+            document.getElementById('next-btn').style.display = 'none';
+            document.getElementById('submit-btn').style.display = 'inline-block';
+            
+            const input = document.getElementById('answer-input');
+            input.disabled = false;
+            input.value = '';
+
+            try {
+                const res = await fetch('/api/problem/normal');
+                currentProblem = await res.json();
+
+                const promptEl = document.getElementById('problem-prompt');
+                promptEl.innerHTML = currentProblem.prompt;
+                triggerKaTeX(promptEl);
+                input.focus();
+            } catch (err) {
+                document.getElementById('problem-prompt').innerText = 'Failed to load problem. Check server connection.';
+            }
+        }
+
+        async function submitAnswer() {
+            const rawVal = document.getElementById('answer-input').value.trim();
+            if (!rawVal) return;
+
+            const userVal = parseFloat(rawVal);
+            const res = await fetch('/api/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_answer: userVal,
+                    expected_answers: currentProblem.expected_answers,
+                    tolerance: currentProblem.tolerance
+                })
+            });
+
+            const data = await res.json();
+            const feedback = document.getElementById('feedback-banner');
+            feedback.style.display = 'block';
+
+            if (data.correct) {
+                streak += 1;
+                feedback.className = 'banner correct';
+                feedback.innerHTML = '&#10004; Correct! Great job.';
+            } else {
+                streak = 0;
+                feedback.className = 'banner incorrect';
+                feedback.innerHTML = '&#10008; Incorrect. Review the worked solution below:';
+                
+                const solCard = document.getElementById('solution-card');
+                const solContent = document.getElementById('solution-content');
+                solContent.innerHTML = currentProblem.solution;
+                triggerKaTeX(solContent);
+                solCard.style.display = 'block';
+            }
+
+            document.getElementById('streak-count').innerText = streak;
+            document.getElementById('submit-btn').style.display = 'none';
+            document.getElementById('answer-input').disabled = true;
+            document.getElementById('next-btn').style.display = 'inline-block';
+            document.getElementById('next-btn').focus();
+        }
+
+        document.getElementById('answer-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') submitAnswer();
+        });
+
+        window.addEventListener('load', loadProblem);
+    </script>
+</body>
+</html>
