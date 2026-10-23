@@ -21,7 +21,7 @@
                 <div id="mastery-pill" class="mastery-badge">
                     Streak: <span id="streak-count">0</span> / 5
                 </div>
-                <button id="reset-progress-btn" class="text-btn" onclick="resetProgress()" title="Reset session stats">Reset</button>
+                <button id="reset-progress-btn" class="text-btn" onclick="resetCurrentSkill()" title="Reset current skill streak">Reset Skill</button>
             </div>
         </header>
 
@@ -66,28 +66,53 @@
     </div>
 
     <script>
-        const STORAGE_KEY = 'komore_unit3_state_v2';
+        const STORAGE_KEY = 'komore_unit3_state_v3';
+        const TARGET_MASTERY = 5;
         let currentProblem = null;
 
+        // Structured state: independent streaks per skill
         let state = {
-            streak: 0,
-            targetMastery: 5,
+            selectedTopic: 'random',
             totalAttempted: 0,
             totalCorrect: 0,
-            mastered: false,
-            selectedTopic: 'random'
+            skills: {
+                random:     { streak: 0, mastered: false },
+                between:    { streak: 0, mastered: false },
+                left_tail:  { streak: 0, mastered: false },
+                right_tail: { streak: 0, mastered: false },
+                inverse:    { streak: 0, mastered: false }
+            }
         };
+
+        function getActiveSkillState() {
+            const topic = state.selectedTopic || 'random';
+            if (!state.skills[topic]) {
+                state.skills[topic] = { streak: 0, mastered: false };
+            }
+            return state.skills[topic];
+        }
 
         function loadSavedState() {
             try {
                 const saved = localStorage.getItem(STORAGE_KEY);
                 if (saved) {
-                    state = Object.assign(state, JSON.parse(saved));
+                    const parsed = JSON.parse(saved);
+                    // Deep merge to safeguard missing skill keys
+                    state.selectedTopic = parsed.selectedTopic || 'random';
+                    state.totalAttempted = parsed.totalAttempted || 0;
+                    state.totalCorrect = parsed.totalCorrect || 0;
+                    if (parsed.skills) {
+                        for (let k in parsed.skills) {
+                            if (state.skills[k]) {
+                                state.skills[k] = parsed.skills[k];
+                            }
+                        }
+                    }
                 }
             } catch (e) {
                 console.warn('localStorage not accessible, using in-memory state');
             }
-            document.getElementById('topic-select').value = state.selectedTopic || 'random';
+            document.getElementById('topic-select').value = state.selectedTopic;
             updateStatsUI();
         }
 
@@ -100,12 +125,10 @@
             updateStatsUI();
         }
 
-        function resetProgress() {
-            if (confirm("Reset your streak and session stats for this module?")) {
-                state.streak = 0;
-                state.totalAttempted = 0;
-                state.totalCorrect = 0;
-                state.mastered = false;
+        function resetCurrentSkill() {
+            const topic = state.selectedTopic || 'random';
+            if (confirm(`Reset your streak for this specific skill?`)) {
+                state.skills[topic] = { streak: 0, mastered: false };
                 saveState();
             }
         }
@@ -117,19 +140,17 @@
         }
 
         function updateStatsUI() {
-            const streakCountEl = document.getElementById('streak-count');
             const pillEl = document.getElementById('mastery-pill');
             const statsEl = document.getElementById('session-stats');
+            const skillState = getActiveSkillState();
 
-            streakCountEl.innerText = state.streak;
-
-            if (state.streak >= state.targetMastery || state.mastered) {
-                state.mastered = true;
+            if (skillState.mastered || skillState.streak >= TARGET_MASTERY) {
+                skillState.mastered = true;
                 pillEl.className = 'mastery-badge mastered';
-                pillEl.innerHTML = '&#10004; Mastered (' + state.streak + '/' + state.targetMastery + ')';
+                pillEl.innerHTML = `&#10004; Mastered (${skillState.streak}/${TARGET_MASTERY})`;
             } else {
                 pillEl.className = 'mastery-badge';
-                pillEl.innerHTML = 'Streak: <span id="streak-count">' + state.streak + '</span> / ' + state.targetMastery;
+                pillEl.innerHTML = `Streak: <span>${skillState.streak}</span> / ${TARGET_MASTERY}`;
             }
 
             const acc = state.totalAttempted > 0 
@@ -170,7 +191,6 @@
                 return baselineY - gaussian(z) * peakHeight;
             }
 
-            // Determine shading intervals based on problem type
             let startZ = zMin;
             let endZ = zMax;
 
@@ -193,7 +213,6 @@
                 }
             }
 
-            // Draw Shaded Path
             let shadeD = `M ${zToX(startZ)} ${baselineY}`;
             const step = 0.05;
             for (let z = startZ; z <= endZ; z += step) {
@@ -207,7 +226,6 @@
             shadePath.setAttribute("opacity", "0.65");
             svg.appendChild(shadePath);
 
-            // Draw Bell Curve Outline
             let curveD = `M ${zToX(zMin)} ${baselineY}`;
             for (let z = zMin; z <= zMax; z += step) {
                 curveD += ` L ${zToX(z)} ${zToY(z)}`;
@@ -221,7 +239,6 @@
             curvePath.setAttribute("stroke-width", "2.5");
             svg.appendChild(curvePath);
 
-            // Baseline
             const axisLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
             axisLine.setAttribute("x1", "20");
             axisLine.setAttribute("y1", baselineY);
@@ -231,7 +248,6 @@
             axisLine.setAttribute("stroke-width", "1.5");
             svg.appendChild(axisLine);
 
-            // Mean vertical dashed line
             const meanLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
             meanLine.setAttribute("x1", zToX(0));
             meanLine.setAttribute("y1", baselineY);
@@ -335,14 +351,15 @@
             feedback.style.display = 'block';
 
             state.totalAttempted += 1;
+            const skillState = getActiveSkillState();
 
             if (data.correct) {
-                state.streak += 1;
+                skillState.streak += 1;
                 state.totalCorrect += 1;
                 feedback.className = 'banner correct';
                 feedback.innerHTML = '&#10004; Correct! Great job.';
             } else {
-                state.streak = 0;
+                skillState.streak = 0;
                 feedback.className = 'banner incorrect';
                 feedback.innerHTML = '&#10008; Incorrect. Review the worked solution below:';
                 
