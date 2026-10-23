@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stats Mastery Engine</title>
+    <title>Komore - Stats Practice</title>
     <!-- KaTeX CDN -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
@@ -13,15 +13,25 @@
 <body>
     <div class="container">
         <header>
-            <h1>Stats Mastery Engine</h1>
-            <div class="mastery-badge">
-                Mastery: <span id="streak-count">0</span> / 5
+            <div class="brand">
+                <h1>Komore</h1>
+                <span class="tagline">Clear, procedural statistics practice</span>
+            </div>
+            <div class="header-controls">
+                <div id="mastery-pill" class="mastery-badge">
+                    Streak: <span id="streak-count">0</span> / 5
+                </div>
+                <button id="reset-progress-btn" class="text-btn" onclick="resetProgress()" title="Reset session stats">Reset</button>
             </div>
         </header>
 
         <main>
             <div class="card">
-                <div class="topic-title">Unit 3: Normal Probability Calculations</div>
+                <div class="topic-header">
+                    <span class="topic-title">Unit 3: Normal Probability Calculations</span>
+                    <span id="session-stats" class="session-stats">Attempts: 0 | Accuracy: 0%</span>
+                </div>
+
                 <div id="problem-prompt" class="prompt">Loading problem...</div>
 
                 <div class="input-row">
@@ -37,7 +47,6 @@
             <div id="solution-card" class="card solution" style="display: none;">
                 <h3>Step-by-Step Worked Solution</h3>
                 
-                <!-- Dynamic SVG Shaded Curve -->
                 <div class="graph-container">
                     <svg id="normal-curve-svg" viewBox="0 0 600 220" preserveAspectRatio="xMidYMid meet"></svg>
                 </div>
@@ -48,8 +57,70 @@
     </div>
 
     <script>
+        const STORAGE_KEY = 'komore_normal_unit3_state';
         let currentProblem = null;
-        let streak = 0;
+
+        // Local state schema
+        let state = {
+            streak: 0,
+            targetMastery: 5,
+            totalAttempted: 0,
+            totalCorrect: 0,
+            mastered: false
+        };
+
+        function loadSavedState() {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    state = Object.assign(state, JSON.parse(saved));
+                }
+            } catch (e) {
+                console.warn('localStorage not accessible, using in-memory state');
+            }
+            updateStatsUI();
+        }
+
+        function saveState() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            } catch (e) {
+                console.warn('Failed to save to localStorage');
+            }
+            updateStatsUI();
+        }
+
+        function resetProgress() {
+            if (confirm("Reset your streak and session stats for this module?")) {
+                state.streak = 0;
+                state.totalAttempted = 0;
+                state.totalCorrect = 0;
+                state.mastered = false;
+                saveState();
+            }
+        }
+
+        function updateStatsUI() {
+            const streakCountEl = document.getElementById('streak-count');
+            const pillEl = document.getElementById('mastery-pill');
+            const statsEl = document.getElementById('session-stats');
+
+            streakCountEl.innerText = state.streak;
+
+            if (state.streak >= state.targetMastery || state.mastered) {
+                state.mastered = true;
+                pillEl.className = 'mastery-badge mastered';
+                pillEl.innerHTML = '&#10004; Mastered (' + state.streak + '/' + state.targetMastery + ')';
+            } else {
+                pillEl.className = 'mastery-badge';
+                pillEl.innerHTML = 'Streak: <span id="streak-count">' + state.streak + '</span> / ' + state.targetMastery;
+            }
+
+            const acc = state.totalAttempted > 0 
+                ? Math.round((state.totalCorrect / state.totalAttempted) * 100) 
+                : 0;
+            statsEl.innerText = `Attempts: ${state.totalAttempted} | Accuracy: ${acc}%`;
+        }
 
         function triggerKaTeX(element) {
             if (window.renderMathInElement) {
@@ -86,7 +157,6 @@
                 return baselineY - gaussian(z) * peakHeight;
             }
 
-            // 1. Shaded area path between z1 and z2
             const z1 = Math.max(zMin, Math.min(plotData.z1, zMax));
             const z2 = Math.max(zMin, Math.min(plotData.z2, zMax));
             
@@ -103,7 +173,6 @@
             shadePath.setAttribute("opacity", "0.65");
             svg.appendChild(shadePath);
 
-            // 2. Bell curve outline
             let curveD = `M ${zToX(zMin)} ${baselineY}`;
             for (let z = zMin; z <= zMax; z += step) {
                 curveD += ` L ${zToX(z)} ${zToY(z)}`;
@@ -117,7 +186,6 @@
             curvePath.setAttribute("stroke-width", "2.5");
             svg.appendChild(curvePath);
 
-            // 3. Baseline horizontal axis
             const axisLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
             axisLine.setAttribute("x1", "20");
             axisLine.setAttribute("y1", baselineY);
@@ -127,7 +195,6 @@
             axisLine.setAttribute("stroke-width", "1.5");
             svg.appendChild(axisLine);
 
-            // 4. Mean vertical marker
             const meanLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
             meanLine.setAttribute("x1", zToX(0));
             meanLine.setAttribute("y1", baselineY);
@@ -137,7 +204,6 @@
             meanLine.setAttribute("stroke-dasharray", "4 4");
             svg.appendChild(meanLine);
 
-            // 5. Boundary ticks & labels
             function addTick(z, label, subLabel, isBold = false) {
                 const x = zToX(z);
                 const tick = document.createElementNS("http://www.w3.org/2000/svg", "line");
@@ -220,12 +286,15 @@
             const feedback = document.getElementById('feedback-banner');
             feedback.style.display = 'block';
 
+            state.totalAttempted += 1;
+
             if (data.correct) {
-                streak += 1;
+                state.streak += 1;
+                state.totalCorrect += 1;
                 feedback.className = 'banner correct';
                 feedback.innerHTML = '&#10004; Correct! Great job.';
             } else {
-                streak = 0;
+                state.streak = 0;
                 feedback.className = 'banner incorrect';
                 feedback.innerHTML = '&#10008; Incorrect. Review the worked solution below:';
                 
@@ -238,7 +307,8 @@
                 solCard.style.display = 'block';
             }
 
-            document.getElementById('streak-count').innerText = streak;
+            saveState();
+
             document.getElementById('submit-btn').style.display = 'none';
             document.getElementById('answer-input').disabled = true;
             document.getElementById('next-btn').style.display = 'inline-block';
@@ -249,7 +319,10 @@
             if (e.key === 'Enter') submitAnswer();
         });
 
-        window.addEventListener('load', loadProblem);
+        window.addEventListener('load', () => {
+            loadSavedState();
+            loadProblem();
+        });
     </script>
 </body>
 </html>
