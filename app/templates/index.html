@@ -8,186 +8,148 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
-    <link rel="stylesheet" href="/static/style.css">
+    
+    <link rel="stylesheet" href="/static/style.css?v=4">
     <style>
-        .stage-box {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            padding: 12px 16px;
-            margin-bottom: 12px;
-            transition: all 0.2s ease;
-        }
-        .stage-box.active {
-            border-color: #3b82f6;
-            background: #eff6ff;
-        }
-        .stage-box.completed {
-            border-color: #10b981;
-            background: #f0fdf4;
-        }
-        .stage-box.revealed {
-            border-color: #f59e0b;
-            background: #fffbeb;
-        }
-        .stage-header {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: #334155;
-            margin-bottom: 6px;
-        }
-        .stage-hint {
-            font-size: 0.8rem;
-            color: #64748b;
-            margin-top: 4px;
-        }
-        .revealed-msg {
-            color: #b45309;
-            font-size: 0.85rem;
-            font-weight: 600;
-            margin-top: 6px;
-        }
-        
-        /* Modal & Tab System */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(15, 23, 42, 0.55);
+        #floating-tables-window {
+            position: fixed !important;
+            top: 75px !important;
+            right: 25px !important;
+            width: 620px !important;
+            height: 520px !important;
+            min-width: 320px !important;
+            min-height: 240px !important;
+            max-width: 96vw !important;
+            max-height: 92vh !important;
+            background: #ffffff !important;
+            border-radius: 8px !important;
+            box-shadow: 0 14px 35px rgba(15, 23, 42, 0.3) !important;
+            border: 1px solid #cbd5e1 !important;
             display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
+            flex-direction: column !important;
+            z-index: 9999 !important;
+            overflow: hidden !important;
+            user-select: none;
         }
-        .modal-card {
-            background: #ffffff;
-            width: 95%;
-            max-width: 950px;
-            height: 88vh;
-            border-radius: 8px;
-            padding: 20px 24px;
-            box-shadow: 0 12px 30px rgba(0,0,0,0.25);
-            display: flex;
-            flex-direction: column;
+        .window-titlebar {
+            background: #1e293b !important;
+            color: #ffffff !important;
+            padding: 9px 14px !important;
+            font-size: 0.88rem !important;
+            font-weight: 600 !important;
+            cursor: move !important;
+            user-select: none !important;
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            flex-shrink: 0 !important;
         }
-        .modal-top-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #e2e8f0;
+        .window-titlebar .controls button {
+            background: transparent !important;
+            border: none !important;
+            color: #94a3b8 !important;
+            font-size: 1.3rem !important;
+            cursor: pointer !important;
+            line-height: 1 !important;
+            padding: 0 4px !important;
         }
-        .modal-top-bar h2 {
-            margin: 0;
-            font-size: 1.25rem;
-            color: #0f172a;
+        .window-titlebar .controls button:hover {
+            color: #ffffff !important;
         }
-        .close-modal-btn {
-            background: none;
-            border: none;
-            font-size: 1.6rem;
-            color: #64748b;
-            cursor: pointer;
-            line-height: 1;
+        .window-tab-bar {
+            display: flex !important;
+            background: #f8fafc !important;
+            border-bottom: 1px solid #cbd5e1 !important;
+            overflow-x: auto !important;
+            flex-shrink: 0 !important;
         }
-        .close-modal-btn:hover {
-            color: #0f172a;
+        .window-tab-btn {
+            background: none !important;
+            border: none !important;
+            padding: 8px 12px !important;
+            font-size: 0.8rem !important;
+            font-weight: 600 !important;
+            color: #475569 !important;
+            cursor: pointer !important;
+            border-right: 1px solid #e2e8f0 !important;
+            border-radius: 0 !important;
+            white-space: nowrap !important;
         }
-        
-        /* Tab Navigation Bar */
-        .tab-bar {
-            display: flex;
-            gap: 6px;
-            border-bottom: 2px solid #e2e8f0;
-            margin-top: 10px;
-            overflow-x: auto;
-            flex-shrink: 0;
+        .window-tab-btn:hover {
+            background: #f1f5f9 !important;
         }
-        .tab-btn {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-bottom: none;
-            border-radius: 6px 6px 0 0;
-            padding: 8px 14px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            color: #475569;
-            cursor: pointer;
-            white-space: nowrap;
+        .window-tab-btn.active {
+            background: #ffffff !important;
+            color: #1d4ed8 !important;
+            border-bottom: 2px solid #2563eb !important;
         }
-        .tab-btn.active {
-            background: #ffffff;
-            border-color: #3b82f6;
-            color: #1d4ed8;
-            border-bottom: 2px solid #ffffff;
-            margin-bottom: -2px;
-        }
-        
-        .tab-content-area {
-            flex-grow: 1;
-            overflow-y: auto;
-            padding: 16px 4px 10px 4px;
+        .window-body {
+            flex-grow: 1 !important;
+            overflow-y: auto !important;
+            padding: 14px !important;
+            background: #ffffff !important;
+            height: calc(100% - 85px) !important;
+            user-select: text;
         }
         .tab-pane {
-            display: none;
+            display: none !important;
+            height: 100% !important;
         }
         .tab-pane.active {
-            display: block;
+            display: flex !important;
+            flex-direction: column !important;
         }
-        
-        /* Table Styling */
+        .table-scroll-container {
+            overflow: auto !important;
+            flex-grow: 1 !important;
+            max-height: calc(100% - 60px) !important;
+        }
         .ap-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.78rem;
-            font-family: monospace, sans-serif;
-            margin-bottom: 16px;
+            width: 100% !important;
+            border-collapse: collapse !important;
+            font-size: 0.78rem !important;
+            font-family: monospace, sans-serif !important;
+            margin-bottom: 12px !important;
         }
         .ap-table th, .ap-table td {
-            border: 1px solid #cbd5e1;
-            padding: 4px 6px;
-            text-align: center;
+            border: 1px solid #cbd5e1 !important;
+            padding: 4px 6px !important;
+            text-align: center !important;
         }
         .ap-table th {
-            background-color: #f1f5f9;
-            color: #1e293b;
-            font-weight: 700;
-            position: sticky;
-            top: 0;
-            z-index: 2;
+            background-color: #f1f5f9 !important;
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 2 !important;
         }
         .ap-table td:first-child {
-            font-weight: 700;
-            background-color: #f8fafc;
-            position: sticky;
-            left: 0;
+            font-weight: 700 !important;
+            background-color: #f8fafc !important;
         }
         .table-intro {
-            font-size: 0.85rem;
-            color: #475569;
-            margin-bottom: 12px;
-            background: #f1f5f9;
-            padding: 8px 12px;
-            border-radius: 4px;
+            font-size: 0.82rem !important;
+            color: #334155 !important;
+            background: #f8fafc !important;
+            padding: 6px 10px !important;
+            border-radius: 4px !important;
+            margin-bottom: 8px !important;
+            border-left: 3px solid #3b82f6 !important;
+            flex-shrink: 0 !important;
         }
-        .btn-tables-trigger {
-            background-color: #f1f5f9;
-            color: #1e293b;
-            border: 1px solid #cbd5e1;
-            padding: 6px 14px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            border-radius: 6px;
-            cursor: pointer;
-        }
-        .btn-tables-trigger:hover {
-            background-color: #e2e8f0;
+        /* Custom Corner Resize Grip */
+        .window-resize-grip {
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            width: 18px;
+            height: 18px;
+            cursor: se-resize;
+            z-index: 10000;
+            background: linear-gradient(135deg, transparent 50%, #94a3b8 50%, #94a3b8 60%, transparent 60%, transparent 75%, #94a3b8 75%, #94a3b8 85%, transparent 85%);
         }
     </style>
+    <script defer src="/static/tables.js?v=4"></script>
+    <script defer src="/static/app.js?v=4"></script>
 </head>
 <body>
     <div class="container">
@@ -197,11 +159,9 @@
                 <span class="tagline">Clear, procedural statistics practice</span>
             </div>
             <div class="header-controls">
-                <button class="btn-tables-trigger" onclick="openTableModal('tab-table-a')">📋 AP Tables & Formulas</button>
-                <div id="mastery-pill" class="mastery-badge">
-                    Streak: <span id="streak-count">0</span> / 5
-                </div>
-                <button id="reset-progress-btn" class="text-btn" onclick="resetCurrentSkill()" title="Reset current skill streak">Reset Skill</button>
+                <button class="btn-secondary" onclick="toggleFloatingWindow()">📋 Formulas &amp; Tables</button>
+                <div id="mastery-pill" class="mastery-badge">Streak: 0 / 5</div>
+                <button id="reset-progress-btn" class="text-btn" onclick="resetCurrentSkill()">Reset Skill</button>
             </div>
         </header>
 
@@ -240,7 +200,6 @@
                 <div id="multi-stage-panel" style="display: none;"></div>
 
                 <button id="next-btn" onclick="loadProblem()" style="display: none; margin-top: 15px;">Next Problem &rarr;</button>
-
                 <div id="feedback-banner" style="display: none; margin-top: 15px;"></div>
             </div>
 
@@ -254,624 +213,133 @@
         </main>
     </div>
 
-    <!-- Tabbed Modal for AP Tables & Formulas -->
-    <div id="table-modal" class="modal-overlay" onclick="onModalOverlayClick(event)">
-        <div class="modal-card">
-            <div class="modal-top-bar">
-                <h2>AP Statistics Formula Sheet & Tables</h2>
-                <button class="close-modal-btn" onclick="closeTableModal()">&times;</button>
-            </div>
-            
-            <!-- Navigation Tabs -->
-            <div class="tab-bar">
-                <button class="tab-btn active" id="btn-tab-table-a" onclick="switchTab('tab-table-a')">Table A: Standard Normal (Z)</button>
-                <button class="tab-btn" id="btn-tab-table-b" onclick="switchTab('tab-table-b')">Table B: t-Distribution</button>
-                <button class="tab-btn" id="btn-tab-table-c" onclick="switchTab('tab-table-c')">Table C: Chi-Square (χ²)</button>
-                <button class="tab-btn" id="btn-tab-form-inf" onclick="switchTab('tab-form-inf')">Formulas: Inference</button>
-                <button class="tab-btn" id="btn-tab-form-desc" onclick="switchTab('tab-form-desc')">Formulas: Descriptive &amp; Prob</button>
-            </div>
-
-            <div class="tab-content-area">
-                <!-- Tab Pane: Table A -->
-                <div id="tab-table-a" class="tab-pane active">
-                    <div class="table-intro">
-                        <strong>Table A: Standard Normal Probabilities.</strong> Entries in the table give the area under the curve to the left of \(z\), \(P(Z \le z)\).
-                    </div>
-                    <div style="margin-bottom: 8px;">
-                        <label style="font-weight: 600; font-size: 0.85rem;">Display Mode: </label>
-                        <select id="table-a-mode" onchange="renderTableA()" style="padding: 3px 8px; font-size: 0.85rem;">
-                            <option value="positive">Positive z (0.0 to 3.4)</option>
-                            <option value="negative">Negative z (-3.4 to 0.0)</option>
-                        </select>
-                    </div>
-                    <div style="overflow-x: auto; max-height: 58vh;">
-                        <table class="ap-table" id="table-a-content"></table>
-                    </div>
-                </div>
-
-                <!-- Tab Pane: Table B -->
-                <div id="tab-table-b" class="tab-pane">
-                    <div class="table-intro">
-                        <strong>Table B: t-Distribution Critical Values (\(t^*\)).</strong> Entries give critical values with area \(C\) between \(-t^*\) and \(t^*\), or upper tail probability \(p\).
-                    </div>
-                    <div style="overflow-x: auto; max-height: 60vh;">
-                        <table class="ap-table" id="table-b-content">
-                            <thead>
-                                <tr>
-                                    <th>df</th>
-                                    <th>Tail: 0.10<br>(80% CI)</th>
-                                    <th>Tail: 0.05<br>(90% CI)</th>
-                                    <th>Tail: 0.025<br>(95% CI)</th>
-                                    <th>Tail: 0.02<br>(96% CI)</th>
-                                    <th>Tail: 0.01<br>(98% CI)</th>
-                                    <th>Tail: 0.005<br>(99% CI)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr><td>1</td><td>3.078</td><td>6.314</td><td>12.71</td><td>15.89</td><td>31.82</td><td>63.66</td></tr>
-                                <tr><td>2</td><td>1.886</td><td>2.920</td><td>4.303</td><td>4.849</td><td>6.965</td><td>9.925</td></tr>
-                                <tr><td>3</td><td>1.638</td><td>2.353</td><td>3.182</td><td>3.482</td><td>4.541</td><td>5.841</td></tr>
-                                <tr><td>4</td><td>1.533</td><td>2.132</td><td>2.776</td><td>2.999</td><td>3.747</td><td>4.604</td></tr>
-                                <tr><td>5</td><td>1.476</td><td>2.015</td><td>2.571</td><td>2.757</td><td>3.365</td><td>4.032</td></tr>
-                                <tr><td>6</td><td>1.440</td><td>1.943</td><td>2.447</td><td>2.612</td><td>3.143</td><td>3.707</td></tr>
-                                <tr><td>7</td><td>1.415</td><td>1.895</td><td>2.365</td><td>2.517</td><td>2.998</td><td>3.499</td></tr>
-                                <tr><td>8</td><td>1.397</td><td>1.860</td><td>2.306</td><td>2.449</td><td>2.896</td><td>3.355</td></tr>
-                                <tr><td>9</td><td>1.383</td><td>1.833</td><td>2.262</td><td>2.398</td><td>2.821</td><td>3.250</td></tr>
-                                <tr><td>10</td><td>1.372</td><td>1.812</td><td>2.228</td><td>2.359</td><td>2.764</td><td>3.169</td></tr>
-                                <tr><td>11</td><td>1.363</td><td>1.796</td><td>2.201</td><td>2.328</td><td>2.718</td><td>3.106</td></tr>
-                                <tr><td>12</td><td>1.356</td><td>1.782</td><td>2.179</td><td>2.303</td><td>2.681</td><td>3.055</td></tr>
-                                <tr><td>13</td><td>1.350</td><td>1.771</td><td>2.160</td><td>2.282</td><td>2.650</td><td>3.012</td></tr>
-                                <tr><td>14</td><td>1.345</td><td>1.761</td><td>2.145</td><td>2.264</td><td>2.624</td><td>2.977</td></tr>
-                                <tr><td>15</td><td>1.341</td><td>1.753</td><td>2.131</td><td>2.249</td><td>2.602</td><td>2.947</td></tr>
-                                <tr><td>16</td><td>1.337</td><td>1.746</td><td>2.120</td><td>2.235</td><td>2.583</td><td>2.921</td></tr>
-                                <tr><td>17</td><td>1.333</td><td>1.740</td><td>2.110</td><td>2.224</td><td>2.567</td><td>2.898</td></tr>
-                                <tr><td>18</td><td>1.330</td><td>1.734</td><td>2.101</td><td>2.214</td><td>2.552</td><td>2.878</td></tr>
-                                <tr><td>19</td><td>1.328</td><td>1.729</td><td>2.093</td><td>2.205</td><td>2.539</td><td>2.861</td></tr>
-                                <tr><td>20</td><td>1.325</td><td>1.725</td><td>2.086</td><td>2.197</td><td>2.528</td><td>2.845</td></tr>
-                                <tr><td>24</td><td>1.318</td><td>1.711</td><td>2.064</td><td>2.172</td><td>2.492</td><td>2.797</td></tr>
-                                <tr><td>29</td><td>1.311</td><td>1.699</td><td>2.045</td><td>2.150</td><td>2.462</td><td>2.756</td></tr>
-                                <tr><td>30</td><td>1.310</td><td>1.697</td><td>2.042</td><td>2.147</td><td>2.457</td><td>2.750</td></tr>
-                                <tr><td>35</td><td>1.306</td><td>1.690</td><td>2.030</td><td>2.133</td><td>2.438</td><td>2.724</td></tr>
-                                <tr><td>39</td><td>1.304</td><td>1.685</td><td>2.023</td><td>2.124</td><td>2.426</td><td>2.708</td></tr>
-                                <tr><td>40</td><td>1.303</td><td>1.684</td><td>2.021</td><td>2.123</td><td>2.423</td><td>2.704</td></tr>
-                                <tr><td>48</td><td>1.299</td><td>1.677</td><td>2.011</td><td>2.112</td><td>2.407</td><td>2.682</td></tr>
-                                <tr><td>49</td><td>1.299</td><td>1.677</td><td>2.010</td><td>2.110</td><td>2.405</td><td>2.680</td></tr>
-                                <tr><td>50</td><td>1.299</td><td>1.676</td><td>2.009</td><td>2.109</td><td>2.403</td><td>2.678</td></tr>
-                                <tr><td>60</td><td>1.296</td><td>1.671</td><td>2.000</td><td>2.099</td><td>2.390</td><td>2.660</td></tr>
-                                <tr><td>80</td><td>1.292</td><td>1.664</td><td>1.990</td><td>2.088</td><td>2.374</td><td>2.639</td></tr>
-                                <tr><td>100</td><td>1.290</td><td>1.660</td><td>1.984</td><td>2.081</td><td>2.364</td><td>2.626</td></tr>
-                                <tr><td><strong>∞ (z*)</strong></td><td><strong>1.282</strong></td><td><strong>1.645</strong></td><td><strong>1.960</strong></td><td><strong>2.054</strong></td><td><strong>2.326</strong></td><td><strong>2.576</strong></td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Tab Pane: Table C -->
-                <div id="tab-table-c" class="tab-pane">
-                    <div class="table-intro">
-                        <strong>Table C: Chi-Square (χ²) Critical Values.</strong> Entries give \(\chi^2\) values for right-tail probability \(p\).
-                    </div>
-                    <div style="overflow-x: auto; max-height: 60vh;">
-                        <table class="ap-table">
-                            <thead>
-                                <tr>
-                                    <th>df</th>
-                                    <th>p = 0.25</th>
-                                    <th>p = 0.20</th>
-                                    <th>p = 0.15</th>
-                                    <th>p = 0.10</th>
-                                    <th>p = 0.05</th>
-                                    <th>p = 0.025</th>
-                                    <th>p = 0.01</th>
-                                    <th>p = 0.005</th>
-                                    <th>p = 0.001</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr><td>1</td><td>1.32</td><td>1.64</td><td>2.07</td><td>2.71</td><td>3.84</td><td>5.02</td><td>6.63</td><td>7.88</td><td>10.83</td></tr>
-                                <tr><td>2</td><td>2.77</td><td>3.22</td><td>3.79</td><td>4.61</td><td>5.99</td><td>7.38</td><td>9.21</td><td>10.60</td><td>13.82</td></tr>
-                                <tr><td>3</td><td>4.11</td><td>4.64</td><td>5.32</td><td>6.25</td><td>7.81</td><td>9.35</td><td>11.34</td><td>12.84</td><td>16.27</td></tr>
-                                <tr><td>4</td><td>5.39</td><td>5.99</td><td>6.74</td><td>7.78</td><td>9.49</td><td>11.14</td><td>13.28</td><td>14.86</td><td>18.47</td></tr>
-                                <tr><td>5</td><td>6.63</td><td>7.29</td><td>8.12</td><td>9.24</td><td>11.07</td><td>12.83</td><td>15.09</td><td>16.75</td><td>20.51</td></tr>
-                                <tr><td>6</td><td>7.84</td><td>8.56</td><td>9.45</td><td>10.64</td><td>12.59</td><td>14.45</td><td>16.81</td><td>18.55</td><td>22.46</td></tr>
-                                <tr><td>7</td><td>9.04</td><td>9.80</td><td>10.75</td><td>12.02</td><td>14.07</td><td>16.01</td><td>18.48</td><td>20.28</td><td>24.32</td></tr>
-                                <tr><td>8</td><td>10.22</td><td>11.03</td><td>12.03</td><td>13.36</td><td>15.51</td><td>17.53</td><td>20.09</td><td>21.95</td><td>26.12</td></tr>
-                                <tr><td>9</td><td>11.39</td><td>12.24</td><td>13.29</td><td>14.68</td><td>16.92</td><td>19.02</td><td>21.67</td><td>23.59</td><td>27.88</td></tr>
-                                <tr><td>10</td><td>12.55</td><td>13.44</td><td>14.53</td><td>15.99</td><td>18.31</td><td>20.48</td><td>23.21</td><td>25.19</td><td>29.59</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Tab Pane: Formulas Inference -->
-                <div id="tab-form-inf" class="tab-pane">
-                    <div class="table-intro">
-                        <strong>AP Statistics Formula Sheet: Section II — Inference</strong>
-                    </div>
-                    <div style="font-size: 0.95rem; line-height: 1.7; padding: 4px 10px;">
-                        <p><strong>General Formula:</strong></p>
-                        $$\text{Confidence Interval: } \quad \text{statistic} \pm (\text{critical value})(\text{standard error})$$
-                        $$\text{Standardized Test Statistic: } \quad \frac{\text{statistic} - \text{parameter}}{\text{standard error}}$$
-
-                        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 16px 0;">
-
-                        <p><strong>Single-Sample Inference:</strong></p>
-                        <ul>
-                            <li><strong>Sample Mean (\(\mu\)):</strong>
-                                <br>\(\text{Standard Error: } SE_{\bar{x}} = \frac{s}{\sqrt{n}}\)
-                                <br>\(\text{Interval: } \bar{x} \pm t^* \left(\frac{s}{\sqrt{n}}\right), \quad df = n - 1\)
-                            </li>
-                            <li style="margin-top: 8px;"><strong>Sample Proportion (\(p\)):</strong>
-                                <br>\(\text{Standard Error: } SE_{\hat{p}} = \sqrt{\frac{\hat{p}(1 - \hat{p})}{n}}\)
-                                <br>\(\text{Interval: } \hat{p} \pm z^* \sqrt{\frac{\hat{p}(1 - \hat{p})}{n}}\)
-                            </li>
-                        </ul>
-
-                        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 16px 0;">
-
-                        <p><strong>Two-Sample Inference:</strong></p>
-                        <ul>
-                            <li><strong>Difference of Means (\(\mu_1 - \mu_2\)):</strong>
-                                <br>\(\text{Standard Error: } SE = \sqrt{\frac{s_1^2}{n_1} + \frac{s_2^2}{n_2}}\)
-                            </li>
-                            <li style="margin-top: 8px;"><strong>Difference of Proportions (\(p_1 - p_2\)):</strong>
-                                <br>\(\text{Standard Error (Intervals): } SE = \sqrt{\frac{\hat{p}_1(1 - \hat{p}_1)}{n_1} + \frac{\hat{p}_2(1 - \hat{p}_2)}{n_2}}\)
-                                <br>\(\text{Standard Error (Tests - Pooled): } SE_p = \sqrt{\hat{p}_c(1 - \hat{p}_c)\left(\frac{1}{n_1} + \frac{1}{n_2}\right)}\)
-                            </li>
-                        </ul>
-                    </div>
-                </div>
-
-                <!-- Tab Pane: Formulas Descriptive & Probability -->
-                <div id="tab-form-desc" class="tab-pane">
-                    <div class="table-intro">
-                        <strong>AP Statistics Formula Sheet: Section I — Descriptive Statistics &amp; Probability</strong>
-                    </div>
-                    <div style="font-size: 0.95rem; line-height: 1.7; padding: 4px 10px;">
-                        <p><strong>Descriptive Statistics:</strong></p>
-                        $$\bar{x} = \frac{\sum x_i}{n}, \quad s_x = \sqrt{\frac{\sum (x_i - \bar{x})^2}{n - 1}}$$
-                        $$\hat{y} = a + bx, \quad b = r \left(\frac{s_y}{s_x}\right)$$
-
-                        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 16px 0;">
-
-                        <p><strong>Probability &amp; Random Variables:</strong></p>
-                        $$P(A \cup B) = P(A) + P(B) - P(A \cap B)$$
-                        $$P(A \mid B) = \frac{P(A \cap B)}{P(B)}$$
-                        $$\mu_X = E(X) = \sum x_i P(x_i)$$
-                        $$\sigma_X^2 = \sum (x_i - \mu_X)^2 P(x_i)$$
-
-                        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 16px 0;">
-
-                        <p><strong>Binomial Distribution (\(X \sim B(n, p)\)):</strong></p>
-                        $$P(X = k) = \binom{n}{k} p^k (1 - p)^{n - k}$$
-                        $$\mu_X = np, \quad \sigma_X = \sqrt{np(1 - p)}$$
-                    </div>
-                </div>
-
+    <!-- Floating Draggable & Resizable Reference Window -->
+    <div id="floating-tables-window">
+        <div id="window-titlebar" class="window-titlebar">
+            <span>📊 Tables &amp; Formulas</span>
+            <div class="controls">
+                <button onclick="closeFloatingWindow()" title="Close">&times;</button>
             </div>
         </div>
+        
+        <div class="window-tab-bar">
+            <button class="window-tab-btn active" id="btn-tab-table-a" onclick="switchTab('tab-table-a')">Table A (Z)</button>
+            <button class="window-tab-btn" id="btn-tab-table-b" onclick="switchTab('tab-table-b')">Table B (t)</button>
+            <button class="window-tab-btn" id="btn-tab-table-c" onclick="switchTab('tab-table-c')">Table C (χ²)</button>
+            <button class="window-tab-btn" id="btn-tab-form-inf" onclick="switchTab('tab-form-inf')">Inference Formulas</button>
+            <button class="window-tab-btn" id="btn-tab-form-desc" onclick="switchTab('tab-form-desc')">Descriptive Formulas</button>
+        </div>
+
+        <div class="window-body">
+            <!-- Table A Pane -->
+            <div id="tab-table-a" class="tab-pane active">
+                <div class="table-intro">
+                    <strong>Table A: Standard Normal Probabilities.</strong> Cumulative area to the left of \(z\).
+                </div>
+                <div style="margin-bottom: 8px; flex-shrink: 0;">
+                    <label style="font-weight: 600; font-size: 0.8rem;">Values: </label>
+                    <select id="table-a-mode" onchange="renderTableA()" style="padding: 2px 6px; font-size: 0.8rem;">
+                        <option value="positive">Positive z (0.0 to 3.4)</option>
+                        <option value="negative">Negative z (-3.4 to 0.0)</option>
+                    </select>
+                </div>
+                <div class="table-scroll-container">
+                    <table class="ap-table" id="table-a-content"></table>
+                </div>
+            </div>
+
+            <!-- Table B Pane -->
+            <div id="tab-table-b" class="tab-pane">
+                <div class="table-intro">
+                    <strong>Table B: t-Distribution Critical Values (\(t^*\)).</strong>
+                </div>
+                <div class="table-scroll-container">
+                    <table class="ap-table">
+                        <thead>
+                            <tr>
+                                <th>df</th>
+                                <th>Tail: .10<br>(80%)</th>
+                                <th>Tail: .05<br>(90%)</th>
+                                <th>Tail: .025<br>(95%)</th>
+                                <th>Tail: .02<br>(96%)</th>
+                                <th>Tail: .01<br>(98%)</th>
+                                <th>Tail: .005<br>(99%)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>1</td><td>3.078</td><td>6.314</td><td>12.71</td><td>15.89</td><td>31.82</td><td>63.66</td></tr>
+                            <tr><td>2</td><td>1.886</td><td>2.920</td><td>4.303</td><td>4.849</td><td>6.965</td><td>9.925</td></tr>
+                            <tr><td>3</td><td>1.638</td><td>2.353</td><td>3.182</td><td>3.482</td><td>4.541</td><td>5.841</td></tr>
+                            <tr><td>4</td><td>1.533</td><td>2.132</td><td>2.776</td><td>2.999</td><td>3.747</td><td>4.604</td></tr>
+                            <tr><td>5</td><td>1.476</td><td>2.015</td><td>2.571</td><td>2.757</td><td>3.365</td><td>4.032</td></tr>
+                            <tr><td>10</td><td>1.372</td><td>1.812</td><td>2.228</td><td>2.359</td><td>2.764</td><td>3.169</td></tr>
+                            <tr><td>15</td><td>1.341</td><td>1.753</td><td>2.131</td><td>2.249</td><td>2.602</td><td>2.947</td></tr>
+                            <tr><td>19</td><td>1.328</td><td>1.729</td><td>2.093</td><td>2.205</td><td>2.539</td><td>2.861</td></tr>
+                            <tr><td>20</td><td>1.325</td><td>1.725</td><td>2.086</td><td>2.197</td><td>2.528</td><td>2.845</td></tr>
+                            <tr><td>24</td><td>1.318</td><td>1.711</td><td>2.064</td><td>2.172</td><td>2.492</td><td>2.797</td></tr>
+                            <tr><td>29</td><td>1.311</td><td>1.699</td><td>2.045</td><td>2.150</td><td>2.462</td><td>2.756</td></tr>
+                            <tr><td>30</td><td>1.310</td><td>1.697</td><td>2.042</td><td>2.147</td><td>2.457</td><td>2.750</td></tr>
+                            <tr><td>39</td><td>1.304</td><td>1.685</td><td>2.023</td><td>2.124</td><td>2.426</td><td>2.708</td></tr>
+                            <tr><td>49</td><td>1.299</td><td>1.677</td><td>2.010</td><td>2.110</td><td>2.405</td><td>2.680</td></tr>
+                            <tr><td><strong>∞ (z*)</strong></td><td><strong>1.282</strong></td><td><strong>1.645</strong></td><td><strong>1.960</strong></td><td><strong>2.054</strong></td><td><strong>2.326</strong></td><td><strong>2.576</strong></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Table C Pane -->
+            <div id="tab-table-c" class="tab-pane">
+                <div class="table-intro">
+                    <strong>Table C: Chi-Square (\(\chi^2\)) Critical Values.</strong> Right-tail probability \(p\).
+                </div>
+                <div class="table-scroll-container">
+                    <table class="ap-table">
+                        <thead>
+                            <tr>
+                                <th>df</th>
+                                <th>p = 0.10</th>
+                                <th>p = 0.05</th>
+                                <th>p = 0.025</th>
+                                <th>p = 0.01</th>
+                                <th>p = 0.001</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>1</td><td>2.71</td><td>3.84</td><td>5.02</td><td>6.63</td><td>10.83</td></tr>
+                            <tr><td>2</td><td>4.61</td><td>5.99</td><td>7.38</td><td>9.21</td><td>13.82</td></tr>
+                            <tr><td>3</td><td>6.25</td><td>7.81</td><td>9.35</td><td>11.34</td><td>16.27</td></tr>
+                            <tr><td>4</td><td>7.78</td><td>9.49</td><td>11.14</td><td>13.28</td><td>18.47</td></tr>
+                            <tr><td>5</td><td>9.24</td><td>11.07</td><td>12.83</td><td>15.09</td><td>20.51</td></tr>
+                            <tr><td>10</td><td>15.99</td><td>18.31</td><td>20.48</td><td>23.21</td><td>29.59</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Formulas Inference Pane -->
+            <div id="tab-form-inf" class="tab-pane">
+                <div class="table-intro"><strong>Section II: Inference Formulas</strong></div>
+                <div class="table-scroll-container" style="font-size: 0.9rem; line-height: 1.6;">
+                    <p>$$\text{Confidence Interval: } \quad \text{statistic} \pm (\text{critical value})(\text{standard error})$$</p>
+                    <p><strong>Sample Mean (\(\mu\)):</strong><br>
+                    \(SE = \frac{s}{\sqrt{n}}, \quad \text{Interval: } \bar{x} \pm t^* \left(\frac{s}{\sqrt{n}}\right)\)</p>
+                    <p><strong>Sample Proportion (\(p\)):</strong><br>
+                    \(SE = \sqrt{\frac{\hat{p}(1-\hat{p})}{n}}, \quad \text{Interval: } \hat{p} \pm z^* \sqrt{\frac{\hat{p}(1-\hat{p})}{n}}\)</p>
+                </div>
+            </div>
+
+            <!-- Formulas Descriptive Pane -->
+            <div id="tab-form-desc" class="tab-pane">
+                <div class="table-intro"><strong>Section I: Descriptive &amp; Probability Formulas</strong></div>
+                <div class="table-scroll-container" style="font-size: 0.9rem; line-height: 1.6;">
+                    <p>$$\bar{x} = \frac{\sum x_i}{n}, \quad s_x = \sqrt{\frac{\sum (x_i - \bar{x})^2}{n - 1}}$$</p>
+                    <p>$$P(A \cup B) = P(A) + P(B) - P(A \cap B)$$</p>
+                    <p>$$P(A \mid B) = \frac{P(A \cap B)}{P(B)}$$</p>
+                </div>
+            </div>
+        </div>
+        <!-- Corner Resize Handle -->
+        <div id="window-resize-grip" class="window-resize-grip" title="Drag to resize"></div>
     </div>
-
-    <script>
-        const STORAGE_KEY = 'komore_state_v6';
-        const TARGET_MASTERY = 5;
-        let currentProblem = null;
-        let isMultiStage = false;
-        let hadStageMistake = false;
-
-        let state = {
-            selectedTopic: 'random',
-            totalAttempted: 0,
-            totalCorrect: 0,
-            skills: {
-                random:     { streak: 0, mastered: false },
-                between:    { streak: 0, mastered: false },
-                left_tail:  { streak: 0, mastered: false },
-                right_tail: { streak: 0, mastered: false },
-                inverse:    { streak: 0, mastered: false },
-                ci_mean_t:  { streak: 0, mastered: false },
-                ci_prop_z:  { streak: 0, mastered: false }
-            }
-        };
-
-        // Modal & Tab Controls
-        function openTableModal(preferredTab = 'tab-table-a') {
-            document.getElementById('table-modal').style.display = 'flex';
-            switchTab(preferredTab);
-            renderTableA();
-            triggerKaTeX(document.getElementById('table-modal'));
-        }
-
-        function closeTableModal() {
-            document.getElementById('table-modal').style.display = 'none';
-        }
-
-        function onModalOverlayClick(e) {
-            if (e.target.id === 'table-modal') closeTableModal();
-        }
-
-        function switchTab(tabId) {
-            const panes = document.querySelectorAll('.tab-pane');
-            const btns = document.querySelectorAll('.tab-btn');
-            
-            panes.forEach(pane => pane.classList.remove('active'));
-            btns.forEach(btn => btn.classList.remove('active'));
-
-            const targetPane = document.getElementById(tabId);
-            const targetBtn = document.getElementById('btn-' + tabId);
-
-            if (targetPane) targetPane.classList.add('active');
-            if (targetBtn) targetBtn.classList.add('active');
-
-            triggerKaTeX(targetPane);
-        }
-
-        // Standard Normal Table A Generator
-        function standardNormalCDF(z) {
-            // erf approximation
-            const t = 1.0 / (1.0 + 0.2316419 * Math.abs(z));
-            const d = 0.3989422804014327 * Math.exp(-z * z / 2.0);
-            let prob = d * t * (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
-            if (z > 0) prob = 1.0 - prob;
-            return prob;
-        }
-
-        function renderTableA() {
-            const mode = document.getElementById('table-a-mode').value;
-            const table = document.getElementById('table-a-content');
-            let html = '<thead><tr><th>z</th>';
-            for (let c = 0; c <= 9; c++) {
-                html += `<th>.0${c}</th>`;
-            }
-            html += '</tr></thead><tbody>';
-
-            if (mode === 'positive') {
-                for (let r = 0; r <= 34; r++) {
-                    const rowZ = r / 10.0;
-                    html += `<tr><td>${rowZ.toFixed(1)}</td>`;
-                    for (let c = 0; c <= 9; c++) {
-                        const z = rowZ + c / 100.0;
-                        const p = standardNormalCDF(z);
-                        html += `<td>${p.toFixed(4)}</td>`;
-                    }
-                    html += '</tr>';
-                }
-            } else {
-                for (let r = -34; r <= 0; r++) {
-                    const rowZ = r / 10.0;
-                    html += `<tr><td>${rowZ.toFixed(1)}</td>`;
-                    for (let c = 0; c <= 9; c++) {
-                        const z = rowZ - c / 100.0;
-                        const p = standardNormalCDF(z);
-                        html += `<td>${p.toFixed(4)}</td>`;
-                    }
-                    html += '</tr>';
-                }
-            }
-            html += '</tbody>';
-            table.innerHTML = html;
-        }
-
-        function getActiveSkillState() {
-            const topic = state.selectedTopic || 'random';
-            if (!state.skills[topic]) state.skills[topic] = { streak: 0, mastered: false };
-            return state.skills[topic];
-        }
-
-        function loadSavedState() {
-            try {
-                const saved = localStorage.getItem(STORAGE_KEY);
-                if (saved) {
-                    const parsed = JSON.parse(saved);
-                    state.selectedTopic = parsed.selectedTopic || 'random';
-                    state.totalAttempted = parsed.totalAttempted || 0;
-                    state.totalCorrect = parsed.totalCorrect || 0;
-                    if (parsed.skills) {
-                        for (let k in parsed.skills) {
-                            if (state.skills[k]) state.skills[k] = parsed.skills[k];
-                        }
-                    }
-                }
-            } catch (e) {
-                console.warn('localStorage not accessible, using in-memory state');
-            }
-            document.getElementById('topic-select').value = state.selectedTopic;
-            updateStatsUI();
-        }
-
-        function saveState() {
-            try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-            } catch (e) {}
-            updateStatsUI();
-        }
-
-        function resetCurrentSkill() {
-            const topic = state.selectedTopic || 'random';
-            if (confirm("Reset your streak for this specific skill?")) {
-                state.skills[topic] = { streak: 0, mastered: false };
-                saveState();
-            }
-        }
-
-        function onTopicChange() {
-            state.selectedTopic = document.getElementById('topic-select').value;
-            saveState();
-            loadProblem();
-        }
-
-        function updateStatsUI() {
-            const pillEl = document.getElementById('mastery-pill');
-            const statsEl = document.getElementById('session-stats');
-            const skillState = getActiveSkillState();
-
-            if (skillState.mastered || skillState.streak >= TARGET_MASTERY) {
-                skillState.mastered = true;
-                pillEl.className = 'mastery-badge mastered';
-                pillEl.innerHTML = `&#10004; Mastered (${skillState.streak}/${TARGET_MASTERY})`;
-            } else {
-                pillEl.className = 'mastery-badge';
-                pillEl.innerHTML = `Streak: <span>${skillState.streak}</span> / ${TARGET_MASTERY}`;
-            }
-
-            const acc = state.totalAttempted > 0 
-                ? Math.round((state.totalCorrect / state.totalAttempted) * 100) 
-                : 0;
-            statsEl.innerText = `Attempts: ${state.totalAttempted} | Accuracy: ${acc}%`;
-        }
-
-        function triggerKaTeX(element) {
-            if (window.renderMathInElement && element) {
-                renderMathInElement(element, {
-                    delimiters: [
-                        { left: '$$', right: '$$', display: true },
-                        { left: '\\(', right: '\\)', display: false }
-                    ],
-                    throwOnError: false
-                });
-            }
-        }
-
-        function drawNormalDistribution(plotData) {
-            const svg = document.getElementById('normal-curve-svg');
-            svg.innerHTML = '';
-            const width = 600, baselineY = 175, peakHeight = 140;
-            const zMin = -3.5, zMax = 3.5;
-
-            function zToX(z) { return ((z - zMin) / (zMax - zMin)) * (width - 80) + 40; }
-            function gaussian(z) { return Math.exp(-0.5 * z * z); }
-            function zToY(z) { return baselineY - gaussian(z) * peakHeight; }
-
-            let startZ = zMin, endZ = zMax;
-            if (plotData.type === 'between') {
-                startZ = Math.max(zMin, Math.min(plotData.z1, zMax));
-                endZ = Math.max(zMin, Math.min(plotData.z2, zMax));
-            } else if (plotData.type === 'left_tail') {
-                endZ = Math.max(zMin, Math.min(plotData.z, zMax));
-            } else if (plotData.type === 'right_tail') {
-                startZ = Math.max(zMin, Math.min(plotData.z, zMax));
-            } else if (plotData.type === 'inverse') {
-                if (plotData.is_top) startZ = Math.max(zMin, Math.min(plotData.z, zMax));
-                else endZ = Math.max(zMin, Math.min(plotData.z, zMax));
-            }
-
-            let shadeD = `M ${zToX(startZ)} ${baselineY}`;
-            for (let z = startZ; z <= endZ; z += 0.05) shadeD += ` L ${zToX(z)} ${zToY(z)}`;
-            shadeD += ` L ${zToX(endZ)} ${baselineY} Z`;
-
-            const shadePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            shadePath.setAttribute("d", shadeD);
-            shadePath.setAttribute("fill", "#93c5fd");
-            shadePath.setAttribute("opacity", "0.65");
-            svg.appendChild(shadePath);
-
-            let curveD = `M ${zToX(zMin)} ${baselineY}`;
-            for (let z = zMin; z <= zMax; z += 0.05) curveD += ` L ${zToX(z)} ${zToY(z)}`;
-            const curvePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            curvePath.setAttribute("d", curveD);
-            curvePath.setAttribute("fill", "none");
-            curvePath.setAttribute("stroke", "#1e40af");
-            curvePath.setAttribute("stroke-width", "2.5");
-            svg.appendChild(curvePath);
-        }
-
-        async function loadProblem() {
-            document.getElementById('feedback-banner').style.display = 'none';
-            document.getElementById('solution-card').style.display = 'none';
-            document.getElementById('next-btn').style.display = 'none';
-            hadStageMistake = false;
-
-            const topic = state.selectedTopic || 'random';
-            isMultiStage = topic.startsWith('ci_');
-
-            if (isMultiStage) {
-                document.getElementById('single-input-panel').style.display = 'none';
-                document.getElementById('multi-stage-panel').style.display = 'block';
-                document.getElementById('graph-wrapper').style.display = 'none';
-                
-                const subTopic = topic.replace('ci_', '');
-                const res = await fetch(`/api/problem/ci?topic=${encodeURIComponent(subTopic)}`);
-                currentProblem = await res.json();
-                
-                renderMultiStageUI();
-            } else {
-                document.getElementById('single-input-panel').style.display = 'flex';
-                document.getElementById('multi-stage-panel').style.display = 'none';
-                document.getElementById('graph-wrapper').style.display = 'block';
-                document.getElementById('submit-btn').style.display = 'inline-block';
-                
-                const input = document.getElementById('answer-input');
-                input.disabled = false;
-                input.value = '';
-
-                const res = await fetch(`/api/problem/normal?topic=${encodeURIComponent(topic)}`);
-                currentProblem = await res.json();
-
-                document.getElementById('input-label').innerText = currentProblem.input_label || "Answer:";
-                input.placeholder = currentProblem.placeholder || "e.g. 0.4532";
-                input.focus();
-            }
-
-            const promptEl = document.getElementById('problem-prompt');
-            promptEl.innerHTML = currentProblem.prompt;
-            triggerKaTeX(promptEl);
-        }
-
-        function renderMultiStageUI() {
-            const container = document.getElementById('multi-stage-panel');
-            container.innerHTML = '';
-
-            currentProblem.steps.forEach((step, idx) => {
-                const box = document.createElement('div');
-                box.id = `stage-box-${idx}`;
-                box.className = idx === 0 ? 'stage-box active' : 'stage-box';
-                if (idx > 0) box.style.opacity = '0.45';
-
-                box.innerHTML = `
-                    <div class="stage-header">
-                        <span>Step ${step.step_num}: ${step.label}</span>
-                        <span id="stage-status-${idx}"></span>
-                    </div>
-                    <div class="input-row" style="margin: 6px 0 0 0;">
-                        <input type="number" step="any" id="stage-input-${idx}" placeholder="${step.placeholder}" ${idx > 0 ? 'disabled' : ''} autocomplete="off">
-                        <button id="stage-btn-${idx}" onclick="submitStage(${idx})" ${idx > 0 ? 'disabled' : ''}>Verify Step</button>
-                    </div>
-                    <div class="stage-hint">${step.hint}</div>
-                    <div id="stage-reveal-${idx}" class="revealed-msg" style="display: none;"></div>
-                `;
-                container.appendChild(box);
-            });
-
-            document.getElementById('stage-input-0').focus();
-            document.getElementById('stage-input-0').addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') submitStage(0);
-            });
-        }
-
-        async function submitStage(idx) {
-            const input = document.getElementById(`stage-input-${idx}`);
-            const rawVal = input.value.trim();
-            if (!rawVal) return;
-
-            const userVal = parseFloat(rawVal);
-            const step = currentProblem.steps[idx];
-
-            const res = await fetch('/api/verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    user_answer: userVal,
-                    expected_answers: step.expected,
-                    tolerance: step.tolerance
-                })
-            });
-            const data = await res.json();
-            const statusEl = document.getElementById(`stage-status-${idx}`);
-            const box = document.getElementById(`stage-box-${idx}`);
-            const revealEl = document.getElementById(`stage-reveal-${idx}`);
-
-            if (data.correct) {
-                statusEl.innerHTML = '<span style="color: #10b981;">&#10004; Correct</span>';
-                box.className = 'stage-box completed';
-                input.disabled = true;
-                document.getElementById(`stage-btn-${idx}`).disabled = true;
-
-                unlockNextStage(idx);
-            } else {
-                hadStageMistake = true;
-                const skillState = getActiveSkillState();
-                skillState.streak = 0;
-                saveState();
-
-                statusEl.innerHTML = '<span style="color: #d97706;">&#10008; Incorrect (Revealed)</span>';
-                box.className = 'stage-box revealed';
-                input.value = step.expected[0];
-                input.disabled = true;
-                document.getElementById(`stage-btn-${idx}`).disabled = true;
-                revealEl.style.display = 'block';
-                revealEl.innerText = `Expected value: ${step.expected[0]} (use this to proceed to the next step).`;
-
-                unlockNextStage(idx);
-            }
-        }
-
-        function unlockNextStage(idx) {
-            if (idx + 1 < currentProblem.steps.length) {
-                const nextBox = document.getElementById(`stage-box-${idx + 1}`);
-                nextBox.className = 'stage-box active';
-                nextBox.style.opacity = '1';
-                const nextInput = document.getElementById(`stage-input-${idx + 1}`);
-                const nextBtn = document.getElementById(`stage-btn-${idx + 1}`);
-                nextInput.disabled = false;
-                nextBtn.disabled = false;
-                nextInput.focus();
-
-                nextInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') submitStage(idx + 1);
-                });
-            } else {
-                finalizeProblem(!hadStageMistake);
-            }
-        }
-
-        async function submitSingleAnswer() {
-            const rawVal = document.getElementById('answer-input').value.trim();
-            if (!rawVal) return;
-
-            const userVal = parseFloat(rawVal);
-            const res = await fetch('/api/verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    user_answer: userVal,
-                    expected_answers: currentProblem.expected_answers,
-                    tolerance: currentProblem.tolerance
-                })
-            });
-            const data = await res.json();
-            finalizeProblem(data.correct);
-
-            document.getElementById('submit-btn').style.display = 'none';
-            document.getElementById('answer-input').disabled = true;
-        }
-
-        function finalizeProblem(isSuccess) {
-            const feedback = document.getElementById('feedback-banner');
-            feedback.style.display = 'block';
-            state.totalAttempted += 1;
-            const skillState = getActiveSkillState();
-
-            if (isSuccess) {
-                skillState.streak += 1;
-                state.totalCorrect += 1;
-                feedback.className = 'banner correct';
-                feedback.innerHTML = '&#10004; Problem complete! All steps solved cleanly.';
-            } else {
-                skillState.streak = 0;
-                feedback.className = 'banner incorrect';
-                feedback.innerHTML = '&#10008; Problem finished with step errors. Streak reset. Full derivation:';
-
-                const solCard = document.getElementById('solution-card');
-                const solContent = document.getElementById('solution-content');
-                if (currentProblem.plot_data) drawNormalDistribution(currentProblem.plot_data);
-                solContent.innerHTML = currentProblem.solution;
-                triggerKaTeX(solContent);
-                solCard.style.display = 'block';
-            }
-
-            saveState();
-            document.getElementById('next-btn').style.display = 'inline-block';
-            document.getElementById('next-btn').focus();
-        }
-
-        document.getElementById('answer-input').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') submitSingleAnswer();
-        });
-
-        window.addEventListener('load', () => {
-            loadSavedState();
-            loadProblem();
-        });
-    </script>
 </body>
 </html>
