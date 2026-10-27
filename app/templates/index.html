@@ -9,6 +9,37 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
     <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .stage-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 12px 16px;
+            margin-bottom: 12px;
+            transition: all 0.2s ease;
+        }
+        .stage-box.active {
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+        .stage-box.completed {
+            border-color: #10b981;
+            background: #f0fdf4;
+        }
+        .stage-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #334155;
+            margin-bottom: 6px;
+        }
+        .stage-hint {
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-top: 4px;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -31,11 +62,17 @@
                     <div class="selector-group">
                         <label for="topic-select" class="selector-label">Skill:</label>
                         <select id="topic-select" onchange="onTopicChange()">
-                            <option value="random">Mixed Practice (All Normal Skills)</option>
-                            <option value="between">Area Between: P(x₁ &lt; X &lt; x₂)</option>
-                            <option value="left_tail">Left-Tail: P(X &lt; x)</option>
-                            <option value="right_tail">Right-Tail: P(X &gt; x)</option>
-                            <option value="inverse">Inverse Normal: Find Cutoff Value (x)</option>
+                            <optgroup label="Unit 3: Normal Distributions">
+                                <option value="random">Mixed Normal Practice</option>
+                                <option value="between">Area Between: P(x₁ &lt; X &lt; x₂)</option>
+                                <option value="left_tail">Left-Tail: P(X &lt; x)</option>
+                                <option value="right_tail">Right-Tail: P(X &gt; x)</option>
+                                <option value="inverse">Inverse Normal: Find Cutoff (x)</option>
+                            </optgroup>
+                            <optgroup label="Unit 4: Confidence Intervals (Multi-Stage)">
+                                <option value="ci_mean_t">1-Sample t-Interval for Mean (μ)</option>
+                                <option value="ci_prop_z">1-Sample z-Interval for Proportion (p)</option>
+                            </optgroup>
                         </select>
                     </div>
                     <span id="session-stats" class="session-stats">Attempts: 0 | Accuracy: 0%</span>
@@ -43,34 +80,38 @@
 
                 <div id="problem-prompt" class="prompt">Loading problem...</div>
 
-                <div class="input-row">
+                <!-- Single-stage inputs (Unit 3) -->
+                <div id="single-input-panel" class="input-row">
                     <label for="answer-input"><strong id="input-label">Answer:</strong></label>
                     <input type="number" step="any" id="answer-input" placeholder="e.g. 0.4532" autocomplete="off">
-                    <button id="submit-btn" onclick="submitAnswer()">Submit Answer</button>
-                    <button id="next-btn" onclick="loadProblem()" style="display: none;">Next Problem &rarr;</button>
+                    <button id="submit-btn" onclick="submitSingleAnswer()">Submit Answer</button>
                 </div>
 
-                <div id="feedback-banner" style="display: none;"></div>
+                <!-- Multi-stage container (Unit 4) -->
+                <div id="multi-stage-panel" style="display: none;"></div>
+
+                <button id="next-btn" onclick="loadProblem()" style="display: none; margin-top: 15px;">Next Problem &rarr;</button>
+
+                <div id="feedback-banner" style="display: none; margin-top: 15px;"></div>
             </div>
 
             <div id="solution-card" class="card solution" style="display: none;">
                 <h3>Step-by-Step Worked Solution</h3>
-                
-                <div class="graph-container">
+                <div class="graph-container" id="graph-wrapper">
                     <svg id="normal-curve-svg" viewBox="0 0 600 220" preserveAspectRatio="xMidYMid meet"></svg>
                 </div>
-
                 <div id="solution-content"></div>
             </div>
         </main>
     </div>
 
     <script>
-        const STORAGE_KEY = 'komore_unit3_state_v3';
+        const STORAGE_KEY = 'komore_state_v4';
         const TARGET_MASTERY = 5;
         let currentProblem = null;
+        let isMultiStage = false;
+        let currentStageIndex = 0;
 
-        // Structured state: independent streaks per skill
         let state = {
             selectedTopic: 'random',
             totalAttempted: 0,
@@ -80,15 +121,15 @@
                 between:    { streak: 0, mastered: false },
                 left_tail:  { streak: 0, mastered: false },
                 right_tail: { streak: 0, mastered: false },
-                inverse:    { streak: 0, mastered: false }
+                inverse:    { streak: 0, mastered: false },
+                ci_mean_t:  { streak: 0, mastered: false },
+                ci_prop_z:  { streak: 0, mastered: false }
             }
         };
 
         function getActiveSkillState() {
             const topic = state.selectedTopic || 'random';
-            if (!state.skills[topic]) {
-                state.skills[topic] = { streak: 0, mastered: false };
-            }
+            if (!state.skills[topic]) state.skills[topic] = { streak: 0, mastered: false };
             return state.skills[topic];
         }
 
@@ -97,15 +138,12 @@
                 const saved = localStorage.getItem(STORAGE_KEY);
                 if (saved) {
                     const parsed = JSON.parse(saved);
-                    // Deep merge to safeguard missing skill keys
                     state.selectedTopic = parsed.selectedTopic || 'random';
                     state.totalAttempted = parsed.totalAttempted || 0;
                     state.totalCorrect = parsed.totalCorrect || 0;
                     if (parsed.skills) {
                         for (let k in parsed.skills) {
-                            if (state.skills[k]) {
-                                state.skills[k] = parsed.skills[k];
-                            }
+                            if (state.skills[k]) state.skills[k] = parsed.skills[k];
                         }
                     }
                 }
@@ -119,15 +157,13 @@
         function saveState() {
             try {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-            } catch (e) {
-                console.warn('Failed to save to localStorage');
-            }
+            } catch (e) {}
             updateStatsUI();
         }
 
         function resetCurrentSkill() {
             const topic = state.selectedTopic || 'random';
-            if (confirm(`Reset your streak for this specific skill?`)) {
+            if (confirm("Reset your streak for this specific skill?")) {
                 state.skills[topic] = { streak: 0, mastered: false };
                 saveState();
             }
@@ -174,51 +210,29 @@
         function drawNormalDistribution(plotData) {
             const svg = document.getElementById('normal-curve-svg');
             svg.innerHTML = '';
+            const width = 600, baselineY = 175, peakHeight = 140;
+            const zMin = -3.5, zMax = 3.5;
 
-            const width = 600;
-            const baselineY = 175;
-            const peakHeight = 140;
-            const zMin = -3.5;
-            const zMax = 3.5;
+            function zToX(z) { return ((z - zMin) / (zMax - zMin)) * (width - 80) + 40; }
+            function gaussian(z) { return Math.exp(-0.5 * z * z); }
+            function zToY(z) { return baselineY - gaussian(z) * peakHeight; }
 
-            function zToX(z) {
-                return ((z - zMin) / (zMax - zMin)) * (width - 80) + 40;
-            }
-            function gaussian(z) {
-                return Math.exp(-0.5 * z * z);
-            }
-            function zToY(z) {
-                return baselineY - gaussian(z) * peakHeight;
-            }
-
-            let startZ = zMin;
-            let endZ = zMax;
-
+            let startZ = zMin, endZ = zMax;
             if (plotData.type === 'between') {
                 startZ = Math.max(zMin, Math.min(plotData.z1, zMax));
                 endZ = Math.max(zMin, Math.min(plotData.z2, zMax));
             } else if (plotData.type === 'left_tail') {
-                startZ = zMin;
                 endZ = Math.max(zMin, Math.min(plotData.z, zMax));
             } else if (plotData.type === 'right_tail') {
                 startZ = Math.max(zMin, Math.min(plotData.z, zMax));
-                endZ = zMax;
             } else if (plotData.type === 'inverse') {
-                if (plotData.is_top) {
-                    startZ = Math.max(zMin, Math.min(plotData.z, zMax));
-                    endZ = zMax;
-                } else {
-                    startZ = zMin;
-                    endZ = Math.max(zMin, Math.min(plotData.z, zMax));
-                }
+                if (plotData.is_top) startZ = Math.max(zMin, Math.min(plotData.z, zMax));
+                else endZ = Math.max(zMin, Math.min(plotData.z, zMax));
             }
 
             let shadeD = `M ${zToX(startZ)} ${baselineY}`;
-            const step = 0.05;
-            for (let z = startZ; z <= endZ; z += step) {
-                shadeD += ` L ${zToX(z)} ${zToY(z)}`;
-            }
-            shadeD += ` L ${zToX(endZ)} ${zToY(endZ)} L ${zToX(endZ)} ${baselineY} Z`;
+            for (let z = startZ; z <= endZ; z += 0.05) shadeD += ` L ${zToX(z)} ${zToY(z)}`;
+            shadeD += ` L ${zToX(endZ)} ${baselineY} Z`;
 
             const shadePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
             shadePath.setAttribute("d", shadeD);
@@ -227,111 +241,129 @@
             svg.appendChild(shadePath);
 
             let curveD = `M ${zToX(zMin)} ${baselineY}`;
-            for (let z = zMin; z <= zMax; z += step) {
-                curveD += ` L ${zToX(z)} ${zToY(z)}`;
-            }
-            curveD += ` L ${zToX(zMax)} ${baselineY}`;
-
+            for (let z = zMin; z <= zMax; z += 0.05) curveD += ` L ${zToX(z)} ${zToY(z)}`;
             const curvePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
             curvePath.setAttribute("d", curveD);
             curvePath.setAttribute("fill", "none");
             curvePath.setAttribute("stroke", "#1e40af");
             curvePath.setAttribute("stroke-width", "2.5");
             svg.appendChild(curvePath);
-
-            const axisLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
-            axisLine.setAttribute("x1", "20");
-            axisLine.setAttribute("y1", baselineY);
-            axisLine.setAttribute("x2", width - 20);
-            axisLine.setAttribute("y2", baselineY);
-            axisLine.setAttribute("stroke", "#4b5563");
-            axisLine.setAttribute("stroke-width", "1.5");
-            svg.appendChild(axisLine);
-
-            const meanLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
-            meanLine.setAttribute("x1", zToX(0));
-            meanLine.setAttribute("y1", baselineY);
-            meanLine.setAttribute("x2", zToX(0));
-            meanLine.setAttribute("y2", zToY(0));
-            meanLine.setAttribute("stroke", "#9ca3af");
-            meanLine.setAttribute("stroke-dasharray", "4 4");
-            svg.appendChild(meanLine);
-
-            function addTick(z, label, subLabel, isBold = false) {
-                const x = zToX(z);
-                const tick = document.createElementNS("http://www.w3.org/2000/svg", "line");
-                tick.setAttribute("x1", x);
-                tick.setAttribute("y1", baselineY);
-                tick.setAttribute("x2", x);
-                tick.setAttribute("y2", baselineY + 6);
-                tick.setAttribute("stroke", isBold ? "#1e40af" : "#6b7280");
-                tick.setAttribute("stroke-width", isBold ? "2" : "1");
-                svg.appendChild(tick);
-
-                const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-                txt.setAttribute("x", x);
-                txt.setAttribute("y", baselineY + 19);
-                txt.setAttribute("text-anchor", "middle");
-                txt.setAttribute("font-size", "12");
-                txt.setAttribute("font-family", "inherit");
-                txt.setAttribute("fill", isBold ? "#1e40af" : "#374151");
-                if (isBold) txt.setAttribute("font-weight", "bold");
-                txt.textContent = label;
-                svg.appendChild(txt);
-
-                if (subLabel) {
-                    const subTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-                    subTxt.setAttribute("x", x);
-                    subTxt.setAttribute("y", baselineY + 33);
-                    subTxt.setAttribute("text-anchor", "middle");
-                    subTxt.setAttribute("font-size", "11");
-                    subTxt.setAttribute("font-family", "inherit");
-                    subTxt.setAttribute("fill", "#6b7280");
-                    subTxt.textContent = subLabel;
-                    svg.appendChild(subTxt);
-                }
-            }
-
-            addTick(0, `μ = ${plotData.mu}`, "z = 0");
-
-            if (plotData.type === 'between') {
-                addTick(plotData.z1, `x₁ = ${plotData.x1}`, `z = ${plotData.z1}`, true);
-                addTick(plotData.z2, `x₂ = ${plotData.x2}`, `z = ${plotData.z2}`, true);
-            } else if (plotData.type === 'left_tail' || plotData.type === 'right_tail') {
-                addTick(plotData.z, `x = ${plotData.x}`, `z = ${plotData.z}`, true);
-            } else if (plotData.type === 'inverse') {
-                addTick(plotData.z, `Cutoff x = ${plotData.x}`, `z = ${plotData.z}`, true);
-            }
         }
 
         async function loadProblem() {
             document.getElementById('feedback-banner').style.display = 'none';
             document.getElementById('solution-card').style.display = 'none';
             document.getElementById('next-btn').style.display = 'none';
-            document.getElementById('submit-btn').style.display = 'inline-block';
-            
-            const input = document.getElementById('answer-input');
-            input.disabled = false;
-            input.value = '';
 
-            try {
-                const topic = state.selectedTopic || 'random';
+            const topic = state.selectedTopic || 'random';
+            isMultiStage = topic.startsWith('ci_');
+
+            if (isMultiStage) {
+                document.getElementById('single-input-panel').style.display = 'none';
+                document.getElementById('multi-stage-panel').style.display = 'block';
+                document.getElementById('graph-wrapper').style.display = 'none';
+                
+                const subTopic = topic.replace('ci_', '');
+                const res = await fetch(`/api/problem/ci?topic=${encodeURIComponent(subTopic)}`);
+                currentProblem = await res.json();
+                
+                renderMultiStageUI();
+            } else {
+                document.getElementById('single-input-panel').style.display = 'flex';
+                document.getElementById('multi-stage-panel').style.display = 'none';
+                document.getElementById('graph-wrapper').style.display = 'block';
+                document.getElementById('submit-btn').style.display = 'inline-block';
+                
+                const input = document.getElementById('answer-input');
+                input.disabled = false;
+                input.value = '';
+
                 const res = await fetch(`/api/problem/normal?topic=${encodeURIComponent(topic)}`);
                 currentProblem = await res.json();
 
                 document.getElementById('input-label').innerText = currentProblem.input_label || "Answer:";
                 input.placeholder = currentProblem.placeholder || "e.g. 0.4532";
-
-                const promptEl = document.getElementById('problem-prompt');
-                promptEl.innerHTML = currentProblem.prompt;
-                triggerKaTeX(promptEl);
                 input.focus();
-            } catch (err) {
-                document.getElementById('problem-prompt').innerText = 'Failed to load problem. Check server connection.';
+            }
+
+            const promptEl = document.getElementById('problem-prompt');
+            promptEl.innerHTML = currentProblem.prompt;
+            triggerKaTeX(promptEl);
+        }
+
+        function renderMultiStageUI() {
+            const container = document.getElementById('multi-stage-panel');
+            container.innerHTML = '';
+            currentStageIndex = 0;
+
+            currentProblem.steps.forEach((step, idx) => {
+                const box = document.createElement('div');
+                box.id = `stage-box-${idx}`;
+                box.className = idx === 0 ? 'stage-box active' : 'stage-box';
+                if (idx > 0) box.style.opacity = '0.5';
+
+                box.innerHTML = `
+                    <div class="stage-header">
+                        <span>Step ${step.step_num}: ${step.label}</span>
+                        <span id="stage-status-${idx}"></span>
+                    </div>
+                    <div class="input-row" style="margin: 6px 0 0 0;">
+                        <input type="number" step="any" id="stage-input-${idx}" placeholder="${step.placeholder}" ${idx > 0 ? 'disabled' : ''} autocomplete="off">
+                        <button id="stage-btn-${idx}" onclick="submitStage(${idx})" ${idx > 0 ? 'disabled' : ''}>Verify Step</button>
+                    </div>
+                    <div class="stage-hint">${step.hint}</div>
+                `;
+                container.appendChild(box);
+            });
+
+            document.getElementById('stage-input-0').focus();
+        }
+
+        async function submitStage(idx) {
+            const input = document.getElementById(`stage-input-${idx}`);
+            const rawVal = input.value.trim();
+            if (!rawVal) return;
+
+            const userVal = parseFloat(rawVal);
+            const step = currentProblem.steps[idx];
+
+            const res = await fetch('/api/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_answer: userVal,
+                    expected_answers: step.expected,
+                    tolerance: step.tolerance
+                })
+            });
+            const data = await res.json();
+            const statusEl = document.getElementById(`stage-status-${idx}`);
+            const box = document.getElementById(`stage-box-${idx}`);
+
+            if (data.correct) {
+                statusEl.innerHTML = '<span style="color: #10b981;">&#10004; Correct</span>';
+                box.className = 'stage-box completed';
+                input.disabled = true;
+                document.getElementById(`stage-btn-${idx}`).disabled = true;
+
+                if (idx + 1 < currentProblem.steps.length) {
+                    const nextBox = document.getElementById(`stage-box-${idx + 1}`);
+                    nextBox.className = 'stage-box active';
+                    nextBox.style.opacity = '1';
+                    document.getElementById(`stage-input-${idx + 1}`).disabled = false;
+                    document.getElementById(`stage-btn-${idx + 1}`).disabled = false;
+                    document.getElementById(`stage-input-${idx + 1}`).focus();
+                } else {
+                    // Full CI completed successfully
+                    handleOverallResult(true);
+                }
+            } else {
+                statusEl.innerHTML = '<span style="color: #ef4444;">&#10008; Incorrect</span>';
+                handleOverallResult(false);
             }
         }
 
-        async function submitAnswer() {
+        async function submitSingleAnswer() {
             const rawVal = document.getElementById('answer-input').value.trim();
             if (!rawVal) return;
 
@@ -345,43 +377,44 @@
                     tolerance: currentProblem.tolerance
                 })
             });
-
             const data = await res.json();
+            handleOverallResult(data.correct);
+
+            document.getElementById('submit-btn').style.display = 'none';
+            document.getElementById('answer-input').disabled = true;
+        }
+
+        function handleOverallResult(isSuccess) {
             const feedback = document.getElementById('feedback-banner');
             feedback.style.display = 'block';
-
             state.totalAttempted += 1;
             const skillState = getActiveSkillState();
 
-            if (data.correct) {
+            if (isSuccess) {
                 skillState.streak += 1;
                 state.totalCorrect += 1;
                 feedback.className = 'banner correct';
-                feedback.innerHTML = '&#10004; Correct! Great job.';
+                feedback.innerHTML = '&#10004; Correct! Great procedural execution.';
             } else {
                 skillState.streak = 0;
                 feedback.className = 'banner incorrect';
-                feedback.innerHTML = '&#10008; Incorrect. Review the worked solution below:';
+                feedback.innerHTML = '&#10008; Incorrect intermediate step. Review the full derivation:';
                 
                 const solCard = document.getElementById('solution-card');
                 const solContent = document.getElementById('solution-content');
-                
-                drawNormalDistribution(currentProblem.plot_data);
+                if (currentProblem.plot_data) drawNormalDistribution(currentProblem.plot_data);
                 solContent.innerHTML = currentProblem.solution;
                 triggerKaTeX(solContent);
                 solCard.style.display = 'block';
             }
 
             saveState();
-
-            document.getElementById('submit-btn').style.display = 'none';
-            document.getElementById('answer-input').disabled = true;
             document.getElementById('next-btn').style.display = 'inline-block';
             document.getElementById('next-btn').focus();
         }
 
         document.getElementById('answer-input').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') submitAnswer();
+            if (e.key === 'Enter') submitSingleAnswer();
         });
 
         window.addEventListener('load', () => {
