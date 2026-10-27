@@ -8,10 +8,15 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
-    
-    <link rel="stylesheet" href="/static/style.css?v=7">
+
+    <!-- MathLive Engine -->
+    <script defer src="https://unpkg.com/mathlive"></script>
+
+    <!-- Math.js for Evaluation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.1/math.js"></script>
+
+    <link rel="stylesheet" href="/static/style.css?v=11">
     <style>
-        /* Base page wrapper */
         #page-wrapper {
             display: block;
             width: 100%;
@@ -28,7 +33,7 @@
             padding: 0 10px;
         }
 
-        /* True split-screen layout when snapped right */
+        /* Split-screen layout when Tables are snapped right */
         body.snap-mode-right #page-wrapper {
             padding-right: 470px !important;
             padding-left: 20px !important;
@@ -39,7 +44,7 @@
             width: 100% !important;
         }
 
-        /* True split-screen layout when snapped left */
+        /* Split-screen layout when Tables are snapped left */
         body.snap-mode-left #page-wrapper {
             padding-left: 470px !important;
             padding-right: 20px !important;
@@ -50,7 +55,12 @@
             width: 100% !important;
         }
 
-        /* Floating Window Styles */
+        /* Page clearance when DeltaMath-style dock is active */
+        body.calc-docked-active #page-wrapper {
+            padding-bottom: 310px !important;
+        }
+
+        /* Floating Tables Window */
         #floating-tables-window {
             position: fixed;
             top: 75px;
@@ -72,7 +82,6 @@
             user-select: none;
         }
 
-        /* Snapped Right State */
         #floating-tables-window.is-snapped-right {
             top: 0 !important;
             bottom: 0 !important;
@@ -88,7 +97,6 @@
             border-bottom: none !important;
         }
 
-        /* Snapped Left State */
         #floating-tables-window.is-snapped-left {
             top: 0 !important;
             bottom: 0 !important;
@@ -104,7 +112,6 @@
             border-bottom: none !important;
         }
 
-        /* Fullscreen Maximize State */
         #floating-tables-window.is-maximized {
             top: 0 !important;
             left: 0 !important;
@@ -255,9 +262,162 @@
             z-index: 10000;
             background: linear-gradient(135deg, transparent 50%, #94a3b8 50%, #94a3b8 60%, transparent 60%, transparent 75%, #94a3b8 75%, #94a3b8 85%, transparent 85%);
         }
+
+        /* ============================================================ */
+        /* DELTAMATH-STYLE BOTTOM DOCK CALCULATOR                       */
+        /* ============================================================ */
+        #deltamath-calc-dock {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #73808c;
+            box-shadow: 0 -3px 20px rgba(0, 0, 0, 0.28);
+            z-index: 10010;
+            display: none;
+            flex-direction: column;
+            border-top: 1px solid #5a6672;
+        }
+
+        /* Top Display Toolbar above the keys */
+        .deltamath-calc-header {
+            background: #ffffff;
+            border-bottom: 1px solid #cbd5e1;
+            padding: 6px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .calc-display-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            max-width: 820px;
+            margin: 0 auto;
+        }
+
+        #calc-mathfield {
+            flex: 1;
+            border: 1px solid #94a3b8;
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 1.45rem;
+            background: #ffffff;
+            outline: none;
+            min-height: 42px;
+            display: flex;
+            align-items: center;
+        }
+        #calc-mathfield:focus-within {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+        }
+
+        .calc-display-history {
+            font-size: 0.95rem;
+            color: #64748b;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .calc-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .calc-header-btn {
+            background: #e2e8f0;
+            border: 1px solid #cbd5e1;
+            color: #334155;
+            font-size: 0.8rem;
+            font-weight: 700;
+            border-radius: 4px;
+            padding: 5px 9px;
+            cursor: pointer;
+        }
+        .calc-header-btn:hover { background: #cbd5e1; }
+        .calc-header-close {
+            background: #fee2e2;
+            color: #dc2626;
+            border-color: #fca5a5;
+        }
+
+        /* Keypad Tray Container matching DeltaMath layout */
+        .deltamath-calc-tray {
+            padding: 10px 16px 14px 16px;
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            background: #77838f;
+        }
+
+        .dm-keypad-block {
+            display: grid;
+            gap: 6px;
+        }
+
+        .dm-block-vars {
+            grid-template-columns: repeat(4, 52px);
+            grid-template-rows: repeat(4, 40px);
+        }
+
+        .dm-block-numpad {
+            grid-template-columns: repeat(4, 52px);
+            grid-template-rows: repeat(4, 40px);
+        }
+
+        .dm-block-nav {
+            grid-template-columns: repeat(2, 54px);
+            grid-template-rows: repeat(4, 40px);
+        }
+
+        .dm-btn {
+            background: #ffffff;
+            border: 1px solid #b0b9c2;
+            border-radius: 5px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: #1e293b;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+            transition: all 0.08s ease;
+        }
+        .dm-btn:hover { background: #f1f5f9; }
+        .dm-btn:active { background: #e2e8f0; transform: translateY(1px); }
+
+        .dm-btn-op {
+            color: #1d4ed8;
+            font-size: 1.25rem;
+        }
+        .dm-btn-enter {
+            background: #2563eb;
+            color: #ffffff;
+            border-color: #1d4ed8;
+            grid-column: span 2;
+            font-size: 0.95rem;
+            font-weight: 700;
+        }
+        .dm-btn-enter:hover { background: #1d4ed8; }
+
+        .dm-btn-del {
+            font-size: 1.15rem;
+        }
+
+        .btn-calc.calc-restricted {
+            display: none !important;
+        }
     </style>
-    <script defer src="/static/tables.js?v=7"></script>
-    <script defer src="/static/app.js?v=7"></script>
+    <script defer src="/static/tables.js?v=11"></script>
+    <script defer src="/static/app.js?v=11"></script>
+    <script defer src="/static/calculator.js?v=11"></script>
 </head>
 <body>
     <div id="page-wrapper">
@@ -271,6 +431,7 @@
                     <button class="btn-secondary" onclick="toggleFloatingWindow()">📋 Formulas &amp; Tables</button>
                     <div id="mastery-pill" class="mastery-badge">Streak: 0 / 5</div>
                     <button id="reset-progress-btn" class="text-btn" onclick="resetCurrentSkill()">Reset Skill</button>
+                    <button class="btn-secondary" onclick="toggleCalculatorWindow()">🖩 Calculator</button>
                 </div>
             </header>
 
@@ -298,14 +459,12 @@
 
                     <div id="problem-prompt" class="prompt">Loading problem...</div>
 
-                    <!-- Single-stage inputs (Normal Probabilities) -->
                     <div id="single-input-panel" class="input-row">
                         <label for="answer-input"><strong id="input-label">Answer:</strong></label>
                         <input type="number" step="any" id="answer-input" placeholder="e.g. 0.4532" autocomplete="off">
                         <button id="submit-btn" onclick="submitSingleAnswer()">Submit Answer</button>
                     </div>
 
-                    <!-- Multi-stage container (Confidence Intervals) -->
                     <div id="multi-stage-panel" style="display: none;"></div>
 
                     <button id="next-btn" onclick="loadProblem()" style="display: none; margin-top: 15px;">Next Problem &rarr;</button>
@@ -323,13 +482,13 @@
         </div>
     </div>
 
-    <!-- Floating Draggable, Resizable & Snappable Window -->
+    <!-- Floating Tables Window -->
     <div id="floating-tables-window">
         <div id="window-titlebar" class="window-titlebar">
             <span>📊 Tables &amp; Formulas</span>
             <div class="controls">
-                <button onclick="snapWindow('left')" title="Snap Left (Side by Side)">◧</button>
-                <button onclick="snapWindow('right')" title="Snap Right (Side by Side)">◨</button>
+                <button onclick="snapWindow('left')" title="Snap Left">◧</button>
+                <button onclick="snapWindow('right')" title="Snap Right">◨</button>
                 <button id="btn-maximize-restore" onclick="toggleMaximizeWindow()" title="Full Screen / Maximize">🗖</button>
                 <button onclick="closeFloatingWindow()" title="Close">&times;</button>
             </div>
@@ -344,7 +503,6 @@
         </div>
 
         <div class="window-body">
-            <!-- Table A Pane -->
             <div id="tab-table-a" class="tab-pane active">
                 <div class="table-intro">
                     <strong>Table A: Standard Normal Probabilities.</strong> Cumulative area to the left of \(z\).
@@ -361,7 +519,6 @@
                 </div>
             </div>
 
-            <!-- Table B Pane -->
             <div id="tab-table-b" class="tab-pane">
                 <div class="table-intro">
                     <strong>Table B: t-Distribution Critical Values (\(t^*\)).</strong>
@@ -400,7 +557,6 @@
                 </div>
             </div>
 
-            <!-- Table C Pane -->
             <div id="tab-table-c" class="tab-pane">
                 <div class="table-intro">
                     <strong>Table C: Chi-Square (\(\chi^2\)) Critical Values.</strong> Right-tail probability \(p\).
@@ -429,7 +585,6 @@
                 </div>
             </div>
 
-            <!-- Formulas Inference Pane -->
             <div id="tab-form-inf" class="tab-pane">
                 <div class="table-intro"><strong>Section II: Inference Formulas</strong></div>
                 <div class="table-scroll-container" style="font-size: 0.9rem; line-height: 1.6;">
@@ -441,7 +596,6 @@
                 </div>
             </div>
 
-            <!-- Formulas Descriptive Pane -->
             <div id="tab-form-desc" class="tab-pane">
                 <div class="table-intro"><strong>Section I: Descriptive &amp; Probability Formulas</strong></div>
                 <div class="table-scroll-container" style="font-size: 0.9rem; line-height: 1.6;">
@@ -451,8 +605,85 @@
                 </div>
             </div>
         </div>
-        <!-- Corner Resize Handle -->
         <div id="window-resize-grip" class="window-resize-grip" title="Drag to resize"></div>
+    </div>
+
+    <!-- DELTAMATH-STYLE BOTTOM DOCKED CALCULATOR -->
+    <div id="deltamath-calc-dock">
+        <!-- 1. Display Header Directly on Top of the Keyboard -->
+        <div class="deltamath-calc-header">
+            <div class="calc-display-section">
+                <span class="calc-display-history" id="calc-expression-preview"></span>
+                <math-field id="calc-mathfield" virtual-keyboard-mode="manual"></math-field>
+            </div>
+            <div class="calc-header-actions">
+                <button class="calc-header-btn" onclick="toggleCalculatorAngleMode()" id="calc-angle-btn">DEG</button>
+                <button class="calc-header-btn calc-header-close" onclick="closeCalculatorWindow()">&times;</button>
+            </div>
+        </div>
+
+        <!-- 2. Virtual Keyboard Tray on Bottom (DeltaMath 3-Cluster Layout) -->
+        <div class="deltamath-calc-tray">
+            <!-- Left Block: Variables & Functions -->
+            <div class="dm-keypad-block dm-block-vars">
+                <button class="dm-btn" onclick="calcInsert('x')">x</button>
+                <button class="dm-btn" onclick="calcInsert('y')">y</button>
+                <button class="dm-btn" onclick="calcInsert('(')">(</button>
+                <button class="dm-btn" onclick="calcInsert(')')">)</button>
+
+                <button class="dm-btn dm-btn-op" onclick="calcEvaluate()">=</button>
+                <button class="dm-btn" onclick="calcInsertSqrt()">√</button>
+                <button class="dm-btn" onclick="calcInsert('^2')">a²</button>
+                <button class="dm-btn" onclick="calcInsert('^')">a^b</button>
+
+                <button class="dm-btn" onclick="toggleExtendedFuncs(this)">Funcs</button>
+                <button class="dm-btn" onclick="calcInsertAns()">Ans</button>
+                <button class="dm-btn" onclick="calcInsertFraction()">a/b</button>
+                <button class="dm-btn" onclick="calcInsert(',')">,</button>
+
+                <button class="dm-btn" onclick="calcInsert('\\pi')">π</button>
+                <button class="dm-btn" onclick="calcInsert('e')">e</button>
+                <button class="dm-btn" onclick="calcInsertAbs()">|x|</button>
+                <button class="dm-btn" onclick="calcInsertNthRoot()">ⁿ√</button>
+            </div>
+
+            <!-- Center Block: 10-Key Pad with Dedicated Divide & Multiply -->
+            <div class="dm-keypad-block dm-block-numpad">
+                <button class="dm-btn" onclick="calcInsert('7')">7</button>
+                <button class="dm-btn" onclick="calcInsert('8')">8</button>
+                <button class="dm-btn" onclick="calcInsert('9')">9</button>
+                <button class="dm-btn dm-btn-op" onclick="calcInsertFraction()" title="Divide (Creates Fraction)">÷</button>
+
+                <button class="dm-btn" onclick="calcInsert('4')">4</button>
+                <button class="dm-btn" onclick="calcInsert('5')">5</button>
+                <button class="dm-btn" onclick="calcInsert('6')">6</button>
+                <button class="dm-btn dm-btn-op" onclick="calcInsert('\\times ')">×</button>
+
+                <button class="dm-btn" onclick="calcInsert('1')">1</button>
+                <button class="dm-btn" onclick="calcInsert('2')">2</button>
+                <button class="dm-btn" onclick="calcInsert('3')">3</button>
+                <button class="dm-btn dm-btn-op" onclick="calcInsert('-')">−</button>
+
+                <button class="dm-btn" onclick="calcInsert('0')">0</button>
+                <button class="dm-btn" onclick="calcInsert('.')">.</button>
+                <button class="dm-btn" onclick="calcToFraction()">a b/c</button>
+                <button class="dm-btn dm-btn-op" onclick="calcInsert('+')">+</button>
+            </div>
+
+            <!-- Right Block: Clear, Navigation, Backspace & ENTER -->
+            <div class="dm-keypad-block dm-block-nav">
+                <button class="dm-btn dm-btn-del" onclick="calcBackspace()" title="Backspace">⌫</button>
+                <button class="dm-btn" onclick="calcClear()" title="Clear">AC</button>
+
+                <button class="dm-btn" onclick="calcNav('left')">←</button>
+                <button class="dm-btn" onclick="calcNav('right')">→</button>
+
+                <button class="dm-btn" onclick="calcNav('up')">↑</button>
+                <button class="dm-btn" onclick="calcNav('down')">↓</button>
+
+                <button class="dm-btn dm-btn-enter" onclick="calcEvaluate()">ENTER</button>
+            </div>
+        </div>
     </div>
 </body>
 </html>
