@@ -67,7 +67,7 @@ function switchTab(tabId) {
 function toggleFloatingWindow() {
     const win = document.getElementById('floating-tables-window');
     if (win.style.display === 'flex') {
-        win.style.display = 'none';
+        closeFloatingWindow();
     } else {
         win.style.display = 'flex';
         renderTableA();
@@ -85,10 +85,129 @@ function toggleFloatingWindow() {
 }
 
 function closeFloatingWindow() {
-    document.getElementById('floating-tables-window').style.display = 'none';
+    const win = document.getElementById('floating-tables-window');
+    win.style.display = 'none';
+    clearAllSnapStates(win);
 }
 
-// 2D Movement & Corner Resizing Engines
+// Memory of floating position & dimensions
+let savedFloat = {
+    left: 'auto',
+    right: '25px',
+    top: '75px',
+    width: '600px',
+    height: '520px'
+};
+
+function clearInlineStyles(win) {
+    win.style.removeProperty('left');
+    win.style.removeProperty('top');
+    win.style.removeProperty('right');
+    win.style.removeProperty('bottom');
+    win.style.removeProperty('width');
+    win.style.removeProperty('height');
+}
+
+function clearAllSnapStates(win) {
+    win.classList.remove('is-snapped-left', 'is-snapped-right', 'is-maximized');
+    document.body.classList.remove('snap-mode-left', 'snap-mode-right');
+    
+    const grip = document.getElementById('window-resize-grip');
+    if (grip) grip.style.display = 'block';
+
+    const maxBtn = document.getElementById('btn-maximize-restore');
+    if (maxBtn) {
+        maxBtn.innerText = '🗖';
+        maxBtn.title = 'Full Screen / Maximize';
+    }
+}
+
+function snapWindow(direction) {
+    const win = document.getElementById('floating-tables-window');
+    if (!win) return;
+
+    if (direction === 'left' && win.classList.contains('is-snapped-left')) {
+        restoreFloating(win);
+        return;
+    }
+    if (direction === 'right' && win.classList.contains('is-snapped-right')) {
+        restoreFloating(win);
+        return;
+    }
+
+    if (!win.classList.contains('is-snapped-left') && 
+        !win.classList.contains('is-snapped-right') && 
+        !win.classList.contains('is-maximized')) {
+        const rect = win.getBoundingClientRect();
+        savedFloat = {
+            left: rect.left + 'px',
+            right: 'auto',
+            top: rect.top + 'px',
+            width: rect.width + 'px',
+            height: rect.height + 'px'
+        };
+    }
+
+    clearInlineStyles(win);
+    clearAllSnapStates(win);
+
+    const grip = document.getElementById('window-resize-grip');
+    if (grip) grip.style.display = 'none';
+
+    if (direction === 'left') {
+        win.classList.add('is-snapped-left');
+        document.body.classList.add('snap-mode-left');
+    } else {
+        win.classList.add('is-snapped-right');
+        document.body.classList.add('snap-mode-right');
+    }
+}
+
+function toggleMaximizeWindow() {
+    const win = document.getElementById('floating-tables-window');
+    if (!win) return;
+
+    if (win.classList.contains('is-maximized')) {
+        restoreFloating(win);
+    } else {
+        if (!win.classList.contains('is-snapped-left') && !win.classList.contains('is-snapped-right')) {
+            const rect = win.getBoundingClientRect();
+            savedFloat = {
+                left: rect.left + 'px',
+                right: 'auto',
+                top: rect.top + 'px',
+                width: rect.width + 'px',
+                height: rect.height + 'px'
+            };
+        }
+
+        clearInlineStyles(win);
+        clearAllSnapStates(win);
+
+        win.classList.add('is-maximized');
+        const grip = document.getElementById('window-resize-grip');
+        if (grip) grip.style.display = 'none';
+
+        const maxBtn = document.getElementById('btn-maximize-restore');
+        if (maxBtn) {
+            maxBtn.innerText = '🗗';
+            maxBtn.title = 'Restore Window';
+        }
+    }
+}
+
+function restoreFloating(win) {
+    clearAllSnapStates(win);
+    clearInlineStyles(win);
+
+    win.style.left = savedFloat.left;
+    win.style.top = savedFloat.top;
+    win.style.right = savedFloat.right;
+    win.style.width = savedFloat.width;
+    win.style.height = savedFloat.height;
+}
+
+// 2D Drag & Corner Resize Handlers
 window.addEventListener('DOMContentLoaded', () => {
     const win = document.getElementById('floating-tables-window');
     const titlebar = document.getElementById('window-titlebar');
@@ -101,21 +220,33 @@ window.addEventListener('DOMContentLoaded', () => {
     let startWidth, startHeight;
     let startOffsetX, startOffsetY;
 
-    // Window Movement (Move by Titlebar)
     titlebar.addEventListener('mousedown', (e) => {
-        if (e.target.tagName.toLowerCase() === 'button') return;
+        if (e.target.closest('button')) return;
+
+        if (win.classList.contains('is-snapped-left') || 
+            win.classList.contains('is-snapped-right') || 
+            win.classList.contains('is-maximized')) {
+            const w = parseFloat(savedFloat.width) || 600;
+            const h = parseFloat(savedFloat.height) || 520;
+            clearAllSnapStates(win);
+            clearInlineStyles(win);
+            win.style.width = w + 'px';
+            win.style.height = h + 'px';
+            win.style.left = Math.max(10, e.clientX - w / 2) + 'px';
+            win.style.top = Math.max(10, e.clientY - 20) + 'px';
+        }
+
         isDragging = true;
         const rect = win.getBoundingClientRect();
         startOffsetX = e.clientX - rect.left;
         startOffsetY = e.clientY - rect.top;
 
-        win.style.setProperty('right', 'auto', 'important');
-        win.style.setProperty('left', rect.left + 'px', 'important');
-        win.style.setProperty('top', rect.top + 'px', 'important');
+        win.style.right = 'auto';
+        win.style.left = rect.left + 'px';
+        win.style.top = rect.top + 'px';
         document.body.style.userSelect = 'none';
     });
 
-    // Window Resizing (Corner Grip Drag)
     if (resizeGrip) {
         resizeGrip.addEventListener('mousedown', (e) => {
             isResizing = true;
@@ -125,9 +256,9 @@ window.addEventListener('DOMContentLoaded', () => {
             startWidth = rect.width;
             startHeight = rect.height;
 
-            win.style.setProperty('right', 'auto', 'important');
-            win.style.setProperty('left', rect.left + 'px', 'important');
-            win.style.setProperty('top', rect.top + 'px', 'important');
+            win.style.right = 'auto';
+            win.style.left = rect.left + 'px';
+            win.style.top = rect.top + 'px';
             document.body.style.userSelect = 'none';
             e.stopPropagation();
             e.preventDefault();
@@ -136,19 +267,29 @@ window.addEventListener('DOMContentLoaded', () => {
 
     window.addEventListener('mousemove', (e) => {
         if (isDragging) {
-            const newLeft = Math.max(10, Math.min(window.innerWidth - 80, e.clientX - startOffsetX));
-            const newTop = Math.max(10, Math.min(window.innerHeight - 60, e.clientY - startOffsetY));
-            win.style.setProperty('left', newLeft + 'px', 'important');
-            win.style.setProperty('top', newTop + 'px', 'important');
+            const newLeft = Math.max(0, Math.min(window.innerWidth - 100, e.clientX - startOffsetX));
+            const newTop = Math.max(0, Math.min(window.innerHeight - 50, e.clientY - startOffsetY));
+            win.style.left = newLeft + 'px';
+            win.style.top = newTop + 'px';
         } else if (isResizing) {
-            const newWidth = Math.max(320, Math.min(window.innerWidth - 40, startWidth + (e.clientX - startX)));
-            const newHeight = Math.max(240, Math.min(window.innerHeight - 40, startHeight + (e.clientY - startY)));
-            win.style.setProperty('width', newWidth + 'px', 'important');
-            win.style.setProperty('height', newHeight + 'px', 'important');
+            const newWidth = Math.max(320, Math.min(window.innerWidth - 20, startWidth + (e.clientX - startX)));
+            const newHeight = Math.max(240, Math.min(window.innerHeight - 20, startHeight + (e.clientY - startY)));
+            win.style.width = newWidth + 'px';
+            win.style.height = newHeight + 'px';
         }
     });
 
     window.addEventListener('mouseup', () => {
+        if (isDragging || isResizing) {
+            const rect = win.getBoundingClientRect();
+            savedFloat = {
+                left: rect.left + 'px',
+                right: 'auto',
+                top: rect.top + 'px',
+                width: rect.width + 'px',
+                height: rect.height + 'px'
+            };
+        }
         isDragging = false;
         isResizing = false;
         document.body.style.userSelect = '';
