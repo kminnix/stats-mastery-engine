@@ -1,6 +1,6 @@
 ﻿let lastAnswer = 0;
 let isDegreeMode = true;
-let isDockedMode = true;
+let currentDockMode = 'bottom'; // 'bottom' | 'left' | 'right' | 'float'
 
 const calcHistory = [];
 let historyIndex = -1;
@@ -21,15 +21,49 @@ function suppressMathLiveIcons() {
     }
 }
 
+function updateBodyDockGutters(mode) {
+    document.body.classList.remove('calc-docked-bottom', 'calc-docked-left', 'calc-docked-right');
+    if (mode === 'bottom') document.body.classList.add('calc-docked-bottom');
+    if (mode === 'left') document.body.classList.add('calc-docked-left');
+    if (mode === 'right') document.body.classList.add('calc-docked-right');
+}
+
+function setCalcDockMode(mode) {
+    const dock = document.getElementById('calc-dock');
+    if (!dock) return;
+
+    currentDockMode = mode;
+    dock.className = `dock-${mode}`;
+    updateBodyDockGutters(mode);
+
+    // Update active highlight on toolbar dock buttons
+    document.querySelectorAll('.calc-dock-controls .calc-header-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    const activeBtn = document.querySelector(`.calc-dock-controls button[onclick*="'${mode}'"]`);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    // Clear inline drag positioning when docking
+    if (mode !== 'float') {
+        dock.style.left = '';
+        dock.style.top = '';
+        dock.style.right = '';
+        dock.style.bottom = '';
+        dock.style.width = '';
+        dock.style.height = '';
+    }
+
+    const mf = getMathField();
+    if (mf) mf.focus();
+}
+
 function toggleCalculatorWindow() {
     const dock = document.getElementById('calc-dock');
     if (dock.style.display === 'flex') {
         closeCalculatorWindow();
     } else {
         dock.style.display = 'flex';
-        if (isDockedMode) {
-            document.body.classList.add('calc-docked-active');
-        }
+        setCalcDockMode(currentDockMode || 'bottom');
         suppressMathLiveIcons();
         const mf = getMathField();
         if (mf) setTimeout(() => mf.focus(), 60);
@@ -39,31 +73,7 @@ function toggleCalculatorWindow() {
 function closeCalculatorWindow() {
     const dock = document.getElementById('calc-dock');
     dock.style.display = 'none';
-    document.body.classList.remove('calc-docked-active');
-}
-
-function toggleCalculatorDock() {
-    const dock = document.getElementById('calc-dock');
-    const dockBtn = document.getElementById('calc-dock-btn');
-    isDockedMode = !isDockedMode;
-
-    if (isDockedMode) {
-        dock.className = 'is-docked';
-        dockBtn.innerText = '⬈';
-        dockBtn.title = 'Undock / Float Window';
-        document.body.classList.add('calc-docked-active');
-        dock.style.left = '';
-        dock.style.top = '';
-        dock.style.right = '';
-        dock.style.bottom = '';
-    } else {
-        dock.className = 'is-floating';
-        dockBtn.innerText = '⬊';
-        dockBtn.title = 'Dock to Bottom';
-        document.body.classList.remove('calc-docked-active');
-    }
-    const mf = getMathField();
-    if (mf) mf.focus();
+    document.body.classList.remove('calc-docked-bottom', 'calc-docked-left', 'calc-docked-right');
 }
 
 function toggleKeypadBank(bank) {
@@ -293,6 +303,7 @@ function calcEvaluate() {
     }
 }
 
+// Dragging engine for Float mode
 window.addEventListener('DOMContentLoaded', () => {
     suppressMathLiveIcons();
     const dock = document.getElementById('calc-dock');
@@ -304,7 +315,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (titlebar) {
         titlebar.addEventListener('mousedown', (e) => {
-            if (isDockedMode) return;
+            if (currentDockMode !== 'float') return;
             if (e.target.closest('button') || e.target.closest('math-field') || e.target.closest('.calc-history-list')) return;
 
             isDragging = true;

@@ -15,7 +15,7 @@
     <!-- Math.js for Evaluation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.1/math.js"></script>
 
-    <link rel="stylesheet" href="/static/style.css?v=16">
+    <link rel="stylesheet" href="/static/style.css?v=17">
     <style>
         #page-wrapper {
             display: block;
@@ -33,30 +33,38 @@
             padding: 0 10px;
         }
 
-        body.snap-mode-right #page-wrapper {
-            padding-right: 470px !important;
+        /* Split-screen layout when Tables OR Calc are docked right */
+        body.snap-mode-right #page-wrapper,
+        body.calc-docked-right #page-wrapper {
+            padding-right: 480px !important;
             padding-left: 20px !important;
         }
-        body.snap-mode-right #page-container {
+        body.snap-mode-right #page-container,
+        body.calc-docked-right #page-container {
             max-width: 100% !important;
             margin: 0 !important;
             width: 100% !important;
         }
 
-        body.snap-mode-left #page-wrapper {
-            padding-left: 470px !important;
+        /* Split-screen layout when Tables OR Calc are docked left */
+        body.snap-mode-left #page-wrapper,
+        body.calc-docked-left #page-wrapper {
+            padding-left: 480px !important;
             padding-right: 20px !important;
         }
-        body.snap-mode-left #page-container {
+        body.snap-mode-left #page-container,
+        body.calc-docked-left #page-container {
             max-width: 100% !important;
             margin: 0 !important;
             width: 100% !important;
         }
 
-        body.calc-docked-active #page-wrapper {
+        /* Page clearance when Calc is docked at bottom (Default) */
+        body.calc-docked-bottom #page-wrapper {
             padding-bottom: 330px !important;
         }
 
+        /* Floating Tables Window */
         #floating-tables-window {
             position: fixed;
             top: 75px;
@@ -259,7 +267,9 @@
             background: linear-gradient(135deg, transparent 50%, #94a3b8 50%, #94a3b8 60%, transparent 60%, transparent 75%, #94a3b8 75%, #94a3b8 85%, transparent 85%);
         }
 
-        /* DOCKED VS FLOATING CALCULATOR */
+        /* ============================================================ */
+        /* MULTI-EDGE DOCKED / FLOATING CALCULATOR                      */
+        /* ============================================================ */
         #calc-dock {
             position: fixed;
             background: #6e7a85;
@@ -271,22 +281,51 @@
             box-sizing: border-box;
         }
 
-        #calc-dock.is-docked {
+        /* 1. Dock Bottom (Default) */
+        #calc-dock.dock-bottom {
             bottom: 0 !important;
             left: 0 !important;
             right: 0 !important;
             top: auto !important;
             width: 100vw !important;
+            height: auto !important;
             border-top: 2px solid #475569;
             border-radius: 0;
         }
 
-        #calc-dock.is-floating {
+        /* 2. Dock Left */
+        #calc-dock.dock-left {
+            top: 0 !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: auto !important;
+            width: 460px !important;
+            height: 100vh !important;
+            border-right: 2px solid #475569;
+            border-radius: 0;
+            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.25);
+        }
+
+        /* 3. Dock Right */
+        #calc-dock.dock-right {
+            top: 0 !important;
+            bottom: 0 !important;
+            right: 0 !important;
+            left: auto !important;
+            width: 460px !important;
+            height: 100vh !important;
+            border-left: 2px solid #475569;
+            border-radius: 0;
+            box-shadow: -4px 0 20px rgba(0, 0, 0, 0.25);
+        }
+
+        /* 4. Undocked / Floating */
+        #calc-dock.dock-float {
             top: 100px;
             right: 25px;
             left: auto;
             bottom: auto;
-            width: 615px;
+            width: 580px;
             max-width: 96vw;
             border-radius: 10px;
             border: 1px solid #475569;
@@ -304,7 +343,7 @@
             cursor: default;
             box-sizing: border-box;
         }
-        #calc-dock.is-floating .calc-header {
+        #calc-dock.dock-float .calc-header {
             cursor: move;
             user-select: none;
             background: #f8fafc;
@@ -413,6 +452,11 @@
             flex-shrink: 0;
         }
 
+        .calc-dock-controls {
+            display: flex;
+            gap: 2px;
+        }
+
         .calc-header-btn {
             background: #e2e8f0;
             border: 1px solid #cbd5e1;
@@ -420,12 +464,17 @@
             font-size: 0.8rem;
             font-weight: 700;
             border-radius: 4px;
-            padding: 3px 8px;
+            padding: 3px 6px;
             cursor: pointer;
-            width: 44px;
             text-align: center;
+            line-height: 1;
         }
         .calc-header-btn:hover { background: #cbd5e1; }
+        .calc-header-btn.active {
+            background: #2563eb;
+            color: #ffffff;
+            border-color: #1d4ed8;
+        }
         .calc-header-close {
             background: #fee2e2;
             color: #dc2626;
@@ -439,8 +488,9 @@
             padding: 8px 14px 10px 14px;
             display: flex;
             justify-content: center;
-            gap: 14px;
+            gap: 12px;
             background: #73808c;
+            flex-wrap: wrap;
         }
 
         .calc-keypad-block {
@@ -449,17 +499,17 @@
         }
 
         .calc-block-vars {
-            grid-template-columns: repeat(4, 52px);
+            grid-template-columns: repeat(4, 48px);
             grid-template-rows: repeat(4, 38px);
         }
 
         .calc-block-numpad {
-            grid-template-columns: repeat(4, 52px);
+            grid-template-columns: repeat(4, 48px);
             grid-template-rows: repeat(4, 38px);
         }
 
         .calc-block-nav {
-            grid-template-columns: repeat(2, 54px);
+            grid-template-columns: repeat(2, 50px);
             grid-template-rows: repeat(4, 38px);
         }
 
@@ -504,9 +554,9 @@
             font-size: 1.15rem;
         }
     </style>
-    <script defer src="/static/tables.js?v=16"></script>
-    <script defer src="/static/app.js?v=16"></script>
-    <script defer src="/static/calculator.js?v=16"></script>
+    <script defer src="/static/tables.js?v=17"></script>
+    <script defer src="/static/app.js?v=17"></script>
+    <script defer src="/static/calculator.js?v=17"></script>
 </head>
 <body>
     <div id="page-wrapper">
@@ -697,23 +747,27 @@
         <div id="window-resize-grip" class="window-resize-grip" title="Drag to resize"></div>
     </div>
 
-    <!-- DOCKED / FLOATING CALCULATOR -->
-    <div id="calc-dock" class="is-docked">
-        <!-- 1. Display Header with Natural Math Scrollable Tape -->
+    <!-- MULTI-EDGE DOCKED / FLOATING CALCULATOR -->
+    <div id="calc-dock" class="dock-bottom">
         <div class="calc-header" id="calc-titlebar">
             <div class="calc-display-section">
-                <!-- Scrollable Tape for Past Calculations -->
                 <div id="calc-history-list" class="calc-history-list"></div>
                 <math-field id="calc-mathfield" virtual-keyboard-mode="manual"></math-field>
             </div>
             <div class="calc-header-actions">
-                <button class="calc-header-btn" onclick="toggleCalculatorAngleMode()" id="calc-angle-btn">DEG</button>
-                <button class="calc-header-btn" onclick="toggleCalculatorDock()" id="calc-dock-btn" title="Undock / Float">⬈</button>
-                <button class="calc-header-btn calc-header-close" onclick="closeCalculatorWindow()">&times;</button>
+                <div class="calc-dock-controls">
+                    <button class="calc-header-btn" onclick="setCalcDockMode('left')" title="Dock Left">◧</button>
+                    <button class="calc-header-btn active" id="btn-dock-bottom" onclick="setCalcDockMode('bottom')" title="Dock Bottom">⬊</button>
+                    <button class="calc-header-btn" onclick="setCalcDockMode('right')" title="Dock Right">◨</button>
+                    <button class="calc-header-btn" onclick="setCalcDockMode('float')" title="Float / Undock">⬈</button>
+                </div>
+                <div style="display: flex; gap: 4px; align-items: center; width: 100%; justify-content: flex-end;">
+                    <button class="calc-header-btn" onclick="toggleCalculatorAngleMode()" id="calc-angle-btn">DEG</button>
+                    <button class="calc-header-btn calc-header-close" onclick="closeCalculatorWindow()">&times;</button>
+                </div>
             </div>
         </div>
 
-        <!-- 2. Virtual Keyboard Tray on Bottom -->
         <div class="calc-tray">
             <!-- Left Block A: Main Bank -->
             <div id="calc-bank-main" class="calc-keypad-block calc-block-vars">
