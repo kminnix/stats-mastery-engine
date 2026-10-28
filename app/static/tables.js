@@ -1,79 +1,32 @@
-﻿function standardNormalCDF(z) {
-    const t = 1.0 / (1.0 + 0.2316419 * Math.abs(z));
-    const d = 0.3989422804014327 * Math.exp(-z * z / 2.0);
-    let prob = d * t * (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
-    if (z > 0) prob = 1.0 - prob;
-    return prob;
+﻿let isSnapped = false;
+let isMaximized = false;
+let isResolvingTableCollision = false;
+let savedFloatingRect = { left: 'auto', top: '75px', right: '25px', width: '600px', height: '520px' };
+
+function getFloatingWindow() {
+    return document.getElementById('floating-tables-window');
 }
 
-function renderTableA() {
-    const modeEl = document.getElementById('table-a-mode');
-    const table = document.getElementById('table-a-content');
-    if (!modeEl || !table) return;
-
-    const mode = modeEl.value;
-    let html = '<thead><tr><th>z</th>';
-    for (let c = 0; c <= 9; c++) {
-        html += `<th>.0${c}</th>`;
-    }
-    html += '</tr></thead><tbody>';
-
-    if (mode === 'positive') {
-        for (let r = 0; r <= 34; r++) {
-            const rowZ = r / 10.0;
-            html += `<tr><td>${rowZ.toFixed(1)}</td>`;
-            for (let c = 0; c <= 9; c++) {
-                const z = rowZ + c / 100.0;
-                html += `<td>${standardNormalCDF(z).toFixed(4)}</td>`;
-            }
-            html += '</tr>';
-        }
-    } else {
-        for (let r = -34; r <= 0; r++) {
-            const rowZ = r / 10.0;
-            html += `<tr><td>${rowZ.toFixed(1)}</td>`;
-            for (let c = 0; c <= 9; c++) {
-                const z = rowZ - c / 100.0;
-                html += `<td>${standardNormalCDF(z).toFixed(4)}</td>`;
-            }
-            html += '</tr>';
-        }
-    }
-    html += '</tbody>';
-    table.innerHTML = html;
-}
-
-function switchTab(tabId) {
-    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.window-tab-btn').forEach(b => b.classList.remove('active'));
-
-    const pane = document.getElementById(tabId);
-    const btn = document.getElementById('btn-' + tabId);
-
-    if (pane) pane.classList.add('active');
-    if (btn) btn.classList.add('active');
-
-    if (window.renderMathInElement && pane) {
-        window.renderMathInElement(pane, {
-            delimiters: [
-                { left: '$$', right: '$$', display: true },
-                { left: '\\(', right: '\\)', display: false }
-            ],
-            throwOnError: false
-        });
-    }
+function clearWindowInlineStyles(win) {
+    win.style.left = '';
+    win.style.top = '';
+    win.style.right = '';
+    win.style.bottom = '';
+    win.style.width = '';
+    win.style.height = '';
 }
 
 function toggleFloatingWindow() {
-    const win = document.getElementById('floating-tables-window');
+    const win = getFloatingWindow();
+    if (!win) return;
     if (win.style.display === 'flex') {
         closeFloatingWindow();
     } else {
         win.style.display = 'flex';
         renderTableA();
-        
-        if (window.renderMathInElement) {
-            window.renderMathInElement(win, {
+        const activePane = document.querySelector('.tab-pane.active');
+        if (activePane && window.renderMathInElement) {
+            renderMathInElement(activePane, {
                 delimiters: [
                     { left: '$$', right: '$$', display: true },
                     { left: '\\(', right: '\\)', display: false }
@@ -85,36 +38,13 @@ function toggleFloatingWindow() {
 }
 
 function closeFloatingWindow() {
-    const win = document.getElementById('floating-tables-window');
+    const win = getFloatingWindow();
+    if (!win) return;
     win.style.display = 'none';
-    clearAllSnapStates(win);
-}
-
-// Memory of floating position & dimensions
-let savedFloat = {
-    left: 'auto',
-    right: '25px',
-    top: '75px',
-    width: '600px',
-    height: '520px'
-};
-
-function clearInlineStyles(win) {
-    win.style.removeProperty('left');
-    win.style.removeProperty('top');
-    win.style.removeProperty('right');
-    win.style.removeProperty('bottom');
-    win.style.removeProperty('width');
-    win.style.removeProperty('height');
-}
-
-function clearAllSnapStates(win) {
-    win.classList.remove('is-snapped-left', 'is-snapped-right', 'is-maximized');
-    document.body.classList.remove('snap-mode-left', 'snap-mode-right');
-    
-    const grip = document.getElementById('window-resize-grip');
-    if (grip) grip.style.display = 'block';
-
+    document.body.classList.remove('snap-mode-right', 'snap-mode-left');
+    win.classList.remove('is-snapped-right', 'is-snapped-left', 'is-maximized');
+    isSnapped = false;
+    isMaximized = false;
     const maxBtn = document.getElementById('btn-maximize-restore');
     if (maxBtn) {
         maxBtn.innerText = '🗖';
@@ -122,176 +52,308 @@ function clearAllSnapStates(win) {
     }
 }
 
-function snapWindow(direction) {
-    const win = document.getElementById('floating-tables-window');
+function snapWindow(side) {
+    const win = getFloatingWindow();
     if (!win) return;
 
-    if (direction === 'left' && win.classList.contains('is-snapped-left')) {
-        restoreFloating(win);
-        return;
-    }
-    if (direction === 'right' && win.classList.contains('is-snapped-right')) {
-        restoreFloating(win);
-        return;
+    if (win.style.display !== 'flex') {
+        win.style.display = 'flex';
+        renderTableA();
     }
 
-    if (!win.classList.contains('is-snapped-left') && 
-        !win.classList.contains('is-snapped-right') && 
-        !win.classList.contains('is-maximized')) {
-        const rect = win.getBoundingClientRect();
-        savedFloat = {
-            left: rect.left + 'px',
-            right: 'auto',
-            top: rect.top + 'px',
-            width: rect.width + 'px',
-            height: rect.height + 'px'
-        };
-    }
+    clearWindowInlineStyles(win);
+    win.classList.remove('is-snapped-right', 'is-snapped-left', 'is-maximized');
+    document.body.classList.remove('snap-mode-right', 'snap-mode-left');
 
-    clearInlineStyles(win);
-    clearAllSnapStates(win);
-
-    const grip = document.getElementById('window-resize-grip');
-    if (grip) grip.style.display = 'none';
-
-    if (direction === 'left') {
-        win.classList.add('is-snapped-left');
-        document.body.classList.add('snap-mode-left');
-    } else {
+    // 1. Immediately apply our own target dock state FIRST
+    if (side === 'right') {
         win.classList.add('is-snapped-right');
         document.body.classList.add('snap-mode-right');
+    } else {
+        win.classList.add('is-snapped-left');
+        document.body.classList.add('snap-mode-left');
+    }
+
+    isSnapped = true;
+    isMaximized = false;
+    const maxBtn = document.getElementById('btn-maximize-restore');
+    if (maxBtn) {
+        maxBtn.innerText = '🗖';
+        maxBtn.title = 'Full Screen / Maximize';
+    }
+
+    // 2. Safely resolve collision without re-triggering recursive loops
+    if (!isResolvingTableCollision) {
+        isResolvingTableCollision = true;
+        const isCalcOnRight = document.body.classList.contains('calc-docked-right');
+        const isCalcOnLeft = document.body.classList.contains('calc-docked-left');
+
+        if (side === 'right' && isCalcOnRight) {
+            if (typeof window.setCalcDockMode === 'function') {
+                window.setCalcDockMode('left');
+            }
+        } else if (side === 'left' && isCalcOnLeft) {
+            if (typeof window.setCalcDockMode === 'function') {
+                window.setCalcDockMode('right');
+            }
+        }
+        isResolvingTableCollision = false;
     }
 }
+window.snapWindow = snapWindow;
 
 function toggleMaximizeWindow() {
-    const win = document.getElementById('floating-tables-window');
+    const win = getFloatingWindow();
+    const btn = document.getElementById('btn-maximize-restore');
     if (!win) return;
 
-    if (win.classList.contains('is-maximized')) {
-        restoreFloating(win);
-    } else {
-        if (!win.classList.contains('is-snapped-left') && !win.classList.contains('is-snapped-right')) {
+    if (!isMaximized) {
+        if (!isSnapped) {
             const rect = win.getBoundingClientRect();
-            savedFloat = {
-                left: rect.left + 'px',
+            savedFloatingRect = {
+                left: `${rect.left}px`,
+                top: `${rect.top}px`,
                 right: 'auto',
-                top: rect.top + 'px',
-                width: rect.width + 'px',
-                height: rect.height + 'px'
+                width: `${rect.width}px`,
+                height: `${rect.height}px`
             };
         }
-
-        clearInlineStyles(win);
-        clearAllSnapStates(win);
-
+        clearWindowInlineStyles(win);
+        document.body.classList.remove('snap-mode-right', 'snap-mode-left');
+        win.classList.remove('is-snapped-right', 'is-snapped-left');
         win.classList.add('is-maximized');
-        const grip = document.getElementById('window-resize-grip');
-        if (grip) grip.style.display = 'none';
-
-        const maxBtn = document.getElementById('btn-maximize-restore');
-        if (maxBtn) {
-            maxBtn.innerText = '🗗';
-            maxBtn.title = 'Restore Window';
+        isMaximized = true;
+        isSnapped = false;
+        if (btn) {
+            btn.innerText = '🗗';
+            btn.title = 'Restore Window Size';
         }
+    } else {
+        win.classList.remove('is-maximized');
+        isMaximized = false;
+        if (btn) {
+            btn.innerText = '🗖';
+            btn.title = 'Full Screen / Maximize';
+        }
+        clearWindowInlineStyles(win);
+        win.style.left = savedFloatingRect.left || 'auto';
+        win.style.top = savedFloatingRect.top || '75px';
+        win.style.right = savedFloatingRect.right || '25px';
+        win.style.width = savedFloatingRect.width || '600px';
+        win.style.height = savedFloatingRect.height || '520px';
     }
 }
 
-function restoreFloating(win) {
-    clearAllSnapStates(win);
-    clearInlineStyles(win);
+function unsnapToFloating(clientX, clientY) {
+    const win = getFloatingWindow();
+    if (!win) return;
 
-    win.style.left = savedFloat.left;
-    win.style.top = savedFloat.top;
-    win.style.right = savedFloat.right;
-    win.style.width = savedFloat.width;
-    win.style.height = savedFloat.height;
+    win.classList.remove('is-snapped-right', 'is-snapped-left', 'is-maximized');
+    document.body.classList.remove('snap-mode-right', 'snap-mode-left');
+    isSnapped = false;
+    isMaximized = false;
+
+    const maxBtn = document.getElementById('btn-maximize-restore');
+    if (maxBtn) {
+        maxBtn.innerText = '🗖';
+        maxBtn.title = 'Full Screen / Maximize';
+    }
+
+    clearWindowInlineStyles(win);
+    win.style.width = '600px';
+    win.style.height = '520px';
+    win.style.left = `${Math.max(10, clientX - 300)}px`;
+    win.style.top = `${Math.max(10, clientY - 18)}px`;
 }
 
-// 2D Drag & Corner Resize Handlers
+function switchTab(tabId) {
+    document.querySelectorAll('.window-tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+
+    const activePane = document.getElementById(tabId);
+    if (activePane) activePane.classList.add('active');
+
+    const tabKey = tabId.replace('tab-', 'btn-tab-');
+    const activeBtn = document.getElementById(tabKey);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    if (tabId === 'tab-table-a') renderTableA();
+
+    if (window.renderMathInElement && activePane) {
+        renderMathInElement(activePane, {
+            delimiters: [
+                { left: '$$', right: '$$', display: true },
+                { left: '\\(', right: '\\)', display: false }
+            ],
+            throwOnError: false
+        });
+    }
+}
+
+function normalCDF(z) {
+    const b1 = 0.319381530, b2 = -0.356563782, b3 = 1.781477937, b4 = -1.821255978, b5 = 1.330274429;
+    const p = 0.2316419;
+    const c = 0.39894228;
+    if (z >= 0.0) {
+        const t = 1.0 / (1.0 + p * z);
+        return (1.0 - c * Math.exp(-z * z / 2.0) * t * (t * (t * (t * (t * b5 + b4) + b3) + b2) + b1));
+    } else {
+        const t = 1.0 / (1.0 - p * z);
+        return (c * Math.exp(-z * z / 2.0) * t * (t * (t * (t * (t * b5 + b4) + b3) + b2) + b1));
+    }
+}
+
+function renderTableA() {
+    const modeSelect = document.getElementById('table-a-mode');
+    const mode = modeSelect ? modeSelect.value : 'positive';
+    const tableEl = document.getElementById('table-a-content');
+    if (!tableEl) return;
+
+    const cols = [0.00, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09];
+    let html = '<thead><tr><th>z</th>';
+    cols.forEach(c => html += `<th>${c.toFixed(2).substring(1)}</th>`);
+    html += '</tr></thead><tbody>';
+
+    if (mode === 'positive') {
+        for (let row = 0; row <= 34; row++) {
+            const zRow = (row / 10).toFixed(1);
+            html += `<tr><td>${zRow}</td>`;
+            cols.forEach(c => {
+                const zVal = parseFloat(zRow) + c;
+                html += `<td>${normalCDF(zVal).toFixed(4).substring(1)}</td>`;
+            });
+            html += '</tr>';
+        }
+    } else {
+        for (let row = -34; row <= 0; row++) {
+            const zRow = (row / 10).toFixed(1);
+            html += `<tr><td>${zRow}</td>`;
+            cols.forEach(c => {
+                const zVal = parseFloat(zRow) - c;
+                html += `<td>${normalCDF(zVal).toFixed(4).substring(1)}</td>`;
+            });
+            html += '</tr>';
+        }
+    }
+    html += '</tbody>';
+    tableEl.innerHTML = html;
+}
+
+// 2D Drag & Resize Engine
 window.addEventListener('DOMContentLoaded', () => {
-    const win = document.getElementById('floating-tables-window');
+    const win = getFloatingWindow();
     const titlebar = document.getElementById('window-titlebar');
-    const resizeGrip = document.getElementById('window-resize-grip');
+    const grip = document.getElementById('window-resize-grip');
+    const dockResizer = document.getElementById('tables-dock-resizer');
     if (!win || !titlebar) return;
 
     let isDragging = false;
-    let isResizing = false;
-    let startX, startY;
-    let startWidth, startHeight;
-    let startOffsetX, startOffsetY;
+    let startX, startY, startLeft, startTop;
 
     titlebar.addEventListener('mousedown', (e) => {
-        if (e.target.closest('button')) return;
+        if (e.target.tagName.toLowerCase() === 'button') return;
 
-        if (win.classList.contains('is-snapped-left') || 
-            win.classList.contains('is-snapped-right') || 
-            win.classList.contains('is-maximized')) {
-            const w = parseFloat(savedFloat.width) || 600;
-            const h = parseFloat(savedFloat.height) || 520;
-            clearAllSnapStates(win);
-            clearInlineStyles(win);
-            win.style.width = w + 'px';
-            win.style.height = h + 'px';
-            win.style.left = Math.max(10, e.clientX - w / 2) + 'px';
-            win.style.top = Math.max(10, e.clientY - 20) + 'px';
+        if (isSnapped || isMaximized) {
+            unsnapToFloating(e.clientX, e.clientY);
         }
 
         isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
         const rect = win.getBoundingClientRect();
-        startOffsetX = e.clientX - rect.left;
-        startOffsetY = e.clientY - rect.top;
-
+        startLeft = rect.left;
+        startTop = rect.top;
         win.style.right = 'auto';
-        win.style.left = rect.left + 'px';
-        win.style.top = rect.top + 'px';
         document.body.style.userSelect = 'none';
     });
 
-    if (resizeGrip) {
-        resizeGrip.addEventListener('mousedown', (e) => {
-            isResizing = true;
-            startX = e.clientX;
-            startY = e.clientY;
-            const rect = win.getBoundingClientRect();
-            startWidth = rect.width;
-            startHeight = rect.height;
+    window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        win.style.left = `${Math.max(10, startLeft + dx)}px`;
+        win.style.top = `${Math.max(10, startTop + dy)}px`;
+    });
 
-            win.style.right = 'auto';
-            win.style.left = rect.left + 'px';
-            win.style.top = rect.top + 'px';
+    window.addEventListener('mouseup', () => {
+        isDragging = false;
+        document.body.style.userSelect = '';
+    });
+
+    // Dedicated Edge Drag Resizer on the dock-resizer strip
+    let isTablesDockResizing = false;
+    let dockResizeSide = '';
+    let startDockW = 0;
+    let startDockX = 0;
+
+    if (dockResizer) {
+        dockResizer.addEventListener('mousedown', (e) => {
+            const isRight = win.classList.contains('is-snapped-right');
+            const isLeft = win.classList.contains('is-snapped-left');
+            if (!isRight && !isLeft) return;
+
+            const rect = win.getBoundingClientRect();
+            isTablesDockResizing = true;
+            dockResizeSide = isRight ? 'right' : 'left';
+            startDockX = e.clientX;
+            startDockW = rect.width;
             document.body.style.userSelect = 'none';
+            document.body.style.cursor = 'col-resize';
             e.stopPropagation();
             e.preventDefault();
         });
     }
 
     window.addEventListener('mousemove', (e) => {
-        if (isDragging) {
-            const newLeft = Math.max(0, Math.min(window.innerWidth - 100, e.clientX - startOffsetX));
-            const newTop = Math.max(0, Math.min(window.innerHeight - 50, e.clientY - startOffsetY));
-            win.style.left = newLeft + 'px';
-            win.style.top = newTop + 'px';
-        } else if (isResizing) {
-            const newWidth = Math.max(320, Math.min(window.innerWidth - 20, startWidth + (e.clientX - startX)));
-            const newHeight = Math.max(240, Math.min(window.innerHeight - 20, startHeight + (e.clientY - startY)));
-            win.style.width = newWidth + 'px';
-            win.style.height = newHeight + 'px';
+        if (!isTablesDockResizing) return;
+        if (dockResizeSide === 'right') {
+            const dw = startDockX - e.clientX;
+            const newW = Math.max(320, Math.min(window.innerWidth * 0.7, startDockW + dw));
+            document.documentElement.style.setProperty('--tables-dock-w', `${newW}px`);
+        } else if (dockResizeSide === 'left') {
+            const dw = e.clientX - startDockX;
+            const newW = Math.max(320, Math.min(window.innerWidth * 0.7, startDockW + dw));
+            document.documentElement.style.setProperty('--tables-dock-w', `${newW}px`);
         }
     });
 
     window.addEventListener('mouseup', () => {
-        if (isDragging || isResizing) {
-            const rect = win.getBoundingClientRect();
-            savedFloat = {
-                left: rect.left + 'px',
-                right: 'auto',
-                top: rect.top + 'px',
-                width: rect.width + 'px',
-                height: rect.height + 'px'
-            };
+        if (isTablesDockResizing) {
+            isTablesDockResizing = false;
+            document.body.style.userSelect = '';
+            document.body.style.cursor = '';
         }
-        isDragging = false;
-        isResizing = false;
-        document.body.style.userSelect = '';
     });
+
+    // Floating corner grip
+    if (grip) {
+        let isResizing = false;
+        let startRWidth, startRHeight, startRX, startRY;
+
+        grip.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+            if (isSnapped || isMaximized) return;
+
+            isResizing = true;
+            startRX = e.clientX;
+            startRY = e.clientY;
+            const rect = win.getBoundingClientRect();
+            startRWidth = rect.width;
+            startRHeight = rect.height;
+            document.body.style.userSelect = 'none';
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            const dw = e.clientX - startRX;
+            const dh = e.clientY - startRY;
+            win.style.width = `${Math.max(320, startRWidth + dw)}px`;
+            win.style.height = `${Math.max(240, startRHeight + dh)}px`;
+        });
+
+        window.addEventListener('mouseup', () => {
+            isResizing = false;
+            document.body.style.userSelect = '';
+        });
+    }
 });

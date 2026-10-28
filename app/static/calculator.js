@@ -1,6 +1,7 @@
 ﻿let lastAnswer = 0;
 let isDegreeMode = true;
-let currentDockMode = 'bottom'; // 'bottom' | 'left' | 'right' | 'float'
+let currentDockMode = 'bottom';
+let isResolvingCalcCollision = false;
 
 const calcHistory = [];
 let historyIndex = -1;
@@ -32,6 +33,7 @@ function setCalcDockMode(mode) {
     const dock = document.getElementById('calc-dock');
     if (!dock) return;
 
+    // 1. Immediately apply our own target dock state FIRST
     currentDockMode = mode;
     dock.className = `dock-${mode}`;
     updateBodyDockGutters(mode);
@@ -51,9 +53,28 @@ function setCalcDockMode(mode) {
         dock.style.height = '';
     }
 
+    // 2. Safely resolve collision without re-triggering recursive loops
+    if (!isResolvingCalcCollision) {
+        isResolvingCalcCollision = true;
+        const isTablesOnRight = document.body.classList.contains('snap-mode-right');
+        const isTablesOnLeft = document.body.classList.contains('snap-mode-left');
+
+        if (mode === 'right' && isTablesOnRight) {
+            if (typeof window.snapWindow === 'function') {
+                window.snapWindow('left');
+            }
+        } else if (mode === 'left' && isTablesOnLeft) {
+            if (typeof window.snapWindow === 'function') {
+                window.snapWindow('right');
+            }
+        }
+        isResolvingCalcCollision = false;
+    }
+
     const mf = getMathField();
     if (mf) mf.focus();
 }
+window.setCalcDockMode = setCalcDockMode;
 
 function toggleCalculatorWindow() {
     const dock = document.getElementById('calc-dock');
@@ -182,7 +203,6 @@ function calcNav(dir) {
     mf.focus();
 }
 
-// Robust recursive fraction parser
 function convertLatexFractions(expr) {
     let prev;
     let res = expr;
@@ -193,21 +213,17 @@ function convertLatexFractions(expr) {
     return res;
 }
 
-// Convert arbitrary LaTeX into valid Math.js syntax
 function latexToMathJs(latex) {
     let clean = latex;
 
-    // 1. Strip formatting wrappers and spacing
     clean = clean.replace(/\\(mathrm|mathit|mathbf|text|operatorname)\{([^{}]+)\}/g, '$2')
                  .replace(/\\[,;!]|\\quad|\\qquad|\\enspace/g, ' ')
                  .replace(/\\left|\\right/g, '')
                  .replace(/\\placeholder\{([^{}]*)\}/g, '$1')
                  .replace(/\\placeholder/g, '');
 
-    // 2. Normalize fractions
     clean = convertLatexFractions(clean);
 
-    // 3. Multiplications & common symbols
     clean = clean.replace(/\\times/g, '*')
                  .replace(/\\cdot/g, '*')
                  .replace(/\\ast/g, '*')
@@ -218,29 +234,20 @@ function latexToMathJs(latex) {
                  .replace(/\\log_\{?10\}?/g, 'log10')
                  .replace(/\\log\b/g, 'log10');
 
-    // 4. Robust Root Parsing (Handles \sqrt{7}, \sqrt 7, \sqrt[3]{8}, nested roots)
-    // nthRoot: \sqrt[3]{8} or \sqrt[3]8
     while (/\\sqrt\[([^\]]+)\]\{([^{}]+)\}/.test(clean)) {
         clean = clean.replace(/\\sqrt\[([^\]]+)\]\{([^{}]+)\}/g, 'nthRoot($2, $1)');
     }
     clean = clean.replace(/\\sqrt\[([^\]]+)\]\s*([0-9.]+|[a-zA-Z]+)/g, 'nthRoot($2, $1)');
 
-    // Square root with braces: \sqrt{7} or \sqrt{2+5}
     while (/\\sqrt\s*\{([^{}]+)\}/.test(clean)) {
         clean = clean.replace(/\\sqrt\s*\{([^{}]+)\}/g, 'sqrt($1)');
     }
 
-    // Square root with parentheses: \sqrt(7)
     clean = clean.replace(/\\sqrt\s*\(/g, 'sqrt(');
-
-    // Square root without braces: \sqrt 7, \sqrt7, \sqrt x
     clean = clean.replace(/\\sqrt\s*([0-9.]+|[a-zA-Z]+)/g, 'sqrt($1)');
-
-    // Empty or leftover \sqrt
     clean = clean.replace(/\\sqrt\{\s*\}/g, 'sqrt(0)')
                  .replace(/\\sqrt\b/g, 'sqrt');
 
-    // 5. Trig & Statistical functions
     clean = clean.replace(/\\sin\b/g, 'sin')
                  .replace(/\\cos\b/g, 'cos')
                  .replace(/\\tan\b/g, 'tan')
@@ -251,20 +258,15 @@ function latexToMathJs(latex) {
                  .replace(/nCr\b/g, 'combinations')
                  .replace(/nPr\b/g, 'permutations');
 
-    // Wrap single arguments in functions if missing parentheses (e.g. sin 30 -> sin(30))
     clean = clean.replace(/\b(sin|cos|tan|asin|acos|atan|log|log10)\s+([0-9.]+|[a-zA-Z]+)/g, '$1($2)');
-
-    // 6. Braces to Parentheses
     clean = clean.replace(/\{/g, '(').replace(/\}/g, ')');
 
-    // 7. Implicit Multiplication (e.g. 2(3) -> 2*(3), 2sqrt(7) -> 2*sqrt(7), (2)(3) -> (2)*(3))
     clean = clean.replace(/(\d)\s*\(/g, '$1*(')
                  .replace(/\)\s*(\d)/g, ')*$1')
                  .replace(/\)\s*\(/g, ')*(')
                  .replace(/(\d)\s*(sqrt|sin|cos|tan|asin|acos|atan|log|pi|e)\b/g, '$1*$2')
                  .replace(/\)\s*(sqrt|sin|cos|tan|asin|acos|atan|log|pi|e)\b/g, ')*$1');
 
-    // 8. Degree vs Radian Trig Evaluation
     if (isDegreeMode) {
         clean = clean
             .replace(/\basin\(([^)]+)\)/g, '(asin($1) * (180 / pi))')
@@ -275,9 +277,7 @@ function latexToMathJs(latex) {
             .replace(/\btan\(([^)]+)\)/g, 'tan(($1) * (pi / 180))');
     }
 
-    // 9. Strip any stray backslashes to prevent Math.js parser errors
     clean = clean.replace(/\\/g, '');
-
     return clean;
 }
 
@@ -359,10 +359,13 @@ function calcEvaluate() {
     }
 }
 
+// Drag & Dock Resizing Listeners
 window.addEventListener('DOMContentLoaded', () => {
     suppressMathLiveIcons();
     const dock = document.getElementById('calc-dock');
     const titlebar = document.getElementById('calc-titlebar');
+    const grip = document.getElementById('calc-resize-grip');
+    const dockResizer = document.getElementById('calc-dock-resizer');
     const mf = getMathField();
 
     let isDragging = false;
@@ -396,6 +399,84 @@ window.addEventListener('DOMContentLoaded', () => {
             document.body.style.userSelect = '';
         });
     }
+
+    // Floating Corner Resize for Calculator
+    if (grip) {
+        let isFloatResizing = false;
+        let startFloatW, startFloatH, startFX, startFY;
+
+        grip.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+            if (currentDockMode !== 'float') return;
+
+            isFloatResizing = true;
+            startFX = e.clientX;
+            startFY = e.clientY;
+            const rect = dock.getBoundingClientRect();
+            startFloatW = rect.width;
+            startFloatH = rect.height;
+            document.body.style.userSelect = 'none';
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isFloatResizing) return;
+            const dw = e.clientX - startFX;
+            const dh = e.clientY - startFY;
+            dock.style.width = `${Math.max(340, startFloatW + dw)}px`;
+            dock.style.height = `${Math.max(220, startFloatH + dh)}px`;
+        });
+
+        window.addEventListener('mouseup', () => {
+            isFloatResizing = false;
+            document.body.style.userSelect = '';
+        });
+    }
+
+    // Docked Edge Resizing
+    let isDockResizing = false;
+    let dockResizeMode = '';
+    let startDim = 0;
+    let startCoord = 0;
+
+    if (dockResizer) {
+        dockResizer.addEventListener('mousedown', (e) => {
+            if (currentDockMode === 'float') return;
+            const rect = dock.getBoundingClientRect();
+            isDockResizing = true;
+            dockResizeMode = currentDockMode;
+            startCoord = (currentDockMode === 'bottom') ? e.clientY : e.clientX;
+            startDim = (currentDockMode === 'bottom') ? rect.height : rect.width;
+            document.body.style.userSelect = 'none';
+            document.body.style.cursor = (currentDockMode === 'bottom') ? 'row-resize' : 'col-resize';
+            e.preventDefault();
+        });
+    }
+
+    window.addEventListener('mousemove', (e) => {
+        if (!isDockResizing) return;
+
+        if (dockResizeMode === 'bottom') {
+            const dh = startCoord - e.clientY;
+            const newH = Math.max(240, Math.min(window.innerHeight * 0.75, startDim + dh));
+            document.documentElement.style.setProperty('--calc-dock-h', `${newH}px`);
+        } else if (dockResizeMode === 'right') {
+            const dw = startCoord - e.clientX;
+            const newW = Math.max(320, Math.min(window.innerWidth * 0.7, startDim + dw));
+            document.documentElement.style.setProperty('--calc-dock-w', `${newW}px`);
+        } else if (dockResizeMode === 'left') {
+            const dw = e.clientX - startCoord;
+            const newW = Math.max(320, Math.min(window.innerWidth * 0.7, startDim + dw));
+            document.documentElement.style.setProperty('--calc-dock-w', `${newW}px`);
+        }
+    });
+
+    window.addEventListener('mouseup', () => {
+        if (isDockResizing) {
+            isDockResizing = false;
+            document.body.style.userSelect = '';
+            document.body.style.cursor = '';
+        }
+    });
 
     if (mf) {
         mf.addEventListener('keydown', (e) => {

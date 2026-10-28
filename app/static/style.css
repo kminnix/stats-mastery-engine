@@ -1,6 +1,9 @@
-﻿/* ============================================================ */
-/* BASE PAGE WRAPPER & CORE LAYOUT                              */
-/* ============================================================ */
+﻿:root {
+    --calc-dock-w: 460px;
+    --calc-dock-h: 310px;
+    --tables-dock-w: 460px;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     background-color: #f1f5f9;
@@ -15,7 +18,7 @@ body {
     width: 100%;
     min-height: 100vh;
     box-sizing: border-box;
-    transition: all 0.2s ease;
+    transition: padding 0.1s ease;
 }
 
 #page-container {
@@ -26,10 +29,13 @@ body {
     padding: 0 10px;
 }
 
-/* Split-screen layout when Tables OR Calc are docked right */
-body.snap-mode-right #page-wrapper,
+/* Split-screen right gutters */
+body.snap-mode-right #page-wrapper {
+    padding-right: calc(var(--tables-dock-w) + 20px) !important;
+    padding-left: 20px !important;
+}
 body.calc-docked-right #page-wrapper {
-    padding-right: 480px !important;
+    padding-right: calc(var(--calc-dock-w) + 20px) !important;
     padding-left: 20px !important;
 }
 body.snap-mode-right #page-container,
@@ -39,10 +45,13 @@ body.calc-docked-right #page-container {
     width: 100% !important;
 }
 
-/* Split-screen layout when Tables OR Calc are docked left */
-body.snap-mode-left #page-wrapper,
+/* Split-screen left gutters */
+body.snap-mode-left #page-wrapper {
+    padding-left: calc(var(--tables-dock-w) + 20px) !important;
+    padding-right: 20px !important;
+}
 body.calc-docked-left #page-wrapper {
-    padding-left: 480px !important;
+    padding-left: calc(var(--calc-dock-w) + 20px) !important;
     padding-right: 20px !important;
 }
 body.snap-mode-left #page-container,
@@ -52,9 +61,9 @@ body.calc-docked-left #page-container {
     width: 100% !important;
 }
 
-/* Page clearance when Calc is docked at bottom */
+/* Bottom clearance */
 body.calc-docked-bottom #page-wrapper {
-    padding-bottom: 330px !important;
+    padding-bottom: calc(var(--calc-dock-h) + 20px) !important;
 }
 
 /* Header & Controls */
@@ -91,7 +100,7 @@ header {
     color: #15803d;
 }
 
-/* Card & Prompt UI */
+/* Card & Content UI */
 .card {
     background: #ffffff;
     border-radius: 8px;
@@ -157,9 +166,7 @@ button {
     font-weight: 600;
     cursor: pointer;
 }
-button:hover {
-    background-color: #1d4ed8;
-}
+button:hover { background-color: #1d4ed8; }
 .btn-secondary {
     background-color: #e2e8f0;
     color: #1e293b;
@@ -170,9 +177,7 @@ button:hover {
     border-radius: 6px;
     cursor: pointer;
 }
-.btn-secondary:hover {
-    background-color: #cbd5e1;
-}
+.btn-secondary:hover { background-color: #cbd5e1; }
 .text-btn {
     background: none;
     border: none;
@@ -189,21 +194,10 @@ button:hover {
     font-weight: 600;
     font-size: 0.95rem;
 }
-.banner.correct {
-    background-color: #dcfce7;
-    color: #15803d;
-}
-.banner.incorrect {
-    background-color: #fee2e2;
-    color: #b91c1c;
-}
-.solution {
-    border-left: 4px solid #ef4444;
-}
-.solution h3 {
-    margin-top: 0;
-    color: #991b1b;
-}
+.banner.correct { background-color: #dcfce7; color: #15803d; }
+.banner.incorrect { background-color: #fee2e2; color: #b91c1c; }
+.solution { border-left: 4px solid #ef4444; }
+.solution h3 { margin-top: 0; color: #991b1b; }
 .graph-container {
     background-color: #f8fafc;
     border: 1px solid #e2e8f0;
@@ -228,18 +222,9 @@ button:hover {
     margin-bottom: 12px;
     transition: all 0.2s ease;
 }
-.stage-box.active {
-    border-color: #3b82f6;
-    background: #eff6ff;
-}
-.stage-box.completed {
-    border-color: #10b981;
-    background: #f0fdf4;
-}
-.stage-box.revealed {
-    border-color: #f59e0b;
-    background: #fffbeb;
-}
+.stage-box.active { border-color: #3b82f6; background: #eff6ff; }
+.stage-box.completed { border-color: #10b981; background: #f0fdf4; }
+.stage-box.revealed { border-color: #f59e0b; background: #fffbeb; }
 .stage-header {
     display: flex;
     justify-content: space-between;
@@ -248,20 +233,11 @@ button:hover {
     color: #334155;
     margin-bottom: 6px;
 }
-.stage-hint {
-    font-size: 0.8rem;
-    color: #64748b;
-    margin-top: 4px;
-}
-.revealed-msg {
-    color: #b45309;
-    font-size: 0.85rem;
-    font-weight: 600;
-    margin-top: 6px;
-}
+.stage-hint { font-size: 0.8rem; color: #64748b; margin-top: 4px; }
+.revealed-msg { color: #b45309; font-size: 0.85rem; font-weight: 600; margin-top: 6px; }
 
 /* ============================================================ */
-/* FLOATING / SNAPPABLE TABLES WINDOW                           */
+/* TABLES WINDOW                                                */
 /* ============================================================ */
 #floating-tables-window {
     position: fixed;
@@ -279,8 +255,7 @@ button:hover {
     border: 1px solid #cbd5e1;
     display: none;
     flex-direction: column;
-    z-index: 9999;
-    overflow: hidden;
+    z-index: 10010;
     user-select: none;
 }
 
@@ -289,7 +264,7 @@ button:hover {
     bottom: 0 !important;
     right: 0 !important;
     left: auto !important;
-    width: 460px !important;
+    width: var(--tables-dock-w, 460px) !important;
     height: 100vh !important;
     max-height: 100vh !important;
     border-radius: 0 !important;
@@ -297,6 +272,7 @@ button:hover {
     border-right: none !important;
     border-top: none !important;
     border-bottom: none !important;
+    border-left: 6px solid #475569 !important;
 }
 
 #floating-tables-window.is-snapped-left {
@@ -304,7 +280,7 @@ button:hover {
     bottom: 0 !important;
     left: 0 !important;
     right: auto !important;
-    width: 460px !important;
+    width: var(--tables-dock-w, 460px) !important;
     height: 100vh !important;
     max-height: 100vh !important;
     border-radius: 0 !important;
@@ -312,6 +288,7 @@ button:hover {
     border-left: none !important;
     border-top: none !important;
     border-bottom: none !important;
+    border-right: 6px solid #475569 !important;
 }
 
 #floating-tables-window.is-maximized {
@@ -340,11 +317,7 @@ button:hover {
     align-items: center;
     flex-shrink: 0;
 }
-.window-titlebar .controls {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
+.window-titlebar .controls { display: flex; align-items: center; gap: 4px; }
 .window-titlebar .controls button {
     background: transparent;
     border: none;
@@ -358,10 +331,7 @@ button:hover {
     align-items: center;
     justify-content: center;
 }
-.window-titlebar .controls button:hover {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.15);
-}
+.window-titlebar .controls button:hover { color: #ffffff; background: rgba(255, 255, 255, 0.15); }
 
 .window-tab-bar {
     display: flex;
@@ -395,18 +365,9 @@ button:hover {
     background: #ffffff;
     user-select: text;
 }
-.tab-pane {
-    display: none !important;
-    height: 100%;
-}
-.tab-pane.active {
-    display: flex !important;
-    flex-direction: column;
-}
-.table-scroll-container {
-    overflow: auto;
-    flex-grow: 1;
-}
+.tab-pane { display: none !important; height: 100%; }
+.tab-pane.active { display: flex !important; flex-direction: column; }
+.table-scroll-container { overflow: auto; flex-grow: 1; }
 .ap-table {
     width: 100%;
     border-collapse: collapse;
@@ -419,16 +380,8 @@ button:hover {
     padding: 4px 6px;
     text-align: center;
 }
-.ap-table th {
-    background-color: #f1f5f9;
-    position: sticky;
-    top: 0;
-    z-index: 2;
-}
-.ap-table td:first-child {
-    font-weight: 700;
-    background-color: #f8fafc;
-}
+.ap-table th { background-color: #f1f5f9; position: sticky; top: 0; z-index: 2; }
+.ap-table td:first-child { font-weight: 700; background-color: #f8fafc; }
 .table-intro {
     font-size: 0.82rem;
     color: #334155;
@@ -439,6 +392,61 @@ button:hover {
     border-left: 3px solid #3b82f6;
     flex-shrink: 0;
 }
+
+/* ============================================================ */
+/* DOCK EDGE RESIZER (CRITICAL FIX FOR DOCKED DRAG)             */
+/* ============================================================ */
+.dock-edge-resizer {
+    display: none;
+    position: absolute;
+    z-index: 10030;
+}
+
+/* Tables Dock Resizer Strip */
+#floating-tables-window.is-snapped-right #tables-dock-resizer {
+    display: block;
+    top: 0;
+    bottom: 0;
+    left: -6px;
+    width: 14px;
+    cursor: col-resize;
+}
+#floating-tables-window.is-snapped-left #tables-dock-resizer {
+    display: block;
+    top: 0;
+    bottom: 0;
+    right: -6px;
+    width: 14px;
+    cursor: col-resize;
+}
+
+/* Calculator Dock Resizer Strip */
+#calc-dock.dock-bottom #calc-dock-resizer {
+    display: block;
+    top: -6px;
+    left: 0;
+    right: 0;
+    height: 14px;
+    cursor: row-resize;
+}
+#calc-dock.dock-left #calc-dock-resizer {
+    display: block;
+    top: 0;
+    bottom: 0;
+    right: -6px;
+    width: 14px;
+    cursor: col-resize;
+}
+#calc-dock.dock-right #calc-dock-resizer {
+    display: block;
+    top: 0;
+    bottom: 0;
+    left: -6px;
+    width: 14px;
+    cursor: col-resize;
+}
+
+/* Resize Grip for Floating State (Corner) */
 .window-resize-grip {
     position: absolute;
     right: 0;
@@ -446,12 +454,21 @@ button:hover {
     width: 18px;
     height: 18px;
     cursor: se-resize;
-    z-index: 10000;
+    z-index: 10005;
     background: linear-gradient(135deg, transparent 50%, #94a3b8 50%, #94a3b8 60%, transparent 60%, transparent 75%, #94a3b8 75%, #94a3b8 85%, transparent 85%);
 }
 
+#floating-tables-window.is-snapped-right .window-resize-grip,
+#floating-tables-window.is-snapped-left .window-resize-grip,
+#floating-tables-window.is-maximized .window-resize-grip,
+#calc-dock.dock-bottom #calc-resize-grip,
+#calc-dock.dock-left #calc-resize-grip,
+#calc-dock.dock-right #calc-resize-grip {
+    display: none !important;
+}
+
 /* ============================================================ */
-/* MULTI-EDGE DOCKED & FLOATING CALCULATOR                      */
+/* CALCULATOR MULTI-EDGE DOCK & RESIZE                          */
 /* ============================================================ */
 #calc-dock {
     position: fixed;
@@ -460,7 +477,6 @@ button:hover {
     z-index: 10010;
     display: none;
     flex-direction: column;
-    overflow: hidden;
     box-sizing: border-box;
 }
 
@@ -470,8 +486,8 @@ button:hover {
     right: 0 !important;
     top: auto !important;
     width: 100vw !important;
-    height: auto !important;
-    border-top: 2px solid #475569;
+    height: var(--calc-dock-h, 310px) !important;
+    border-top: 6px solid #475569;
     border-radius: 0;
 }
 
@@ -480,9 +496,9 @@ button:hover {
     bottom: 0 !important;
     left: 0 !important;
     right: auto !important;
-    width: 460px !important;
+    width: var(--calc-dock-w, 460px) !important;
     height: 100vh !important;
-    border-right: 2px solid #475569;
+    border-right: 6px solid #475569;
     border-radius: 0;
     box-shadow: 4px 0 20px rgba(0, 0, 0, 0.25);
 }
@@ -492,9 +508,9 @@ button:hover {
     bottom: 0 !important;
     right: 0 !important;
     left: auto !important;
-    width: 460px !important;
+    width: var(--calc-dock-w, 460px) !important;
     height: 100vh !important;
-    border-left: 2px solid #475569;
+    border-left: 6px solid #475569;
     border-radius: 0;
     box-shadow: -4px 0 20px rgba(0, 0, 0, 0.25);
 }
@@ -551,19 +567,10 @@ button:hover {
     box-sizing: border-box;
     flex-shrink: 0;
 }
-.calc-history-list::-webkit-scrollbar {
-    width: 6px;
-}
-.calc-history-list::-webkit-scrollbar-track {
-    background: #f1f5f9;
-}
-.calc-history-list::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 3px;
-}
-.calc-history-list::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
-}
+.calc-history-list::-webkit-scrollbar { width: 6px; }
+.calc-history-list::-webkit-scrollbar-track { background: #f1f5f9; }
+.calc-history-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+.calc-history-list::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
 .calc-history-row {
     display: flex;
@@ -575,7 +582,6 @@ button:hover {
     line-height: 1.4;
     flex-shrink: 0;
 }
-
 .calc-history-chip {
     padding: 1px 6px;
     border-radius: 4px;
@@ -583,10 +589,7 @@ button:hover {
     transition: all 0.1s ease;
     user-select: none;
 }
-.calc-history-chip:hover {
-    background: #e0f2fe;
-    color: #0369a1;
-}
+.calc-history-chip:hover { background: #e0f2fe; color: #0369a1; }
 .calc-chip-expr { color: #475569; }
 .calc-chip-res { color: #0f172a; font-weight: 700; }
 
@@ -622,10 +625,7 @@ button:hover {
     padding: 2px 0;
     flex-shrink: 0;
 }
-.calc-dock-controls {
-    display: flex;
-    gap: 2px;
-}
+.calc-dock-controls { display: flex; gap: 2px; }
 .calc-header-btn {
     background: #e2e8f0;
     border: 1px solid #cbd5e1;
@@ -661,22 +661,10 @@ button:hover {
     background: #73808c;
     flex-wrap: wrap;
 }
-.calc-keypad-block {
-    display: grid;
-    gap: 6px;
-}
-.calc-block-vars {
-    grid-template-columns: repeat(4, 48px);
-    grid-template-rows: repeat(4, 38px);
-}
-.calc-block-numpad {
-    grid-template-columns: repeat(4, 48px);
-    grid-template-rows: repeat(4, 38px);
-}
-.calc-block-nav {
-    grid-template-columns: repeat(2, 50px);
-    grid-template-rows: repeat(4, 38px);
-}
+.calc-keypad-block { display: grid; gap: 6px; }
+.calc-block-vars { grid-template-columns: repeat(4, 48px); grid-template-rows: repeat(4, 38px); }
+.calc-block-numpad { grid-template-columns: repeat(4, 48px); grid-template-rows: repeat(4, 38px); }
+.calc-block-nav { grid-template-columns: repeat(2, 50px); grid-template-rows: repeat(4, 38px); }
 
 .calc-key-btn {
     background: #ffffff;
@@ -695,7 +683,6 @@ button:hover {
 }
 .calc-key-btn:hover { background: #f8fafc; }
 .calc-key-btn:active { background: #e2e8f0; transform: translateY(1px); }
-
 .calc-btn-op { color: #1d4ed8; font-size: 1.25rem; }
 .calc-btn-funcs { font-size: 0.85rem; font-weight: 700; background: #f1f5f9; }
 .calc-btn-enter {

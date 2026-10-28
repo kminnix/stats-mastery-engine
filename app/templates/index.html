@@ -14,10 +14,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.1/math.js"></script>
 
     <!-- App Stylesheet & Scripts -->
-    <link rel="stylesheet" href="/static/style.css?v=18">
-    <script defer src="/static/tables.js?v=18"></script>
-    <script defer src="/static/app.js?v=18"></script>
-    <script defer src="/static/calculator.js?v=18"></script>
+    <link rel="stylesheet" href="/static/style.css?v=20">
+    <script defer src="/static/tables.js?v=20"></script>
+    <script defer src="/static/calculator.js?v=20"></script>
+    <script defer src="/static/app.js?v=20"></script>
 </head>
 <body>
     <div id="page-wrapper">
@@ -84,6 +84,7 @@
 
     <!-- FLOATING REFERENCE TABLES WINDOW -->
     <div id="floating-tables-window">
+        <div id="tables-dock-resizer" class="dock-edge-resizer"></div>
         <div id="window-titlebar" class="window-titlebar">
             <span>📊 Tables &amp; Formulas</span>
             <div class="controls">
@@ -210,6 +211,7 @@
 
     <!-- MULTI-EDGE DOCKED & FLOATING CALCULATOR -->
     <div id="calc-dock" class="dock-bottom">
+        <div id="calc-dock-resizer" class="dock-edge-resizer"></div>
         <div class="calc-header" id="calc-titlebar">
             <div class="calc-display-section">
                 <div id="calc-history-list" class="calc-history-list"></div>
@@ -313,6 +315,8 @@
                 <button class="calc-key-btn calc-btn-enter" onclick="calcEvaluate()">ENTER</button>
             </div>
         </div>
+        <!-- Corner Resize Handle for Floating Calculator -->
+        <div id="calc-resize-grip" class="window-resize-grip" title="Drag to resize"></div>
     </div>
 </body>
 </html>
