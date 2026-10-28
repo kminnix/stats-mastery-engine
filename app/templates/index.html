@@ -15,7 +15,7 @@
     <!-- Math.js for Evaluation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.1/math.js"></script>
 
-    <link rel="stylesheet" href="/static/style.css?v=11">
+    <link rel="stylesheet" href="/static/style.css?v=16">
     <style>
         #page-wrapper {
             display: block;
@@ -33,7 +33,6 @@
             padding: 0 10px;
         }
 
-        /* Split-screen layout when Tables are snapped right */
         body.snap-mode-right #page-wrapper {
             padding-right: 470px !important;
             padding-left: 20px !important;
@@ -44,7 +43,6 @@
             width: 100% !important;
         }
 
-        /* Split-screen layout when Tables are snapped left */
         body.snap-mode-left #page-wrapper {
             padding-left: 470px !important;
             padding-right: 20px !important;
@@ -55,12 +53,10 @@
             width: 100% !important;
         }
 
-        /* Page clearance when DeltaMath-style dock is active */
         body.calc-docked-active #page-wrapper {
-            padding-bottom: 310px !important;
+            padding-bottom: 330px !important;
         }
 
-        /* Floating Tables Window */
         #floating-tables-window {
             position: fixed;
             top: 75px;
@@ -263,70 +259,158 @@
             background: linear-gradient(135deg, transparent 50%, #94a3b8 50%, #94a3b8 60%, transparent 60%, transparent 75%, #94a3b8 75%, #94a3b8 85%, transparent 85%);
         }
 
-        /* ============================================================ */
-        /* DELTAMATH-STYLE BOTTOM DOCK CALCULATOR                       */
-        /* ============================================================ */
-        #deltamath-calc-dock {
+        /* DOCKED VS FLOATING CALCULATOR */
+        #calc-dock {
             position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: #73808c;
-            box-shadow: 0 -3px 20px rgba(0, 0, 0, 0.28);
+            background: #6e7a85;
+            box-shadow: 0 -4px 22px rgba(0, 0, 0, 0.28);
             z-index: 10010;
             display: none;
             flex-direction: column;
-            border-top: 1px solid #5a6672;
+            overflow: hidden;
+            box-sizing: border-box;
         }
 
-        /* Top Display Toolbar above the keys */
-        .deltamath-calc-header {
+        #calc-dock.is-docked {
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            top: auto !important;
+            width: 100vw !important;
+            border-top: 2px solid #475569;
+            border-radius: 0;
+        }
+
+        #calc-dock.is-floating {
+            top: 100px;
+            right: 25px;
+            left: auto;
+            bottom: auto;
+            width: 615px;
+            max-width: 96vw;
+            border-radius: 10px;
+            border: 1px solid #475569;
+            box-shadow: 0 16px 40px rgba(15, 23, 42, 0.35);
+        }
+
+        .calc-header {
             background: #ffffff;
             border-bottom: 1px solid #cbd5e1;
-            padding: 6px 16px;
+            padding: 6px 14px;
             display: flex;
-            align-items: center;
+            align-items: stretch;
             justify-content: space-between;
             gap: 12px;
+            cursor: default;
+            box-sizing: border-box;
+        }
+        #calc-dock.is-floating .calc-header {
+            cursor: move;
+            user-select: none;
+            background: #f8fafc;
         }
 
         .calc-display-section {
             display: flex;
-            align-items: center;
-            gap: 12px;
+            flex-direction: column;
+            gap: 4px;
             flex: 1;
-            max-width: 820px;
-            margin: 0 auto;
+            min-width: 0;
+        }
+
+        .calc-history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            height: 58px;
+            max-height: 58px;
+            overflow-y: scroll;
+            overflow-x: hidden;
+            padding: 4px 8px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            box-sizing: border-box;
+            flex-shrink: 0;
+        }
+
+        .calc-history-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        .calc-history-list::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        .calc-history-list::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        .calc-history-list::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        .calc-history-row {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 6px;
+            font-size: 0.95rem;
+            color: #475569;
+            line-height: 1.4;
+            flex-shrink: 0;
+        }
+
+        .calc-history-chip {
+            padding: 1px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            user-select: none;
+        }
+        .calc-history-chip:hover {
+            background: #e0f2fe;
+            color: #0369a1;
+        }
+
+        .calc-chip-expr {
+            color: #475569;
+        }
+        .calc-chip-res {
+            color: #0f172a;
+            font-weight: 700;
         }
 
         #calc-mathfield {
-            flex: 1;
+            width: 100%;
             border: 1px solid #94a3b8;
-            border-radius: 6px;
-            padding: 4px 10px;
-            font-size: 1.45rem;
+            border-radius: 5px;
+            padding: 2px 8px;
+            font-size: 1.35rem;
             background: #ffffff;
             outline: none;
-            min-height: 42px;
+            min-height: 38px;
+            box-sizing: border-box;
             display: flex;
             align-items: center;
+            flex-shrink: 0;
         }
         #calc-mathfield:focus-within {
             border-color: #2563eb;
             box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
         }
 
-        .calc-display-history {
-            font-size: 0.95rem;
-            color: #64748b;
-            font-weight: 600;
-            white-space: nowrap;
+        #calc-mathfield::part(virtual-keyboard-toggle),
+        #calc-mathfield::part(menu-toggle) {
+            display: none !important;
         }
 
         .calc-header-actions {
             display: flex;
+            flex-direction: column;
+            justify-content: space-between;
             align-items: center;
-            gap: 6px;
+            gap: 4px;
+            padding: 2px 0;
+            flex-shrink: 0;
         }
 
         .calc-header-btn {
@@ -336,48 +420,52 @@
             font-size: 0.8rem;
             font-weight: 700;
             border-radius: 4px;
-            padding: 5px 9px;
+            padding: 3px 8px;
             cursor: pointer;
+            width: 44px;
+            text-align: center;
         }
         .calc-header-btn:hover { background: #cbd5e1; }
         .calc-header-close {
             background: #fee2e2;
             color: #dc2626;
             border-color: #fca5a5;
+            font-size: 1.1rem;
+            line-height: 1;
+            padding: 2px 8px;
         }
 
-        /* Keypad Tray Container matching DeltaMath layout */
-        .deltamath-calc-tray {
-            padding: 10px 16px 14px 16px;
+        .calc-tray {
+            padding: 8px 14px 10px 14px;
             display: flex;
             justify-content: center;
-            gap: 16px;
-            background: #77838f;
+            gap: 14px;
+            background: #73808c;
         }
 
-        .dm-keypad-block {
+        .calc-keypad-block {
             display: grid;
             gap: 6px;
         }
 
-        .dm-block-vars {
+        .calc-block-vars {
             grid-template-columns: repeat(4, 52px);
-            grid-template-rows: repeat(4, 40px);
+            grid-template-rows: repeat(4, 38px);
         }
 
-        .dm-block-numpad {
+        .calc-block-numpad {
             grid-template-columns: repeat(4, 52px);
-            grid-template-rows: repeat(4, 40px);
+            grid-template-rows: repeat(4, 38px);
         }
 
-        .dm-block-nav {
+        .calc-block-nav {
             grid-template-columns: repeat(2, 54px);
-            grid-template-rows: repeat(4, 40px);
+            grid-template-rows: repeat(4, 38px);
         }
 
-        .dm-btn {
+        .calc-key-btn {
             background: #ffffff;
-            border: 1px solid #b0b9c2;
+            border: 1px solid #a8b3bd;
             border-radius: 5px;
             font-size: 1.05rem;
             font-weight: 600;
@@ -387,17 +475,22 @@
             align-items: center;
             justify-content: center;
             user-select: none;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.14);
             transition: all 0.08s ease;
         }
-        .dm-btn:hover { background: #f1f5f9; }
-        .dm-btn:active { background: #e2e8f0; transform: translateY(1px); }
+        .calc-key-btn:hover { background: #f8fafc; }
+        .calc-key-btn:active { background: #e2e8f0; transform: translateY(1px); }
 
-        .dm-btn-op {
+        .calc-btn-op {
             color: #1d4ed8;
             font-size: 1.25rem;
         }
-        .dm-btn-enter {
+        .calc-btn-funcs {
+            font-size: 0.85rem;
+            font-weight: 700;
+            background: #f1f5f9;
+        }
+        .calc-btn-enter {
             background: #2563eb;
             color: #ffffff;
             border-color: #1d4ed8;
@@ -405,19 +498,15 @@
             font-size: 0.95rem;
             font-weight: 700;
         }
-        .dm-btn-enter:hover { background: #1d4ed8; }
+        .calc-btn-enter:hover { background: #1d4ed8; }
 
-        .dm-btn-del {
+        .calc-btn-del {
             font-size: 1.15rem;
         }
-
-        .btn-calc.calc-restricted {
-            display: none !important;
-        }
     </style>
-    <script defer src="/static/tables.js?v=11"></script>
-    <script defer src="/static/app.js?v=11"></script>
-    <script defer src="/static/calculator.js?v=11"></script>
+    <script defer src="/static/tables.js?v=16"></script>
+    <script defer src="/static/app.js?v=16"></script>
+    <script defer src="/static/calculator.js?v=16"></script>
 </head>
 <body>
     <div id="page-wrapper">
@@ -608,80 +697,105 @@
         <div id="window-resize-grip" class="window-resize-grip" title="Drag to resize"></div>
     </div>
 
-    <!-- DELTAMATH-STYLE BOTTOM DOCKED CALCULATOR -->
-    <div id="deltamath-calc-dock">
-        <!-- 1. Display Header Directly on Top of the Keyboard -->
-        <div class="deltamath-calc-header">
+    <!-- DOCKED / FLOATING CALCULATOR -->
+    <div id="calc-dock" class="is-docked">
+        <!-- 1. Display Header with Natural Math Scrollable Tape -->
+        <div class="calc-header" id="calc-titlebar">
             <div class="calc-display-section">
-                <span class="calc-display-history" id="calc-expression-preview"></span>
+                <!-- Scrollable Tape for Past Calculations -->
+                <div id="calc-history-list" class="calc-history-list"></div>
                 <math-field id="calc-mathfield" virtual-keyboard-mode="manual"></math-field>
             </div>
             <div class="calc-header-actions">
                 <button class="calc-header-btn" onclick="toggleCalculatorAngleMode()" id="calc-angle-btn">DEG</button>
+                <button class="calc-header-btn" onclick="toggleCalculatorDock()" id="calc-dock-btn" title="Undock / Float">⬈</button>
                 <button class="calc-header-btn calc-header-close" onclick="closeCalculatorWindow()">&times;</button>
             </div>
         </div>
 
-        <!-- 2. Virtual Keyboard Tray on Bottom (DeltaMath 3-Cluster Layout) -->
-        <div class="deltamath-calc-tray">
-            <!-- Left Block: Variables & Functions -->
-            <div class="dm-keypad-block dm-block-vars">
-                <button class="dm-btn" onclick="calcInsert('x')">x</button>
-                <button class="dm-btn" onclick="calcInsert('y')">y</button>
-                <button class="dm-btn" onclick="calcInsert('(')">(</button>
-                <button class="dm-btn" onclick="calcInsert(')')">)</button>
+        <!-- 2. Virtual Keyboard Tray on Bottom -->
+        <div class="calc-tray">
+            <!-- Left Block A: Main Bank -->
+            <div id="calc-bank-main" class="calc-keypad-block calc-block-vars">
+                <button class="calc-key-btn" onclick="calcInsert('x')">x</button>
+                <button class="calc-key-btn" onclick="calcInsert('y')">y</button>
+                <button class="calc-key-btn" onclick="calcInsert('(')">(</button>
+                <button class="calc-key-btn" onclick="calcInsert(')')">)</button>
 
-                <button class="dm-btn dm-btn-op" onclick="calcEvaluate()">=</button>
-                <button class="dm-btn" onclick="calcInsertSqrt()">√</button>
-                <button class="dm-btn" onclick="calcInsert('^2')">a²</button>
-                <button class="dm-btn" onclick="calcInsert('^')">a^b</button>
+                <button class="calc-key-btn calc-btn-op" onclick="calcEvaluate()">=</button>
+                <button class="calc-key-btn" onclick="calcInsertSqrt()">√</button>
+                <button class="calc-key-btn" onclick="calcInsert('^2')">a²</button>
+                <button class="calc-key-btn" onclick="calcInsert('^')">a^b</button>
 
-                <button class="dm-btn" onclick="toggleExtendedFuncs(this)">Funcs</button>
-                <button class="dm-btn" onclick="calcInsertAns()">Ans</button>
-                <button class="dm-btn" onclick="calcInsertFraction()">a/b</button>
-                <button class="dm-btn" onclick="calcInsert(',')">,</button>
+                <button class="calc-key-btn calc-btn-funcs" onclick="toggleKeypadBank('funcs')">Funcs</button>
+                <button class="calc-key-btn" onclick="calcInsertAns()">Ans</button>
+                <button class="calc-key-btn" onclick="calcInsertFraction()">a/b</button>
+                <button class="calc-key-btn" onclick="calcInsert(',')">,</button>
 
-                <button class="dm-btn" onclick="calcInsert('\\pi')">π</button>
-                <button class="dm-btn" onclick="calcInsert('e')">e</button>
-                <button class="dm-btn" onclick="calcInsertAbs()">|x|</button>
-                <button class="dm-btn" onclick="calcInsertNthRoot()">ⁿ√</button>
+                <button class="calc-key-btn" onclick="calcInsert('\\pi')">π</button>
+                <button class="calc-key-btn" onclick="calcInsert('e')">e</button>
+                <button class="calc-key-btn" onclick="calcInsertAbs()">|x|</button>
+                <button class="calc-key-btn" onclick="calcInsertNthRoot()">ⁿ√</button>
             </div>
 
-            <!-- Center Block: 10-Key Pad with Dedicated Divide & Multiply -->
-            <div class="dm-keypad-block dm-block-numpad">
-                <button class="dm-btn" onclick="calcInsert('7')">7</button>
-                <button class="dm-btn" onclick="calcInsert('8')">8</button>
-                <button class="dm-btn" onclick="calcInsert('9')">9</button>
-                <button class="dm-btn dm-btn-op" onclick="calcInsertFraction()" title="Divide (Creates Fraction)">÷</button>
+            <!-- Left Block B: Funcs Bank -->
+            <div id="calc-bank-funcs" class="calc-keypad-block calc-block-vars" style="display: none;">
+                <button class="calc-key-btn" onclick="calcInsert('\\sin(')">sin</button>
+                <button class="calc-key-btn" onclick="calcInsert('\\cos(')">cos</button>
+                <button class="calc-key-btn" onclick="calcInsert('\\tan(')">tan</button>
+                <button class="calc-key-btn" onclick="calcInsert('!')">!</button>
 
-                <button class="dm-btn" onclick="calcInsert('4')">4</button>
-                <button class="dm-btn" onclick="calcInsert('5')">5</button>
-                <button class="dm-btn" onclick="calcInsert('6')">6</button>
-                <button class="dm-btn dm-btn-op" onclick="calcInsert('\\times ')">×</button>
+                <button class="calc-key-btn" onclick="calcInsert('\\arcsin(')">sin⁻¹</button>
+                <button class="calc-key-btn" onclick="calcInsert('\\arccos(')">cos⁻¹</button>
+                <button class="calc-key-btn" onclick="calcInsert('\\arctan(')">tan⁻¹</button>
+                <button class="calc-key-btn" onclick="calcInsert('\\ln(')">ln</button>
 
-                <button class="dm-btn" onclick="calcInsert('1')">1</button>
-                <button class="dm-btn" onclick="calcInsert('2')">2</button>
-                <button class="dm-btn" onclick="calcInsert('3')">3</button>
-                <button class="dm-btn dm-btn-op" onclick="calcInsert('-')">−</button>
+                <button class="calc-key-btn calc-btn-funcs" onclick="toggleKeypadBank('main')">123</button>
+                <button class="calc-key-btn" onclick="calcInsert('\\log_{10}(')">log</button>
+                <button class="calc-key-btn" onclick="calcInsert('nCr(')">nCr</button>
+                <button class="calc-key-btn" onclick="calcInsert('nPr(')">nPr</button>
 
-                <button class="dm-btn" onclick="calcInsert('0')">0</button>
-                <button class="dm-btn" onclick="calcInsert('.')">.</button>
-                <button class="dm-btn" onclick="calcToFraction()">a b/c</button>
-                <button class="dm-btn dm-btn-op" onclick="calcInsert('+')">+</button>
+                <button class="calc-key-btn" onclick="calcInsert('mean(')">mean</button>
+                <button class="calc-key-btn" onclick="calcInsert('std(')">stdev</button>
+                <button class="calc-key-btn" onclick="calcInsertAbs()">|x|</button>
+                <button class="calc-key-btn" onclick="calcInsertNthRoot()">ⁿ√</button>
+            </div>
+
+            <!-- Center Block: 10-Key Pad -->
+            <div class="calc-keypad-block calc-block-numpad">
+                <button class="calc-key-btn" onclick="calcInsert('7')">7</button>
+                <button class="calc-key-btn" onclick="calcInsert('8')">8</button>
+                <button class="calc-key-btn" onclick="calcInsert('9')">9</button>
+                <button class="calc-key-btn calc-btn-op" onclick="calcInsertFraction()" title="Divide (Creates Fraction)">÷</button>
+
+                <button class="calc-key-btn" onclick="calcInsert('4')">4</button>
+                <button class="calc-key-btn" onclick="calcInsert('5')">5</button>
+                <button class="calc-key-btn" onclick="calcInsert('6')">6</button>
+                <button class="calc-key-btn calc-btn-op" onclick="calcInsert('\\times ')">×</button>
+
+                <button class="calc-key-btn" onclick="calcInsert('1')">1</button>
+                <button class="calc-key-btn" onclick="calcInsert('2')">2</button>
+                <button class="calc-key-btn" onclick="calcInsert('3')">3</button>
+                <button class="calc-key-btn calc-btn-op" onclick="calcInsert('-')">−</button>
+
+                <button class="calc-key-btn" onclick="calcInsert('0')">0</button>
+                <button class="calc-key-btn" onclick="calcInsert('.')">.</button>
+                <button class="calc-key-btn" onclick="calcInsert('\\pi')">π</button>
+                <button class="calc-key-btn calc-btn-op" onclick="calcInsert('+')">+</button>
             </div>
 
             <!-- Right Block: Clear, Navigation, Backspace & ENTER -->
-            <div class="dm-keypad-block dm-block-nav">
-                <button class="dm-btn dm-btn-del" onclick="calcBackspace()" title="Backspace">⌫</button>
-                <button class="dm-btn" onclick="calcClear()" title="Clear">AC</button>
+            <div class="calc-keypad-block calc-block-nav">
+                <button class="calc-key-btn calc-btn-del" onclick="calcBackspace()" title="Backspace">⌫</button>
+                <button class="calc-key-btn" onclick="calcClear()" title="Clear">AC</button>
 
-                <button class="dm-btn" onclick="calcNav('left')">←</button>
-                <button class="dm-btn" onclick="calcNav('right')">→</button>
+                <button class="calc-key-btn" onclick="calcNav('left')">←</button>
+                <button class="calc-key-btn" onclick="calcNav('right')">→</button>
 
-                <button class="dm-btn" onclick="calcNav('up')">↑</button>
-                <button class="dm-btn" onclick="calcNav('down')">↓</button>
+                <button class="calc-key-btn" onclick="calcNav('up')">↑</button>
+                <button class="calc-key-btn" onclick="calcNav('down')">↓</button>
 
-                <button class="dm-btn dm-btn-enter" onclick="calcEvaluate()">ENTER</button>
+                <button class="calc-key-btn calc-btn-enter" onclick="calcEvaluate()">ENTER</button>
             </div>
         </div>
     </div>
