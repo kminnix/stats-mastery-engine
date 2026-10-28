@@ -36,14 +36,12 @@ function setCalcDockMode(mode) {
     dock.className = `dock-${mode}`;
     updateBodyDockGutters(mode);
 
-    // Update active highlight on toolbar dock buttons
     document.querySelectorAll('.calc-dock-controls .calc-header-btn').forEach(btn => {
         btn.classList.remove('active');
     });
     const activeBtn = document.querySelector(`.calc-dock-controls button[onclick*="'${mode}'"]`);
     if (activeBtn) activeBtn.classList.add('active');
 
-    // Clear inline drag positioning when docking
     if (mode !== 'float') {
         dock.style.left = '';
         dock.style.top = '';
@@ -112,14 +110,14 @@ function calcInsertFraction() {
 function calcInsertSqrt() {
     const mf = getMathField();
     if (!mf) return;
-    mf.executeCommand(['insert', '\\sqrt{#0}']);
+    mf.executeCommand(['insert', '\\sqrt{#?}']);
     mf.focus();
 }
 
 function calcInsertNthRoot() {
     const mf = getMathField();
     if (!mf) return;
-    mf.executeCommand(['insert', '\\sqrt[#?]{#0}']);
+    mf.executeCommand(['insert', '\\sqrt[#?]{#?}']);
     mf.focus();
 }
 
@@ -184,6 +182,7 @@ function calcNav(dir) {
     mf.focus();
 }
 
+// Robust recursive fraction parser
 function convertLatexFractions(expr) {
     let prev;
     let res = expr;
@@ -194,35 +193,91 @@ function convertLatexFractions(expr) {
     return res;
 }
 
+// Convert arbitrary LaTeX into valid Math.js syntax
 function latexToMathJs(latex) {
     let clean = latex;
+
+    // 1. Strip formatting wrappers and spacing
+    clean = clean.replace(/\\(mathrm|mathit|mathbf|text|operatorname)\{([^{}]+)\}/g, '$2')
+                 .replace(/\\[,;!]|\\quad|\\qquad|\\enspace/g, ' ')
+                 .replace(/\\left|\\right/g, '')
+                 .replace(/\\placeholder\{([^{}]*)\}/g, '$1')
+                 .replace(/\\placeholder/g, '');
+
+    // 2. Normalize fractions
     clean = convertLatexFractions(clean);
 
+    // 3. Multiplications & common symbols
     clean = clean.replace(/\\times/g, '*')
                  .replace(/\\cdot/g, '*')
-                 .replace(/\\pi/g, 'pi')
-                 .replace(/\\ln/g, 'log')
-                 .replace(/\\log_\{10\}/g, 'log10')
-                 .replace(/\\log/g, 'log10')
-                 .replace(/\\sin/g, 'sin')
-                 .replace(/\\cos/g, 'cos')
-                 .replace(/\\tan/g, 'tan')
-                 .replace(/\\arcsin/g, 'asin')
-                 .replace(/\\arccos/g, 'acos')
-                 .replace(/\\arctan/g, 'atan')
-                 .replace(/\\sqrt\[(.*?)\]\{(.*?)\}/g, 'nthRoot($2, $1)')
-                 .replace(/\\sqrt\{(.*?)\}/g, 'sqrt($1)')
-                 .replace(/\\left/g, '')
-                 .replace(/\\right/g, '')
-                 .replace(/\{/g, '(')
-                 .replace(/\}/g, ')');
+                 .replace(/\\ast/g, '*')
+                 .replace(/\\div/g, '/')
+                 .replace(/\\pi\b/g, 'pi')
+                 .replace(/\\exponentialE\b|\\mathrm\{e\}\b/g, 'e')
+                 .replace(/\\ln\b/g, 'log')
+                 .replace(/\\log_\{?10\}?/g, 'log10')
+                 .replace(/\\log\b/g, 'log10');
 
+    // 4. Robust Root Parsing (Handles \sqrt{7}, \sqrt 7, \sqrt[3]{8}, nested roots)
+    // nthRoot: \sqrt[3]{8} or \sqrt[3]8
+    while (/\\sqrt\[([^\]]+)\]\{([^{}]+)\}/.test(clean)) {
+        clean = clean.replace(/\\sqrt\[([^\]]+)\]\{([^{}]+)\}/g, 'nthRoot($2, $1)');
+    }
+    clean = clean.replace(/\\sqrt\[([^\]]+)\]\s*([0-9.]+|[a-zA-Z]+)/g, 'nthRoot($2, $1)');
+
+    // Square root with braces: \sqrt{7} or \sqrt{2+5}
+    while (/\\sqrt\s*\{([^{}]+)\}/.test(clean)) {
+        clean = clean.replace(/\\sqrt\s*\{([^{}]+)\}/g, 'sqrt($1)');
+    }
+
+    // Square root with parentheses: \sqrt(7)
+    clean = clean.replace(/\\sqrt\s*\(/g, 'sqrt(');
+
+    // Square root without braces: \sqrt 7, \sqrt7, \sqrt x
+    clean = clean.replace(/\\sqrt\s*([0-9.]+|[a-zA-Z]+)/g, 'sqrt($1)');
+
+    // Empty or leftover \sqrt
+    clean = clean.replace(/\\sqrt\{\s*\}/g, 'sqrt(0)')
+                 .replace(/\\sqrt\b/g, 'sqrt');
+
+    // 5. Trig & Statistical functions
+    clean = clean.replace(/\\sin\b/g, 'sin')
+                 .replace(/\\cos\b/g, 'cos')
+                 .replace(/\\tan\b/g, 'tan')
+                 .replace(/\\arcsin\b/g, 'asin')
+                 .replace(/\\arccos\b/g, 'acos')
+                 .replace(/\\arctan\b/g, 'atan')
+                 .replace(/\\binom\{([^{}]+)\}\{([^{}]+)\}/g, 'combinations($1, $2)')
+                 .replace(/nCr\b/g, 'combinations')
+                 .replace(/nPr\b/g, 'permutations');
+
+    // Wrap single arguments in functions if missing parentheses (e.g. sin 30 -> sin(30))
+    clean = clean.replace(/\b(sin|cos|tan|asin|acos|atan|log|log10)\s+([0-9.]+|[a-zA-Z]+)/g, '$1($2)');
+
+    // 6. Braces to Parentheses
+    clean = clean.replace(/\{/g, '(').replace(/\}/g, ')');
+
+    // 7. Implicit Multiplication (e.g. 2(3) -> 2*(3), 2sqrt(7) -> 2*sqrt(7), (2)(3) -> (2)*(3))
+    clean = clean.replace(/(\d)\s*\(/g, '$1*(')
+                 .replace(/\)\s*(\d)/g, ')*$1')
+                 .replace(/\)\s*\(/g, ')*(')
+                 .replace(/(\d)\s*(sqrt|sin|cos|tan|asin|acos|atan|log|pi|e)\b/g, '$1*$2')
+                 .replace(/\)\s*(sqrt|sin|cos|tan|asin|acos|atan|log|pi|e)\b/g, ')*$1');
+
+    // 8. Degree vs Radian Trig Evaluation
     if (isDegreeMode) {
         clean = clean
-            .replace(/sin\(([^)]+)\)/g, 'sin(($1) * (pi / 180))')
-            .replace(/cos\(([^)]+)\)/g, 'cos(($1) * (pi / 180))')
-            .replace(/tan\(([^)]+)\)/g, 'tan(($1) * (pi / 180))');
+            .replace(/\basin\(([^)]+)\)/g, '(asin($1) * (180 / pi))')
+            .replace(/\bacos\(([^)]+)\)/g, '(acos($1) * (180 / pi))')
+            .replace(/\batan\(([^)]+)\)/g, '(atan($1) * (180 / pi))')
+            .replace(/\bsin\(([^)]+)\)/g, 'sin(($1) * (pi / 180))')
+            .replace(/\bcos\(([^)]+)\)/g, 'cos(($1) * (pi / 180))')
+            .replace(/\btan\(([^)]+)\)/g, 'tan(($1) * (pi / 180))');
     }
+
+    // 9. Strip any stray backslashes to prevent Math.js parser errors
+    clean = clean.replace(/\\/g, '');
+
     return clean;
 }
 
@@ -293,6 +348,7 @@ function calcEvaluate() {
         mf.setValue(formatted.toString());
         mf.focus();
     } catch (err) {
+        console.warn("Calculator evaluation error:", err, "Raw LaTeX:", latex);
         const list = document.getElementById('calc-history-list');
         const errRow = document.createElement('div');
         errRow.className = 'calc-history-row';
@@ -303,7 +359,6 @@ function calcEvaluate() {
     }
 }
 
-// Dragging engine for Float mode
 window.addEventListener('DOMContentLoaded', () => {
     suppressMathLiveIcons();
     const dock = document.getElementById('calc-dock');
