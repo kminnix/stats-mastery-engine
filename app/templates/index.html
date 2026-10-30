@@ -4,13 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Komore - Procedural Statistics Mastery</title>
-    <link rel="stylesheet" href="/static/style.css?v=4">
+    <link rel="stylesheet" href="/static/style.css?v=35">
     <!-- KaTeX for math rendering -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
     <!-- MathLive for 2D Calculator Display -->
     <script defer src="https://unpkg.com/mathlive"></script>
+    <!-- Math.js for calculation engine -->
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.js"></script>
     <!-- Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
@@ -29,7 +31,7 @@
                 <span id="auth-user-label">Sign In with Google</span>
             </button>
             <button class="header-btn" onclick="toggleFloatingWindow()">📋 Formulas & Tables</button>
-            <button id="calc-toggle-btn" class="header-btn" onclick="toggleCalculator()">🖩 Calculator</button>
+            <button id="calc-toggle-btn" class="header-btn" onclick="toggleCalculatorWindow()">🖩 Calculator</button>
         </div>
     </header>
 
@@ -161,51 +163,109 @@
     </div>
 
     <!-- Calculator Dock -->
-    <div id="calc-dock" class="calc-dock" style="display: none;">
+    <div id="calc-dock" class="dock-bottom" style="display: none;">
         <div id="calc-dock-resizer" class="dock-resizer-strip"></div>
-        <div class="calc-header">
-            <span class="calc-title">Scientific Graphing / Matrix Calculator</span>
-            <div class="calc-controls">
-                <button onclick="setCalcDockMode('left')" title="Dock Left">◧</button>
-                <button onclick="setCalcDockMode('right')" title="Dock Right">◨</button>
-                <button onclick="setCalcDockMode('bottom')" title="Dock Bottom">⬋</button>
-                <button onclick="toggleCalculator()" title="Close Calculator">✕</button>
+        <div id="calc-titlebar" class="calc-header">
+            <div class="calc-header-top">
+                <span class="calc-title">Scientific Graphing / Matrix Calculator</span>
+                <div class="calc-dock-controls">
+                    <button class="calc-header-btn" onclick="setCalcDockMode('left')" title="Dock Left">◧</button>
+                    <button class="calc-header-btn active" id="btn-dock-bottom" onclick="setCalcDockMode('bottom')" title="Dock Bottom">&#11027;</button>
+                    <button class="calc-header-btn" onclick="setCalcDockMode('right')" title="Dock Right">◨</button>
+                    <button class="calc-header-btn" onclick="setCalcDockMode('float')" title="Float / Undock">⬈</button>
+                    <button class="calc-header-btn" onclick="closeCalculatorWindow()" title="Close Calculator">✕</button>
+                </div>
+            </div>
+            <div class="calc-display-section">
+                <div id="calc-history-list" class="calc-history-list"></div>
+                <div class="calc-input-row">
+                    <button id="calc-angle-btn" class="calc-mode-btn" onclick="toggleCalculatorAngleMode()">DEG</button>
+                    <math-field id="calc-mathfield" virtual-keyboard-mode="manual"></math-field>
+                </div>
             </div>
         </div>
-        <div class="calc-display-area">
-            <math-field id="calc-mathfield" virtual-keyboard-mode="manual"></math-field>
-            <div id="calc-history-preview" class="calc-history-preview"></div>
+
+        <div class="calc-tray">
+            <div class="calc-keypad-container">
+                <!-- Left Function/Variable Pod -->
+                <div id="calc-bank-main" class="calc-pod calc-pod-left">
+                    <button class="calc-key" onclick="calcInsert('x')">x</button>
+                    <button class="calc-key" onclick="calcInsert('y')">y</button>
+                    <button class="calc-key op-key" onclick="calcInsert('^2')">x²</button>
+                    <button class="calc-key op-key" onclick="calcInsert('^')">a^b</button>
+                    
+                    <button class="calc-key op-key" onclick="calcInsertFraction()">a/b</button>
+                    <button class="calc-key op-key" onclick="calcInsertSqrt()">√</button>
+                    <button class="calc-key op-key" onclick="calcInsertNthRoot()">ⁿ√</button>
+                    <button class="calc-key op-key" onclick="calcInsertAbs()">|x|</button>
+                    
+                    <button class="calc-key op-key" onclick="calcInsert('(')">(</button>
+                    <button class="calc-key op-key" onclick="calcInsert(')')">)</button>
+                    <button class="calc-key op-key" onclick="calcInsert('<')">&lt;</button>
+                    <button class="calc-key op-key" onclick="calcInsert('>')">&gt;</button>
+                    
+                    <button class="calc-key bank-btn" onclick="toggleKeypadBank('funcs')">Funcs</button>
+                    <button class="calc-key" onclick="calcInsertAns()">ans</button>
+                    <button class="calc-key" onclick="calcInsert(',')">,</button>
+                    <button class="calc-key clear-key" onclick="calcClear()">clear</button>
+                </div>
+
+                <div id="calc-bank-funcs" class="calc-pod calc-pod-left" style="display: none;">
+                    <button class="calc-key" onclick="calcInsert('sin(')">sin</button>
+                    <button class="calc-key" onclick="calcInsert('cos(')">cos</button>
+                    <button class="calc-key" onclick="calcInsert('tan(')">tan</button>
+                    <button class="calc-key" onclick="calcInsert('asin(')">sin⁻¹</button>
+                    
+                    <button class="calc-key" onclick="calcInsert('acos(')">cos⁻¹</button>
+                    <button class="calc-key" onclick="calcInsert('atan(')">tan⁻¹</button>
+                    <button class="calc-key" onclick="calcInsert('ln(')">ln</button>
+                    <button class="calc-key" onclick="calcInsert('log(')">log</button>
+                    
+                    <button class="calc-key" onclick="calcInsert('combinations(')">nCr</button>
+                    <button class="calc-key" onclick="calcInsert('permutations(')">nPr</button>
+                    <button class="calc-key" onclick="calcInsert('!')">!</button>
+                    <button class="calc-key" onclick="calcInsert('e')">e</button>
+                    
+                    <button class="calc-key bank-btn" onclick="toggleKeypadBank('main')">123</button>
+                    <button class="calc-key" onclick="calcInsert('mean(')">mean</button>
+                    <button class="calc-key" onclick="calcInsert('std(')">stdev</button>
+                    <button class="calc-key clear-key" onclick="calcClear()">clear</button>
+                </div>
+
+                <!-- Right 10-Key Numpad & Navigation Pod -->
+                <div class="calc-pod calc-pod-right">
+                    <button class="calc-key num-key" onclick="calcInsert('7')">7</button>
+                    <button class="calc-key num-key" onclick="calcInsert('8')">8</button>
+                    <button class="calc-key num-key" onclick="calcInsert('9')">9</button>
+                    <button class="calc-key op-key" onclick="calcInsertFraction()">÷</button>
+                    
+                    <button class="calc-key num-key" onclick="calcInsert('4')">4</button>
+                    <button class="calc-key num-key" onclick="calcInsert('5')">5</button>
+                    <button class="calc-key num-key" onclick="calcInsert('6')">6</button>
+                    <button class="calc-key op-key" onclick="calcInsert('*')">×</button>
+                    
+                    <button class="calc-key num-key" onclick="calcInsert('1')">1</button>
+                    <button class="calc-key num-key" onclick="calcInsert('2')">2</button>
+                    <button class="calc-key num-key" onclick="calcInsert('3')">3</button>
+                    <button class="calc-key op-key" onclick="calcInsert('-')">-</button>
+                    
+                    <button class="calc-key num-key" onclick="calcInsert('0')">0</button>
+                    <button class="calc-key num-key" onclick="calcInsert('.')">.</button>
+                    <button class="calc-key" onclick="calcInsert('pi')">π</button>
+                    <button class="calc-key op-key" onclick="calcInsert('+')">+</button>
+
+                    <button class="calc-key nav-key" onclick="calcNav('left')">◀</button>
+                    <button class="calc-key nav-key" onclick="calcNav('right')">▶</button>
+                    <button class="calc-key backspace-key" onclick="calcBackspace()">⌫</button>
+                    <button class="calc-key eval-key" onclick="calcEvaluate()">ENTER</button>
+                </div>
+            </div>
         </div>
-        <div class="calc-keypad-grid">
-            <button class="calc-key op-key" onclick="calcAction('fraction')">a/b</button>
-            <button class="calc-key op-key" onclick="calcAction('sqrt')">√x</button>
-            <button class="calc-key op-key" onclick="calcAction('square')">x²</button>
-            <button class="calc-key op-key" onclick="calcAction('power')">x^y</button>
-            <button class="calc-key clear-key" onclick="calcAction('clear')">AC</button>
-            <button class="calc-key" onclick="calcInsert('(')">(</button>
-            <button class="calc-key" onclick="calcInsert(')')">)</button>
-            <button class="calc-key op-key" onclick="calcAction('divide')">÷</button>
-            <button class="calc-key" onclick="calcInsert('7')">7</button>
-            <button class="calc-key" onclick="calcInsert('8')">8</button>
-            <button class="calc-key" onclick="calcInsert('9')">9</button>
-            <button class="calc-key op-key" onclick="calcInsert('*')">×</button>
-            <button class="calc-key" onclick="calcInsert('4')">4</button>
-            <button class="calc-key" onclick="calcInsert('5')">5</button>
-            <button class="calc-key" onclick="calcInsert('6')">6</button>
-            <button class="calc-key op-key" onclick="calcInsert('-')">-</button>
-            <button class="calc-key" onclick="calcInsert('1')">1</button>
-            <button class="calc-key" onclick="calcInsert('2')">2</button>
-            <button class="calc-key" onclick="calcInsert('3')">3</button>
-            <button class="calc-key op-key" onclick="calcInsert('+')">+</button>
-            <button class="calc-key" onclick="calcInsert('0')">0</button>
-            <button class="calc-key" onclick="calcInsert('.')">.</button>
-            <button class="calc-key" onclick="calcAction('backspace')">⌫</button>
-            <button class="calc-key eval-key" onclick="calcEvaluate()">=</button>
-        </div>
+        <div id="calc-resize-grip" class="window-resize-grip"></div>
     </div>
 
-    <script src="/static/calculator.js?v=4"></script>
-    <script src="/static/tables.js?v=4"></script>
-    <script src="/static/app.js?v=5"></script>
+    <script src="/static/tables.js?v=35"></script>
+    <script src="/static/calculator.js?v=35"></script>
+    <script src="/static/app.js?v=35"></script>
 </body>
 </html>
