@@ -27,43 +27,41 @@ body {
     width: 100%;
     box-sizing: border-box;
     padding: 0 10px;
+    transition: max-width 0.1s ease;
 }
 
-/* Split-screen right gutters */
+/* ============================================================ */
+/* ADDITIVE PAGE GUTTERS (NEVER OVERWRITE EACH OTHER)           */
+/* ============================================================ */
+/* Right Side Dock Clearance (Tables OR Calc) */
 body.snap-mode-right #page-wrapper {
     padding-right: calc(var(--tables-dock-w) + 20px) !important;
-    padding-left: 20px !important;
 }
 body.calc-docked-right #page-wrapper {
     padding-right: calc(var(--calc-dock-w) + 20px) !important;
-    padding-left: 20px !important;
-}
-body.snap-mode-right #page-container,
-body.calc-docked-right #page-container {
-    max-width: 100% !important;
-    margin: 0 !important;
-    width: 100% !important;
 }
 
-/* Split-screen left gutters */
+/* Left Side Dock Clearance (Tables OR Calc) */
 body.snap-mode-left #page-wrapper {
     padding-left: calc(var(--tables-dock-w) + 20px) !important;
-    padding-right: 20px !important;
 }
 body.calc-docked-left #page-wrapper {
     padding-left: calc(var(--calc-dock-w) + 20px) !important;
-    padding-right: 20px !important;
 }
+
+/* Bottom Clearance (Calc Bottom) */
+body.calc-docked-bottom #page-wrapper {
+    padding-bottom: calc(var(--calc-dock-h) + 30px) !important;
+}
+
+/* Full Width Container when any sidebar dock is engaged */
+body.snap-mode-right #page-container,
 body.snap-mode-left #page-container,
+body.calc-docked-right #page-container,
 body.calc-docked-left #page-container {
     max-width: 100% !important;
     margin: 0 !important;
     width: 100% !important;
-}
-
-/* Bottom clearance */
-body.calc-docked-bottom #page-wrapper {
-    padding-bottom: calc(var(--calc-dock-h) + 20px) !important;
 }
 
 /* Header & Controls */
@@ -237,7 +235,7 @@ button:hover { background-color: #1d4ed8; }
 .revealed-msg { color: #b45309; font-size: 0.85rem; font-weight: 600; margin-top: 6px; }
 
 /* ============================================================ */
-/* TABLES WINDOW                                                */
+/* TABLES WINDOW (SNAPPABLE & COOPERATIVE)                      */
 /* ============================================================ */
 #floating-tables-window {
     position: fixed;
@@ -259,6 +257,7 @@ button:hover { background-color: #1d4ed8; }
     user-select: none;
 }
 
+/* Snapped Right */
 #floating-tables-window.is-snapped-right {
     top: 0 !important;
     bottom: 0 !important;
@@ -275,6 +274,7 @@ button:hover { background-color: #1d4ed8; }
     border-left: 6px solid #475569 !important;
 }
 
+/* Snapped Left */
 #floating-tables-window.is-snapped-left {
     top: 0 !important;
     bottom: 0 !important;
@@ -479,6 +479,7 @@ button:hover { background-color: #1d4ed8; }
     overflow: hidden;
 }
 
+/* Bottom Dock */
 #calc-dock.dock-bottom {
     bottom: 0 !important;
     left: 0 !important;
@@ -491,6 +492,17 @@ button:hover { background-color: #1d4ed8; }
     border-radius: 0;
 }
 
+/* Cooperative Boundary: Bottom Calc yields to Snapped Tables */
+body.snap-mode-right #calc-dock.dock-bottom {
+    right: var(--tables-dock-w, 460px) !important;
+    width: auto !important;
+}
+body.snap-mode-left #calc-dock.dock-bottom {
+    left: var(--tables-dock-w, 460px) !important;
+    width: auto !important;
+}
+
+/* Left & Right Docks */
 #calc-dock.dock-left {
     top: 0 !important;
     bottom: 0 !important;
