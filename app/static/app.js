@@ -1,8 +1,20 @@
 ﻿const STORAGE_KEY = 'komore_state_v7';
 const TARGET_MASTERY = 5;
+
 let currentProblem = null;
 let isMultiStage = false;
 let hadStageMistake = false;
+let currentUser = null;
+let supabaseClient = null;
+
+// Initialize Supabase client if SDK and keys are available
+if (window.SUPABASE_URL && window.SUPABASE_KEY && window.supabase) {
+    try {
+        supabaseClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_KEY);
+    } catch (e) {
+        console.warn("Supabase initialization error:", e);
+    }
+}
 
 let state = {
     selectedTopic: 'random',
@@ -25,6 +37,80 @@ function getActiveSkillState() {
     return state.skills[topic];
 }
 
+// Authentication Handlers
+async function initAuth() {
+    if (!supabaseClient) return;
+
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    handleSession(session);
+
+    supabaseClient.auth.onAuthStateChange((_event, session) => {
+        handleSession(session);
+    });
+}
+
+function handleSession(session) {
+    currentUser = session ? session.user : null;
+    const authBtnLabel = document.getElementById('auth-user-label');
+    
+    if (currentUser) {
+        const name = currentUser.user_metadata?.full_name || currentUser.email || 'Student';
+        authBtnLabel.innerText = `${name} (Sign Out)`;
+        loadCloudState();
+    } else {
+        authBtnLabel.innerText = 'Sign In with Google';
+        loadSavedState();
+    }
+}
+
+async function toggleAuth() {
+    if (!supabaseClient) {
+        alert("Authentication client is not configured.");
+        return;
+    }
+    if (currentUser) {
+        if (confirm("Sign out of your account?")) {
+            await supabaseClient.auth.signOut();
+        }
+    } else {
+        await supabaseClient.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: window.location.origin
+            }
+        });
+    }
+}
+
+// Progress State Synchronization
+async function loadCloudState() {
+    if (!supabaseClient || !currentUser) return;
+    try {
+        const { data, error } = await supabaseClient
+            .from('skill_progress')
+            .select('*')
+            .eq('student_id', currentUser.id);
+
+        if (!error && data) {
+            let totalAtt = 0;
+            let totalCorr = 0;
+            data.forEach(row => {
+                if (state.skills[row.skill_id]) {
+                    state.skills[row.skill_id].streak = row.consecutive_streak || 0;
+                    state.skills[row.skill_id].mastered = Boolean(row.is_mastered);
+                }
+                totalAtt += (row.total_attempted || 0);
+                totalCorr += (row.total_correct || 0);
+            });
+            state.totalAttempted = totalAtt;
+            state.totalCorrect = totalCorr;
+            updateStatsUI();
+        }
+    } catch (e) {
+        console.warn("Could not load cloud progress:", e);
+    }
+}
+
 function loadSavedState() {
     try {
         const saved = localStorage.getItem(STORAGE_KEY);
@@ -42,15 +128,34 @@ function loadSavedState() {
     } catch (e) {
         console.warn('localStorage not accessible');
     }
-    document.getElementById('topic-select').value = state.selectedTopic;
+    const sel = document.getElementById('topic-select');
+    if (sel) sel.value = state.selectedTopic;
     updateStatsUI();
 }
 
-function saveState() {
+async function saveState() {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (e) {}
     updateStatsUI();
+
+    if (supabaseClient && currentUser) {
+        const topic = state.selectedTopic || 'random';
+        const skill = getActiveSkillState();
+        try {
+            await supabaseClient.from('skill_progress').upsert({
+                student_id: currentUser.id,
+                skill_id: topic,
+                consecutive_streak: skill.streak,
+                is_mastered: skill.mastered,
+                total_attempted: state.totalAttempted,
+                total_correct: state.totalCorrect,
+                last_practiced_at: new Date().toISOString()
+            }, { onConflict: 'student_id,skill_id' });
+        } catch (err) {
+            console.warn("Failed to sync progress to cloud:", err);
+        }
+    }
 }
 
 function resetCurrentSkill() {
@@ -101,6 +206,7 @@ function triggerKaTeX(element) {
 
 function drawNormalDistribution(plotData) {
     const svg = document.getElementById('normal-curve-svg');
+    if (!svg) return;
     svg.innerHTML = '';
     const width = 600, baselineY = 175, peakHeight = 140;
     const zMin = -3.5, zMax = 3.5;
@@ -143,9 +249,12 @@ function drawNormalDistribution(plotData) {
 }
 
 async function loadProblem() {
-    document.getElementById('feedback-banner').style.display = 'none';
-    document.getElementById('solution-card').style.display = 'none';
-    document.getElementById('next-btn').style.display = 'none';
+    const feedbackBanner = document.getElementById('feedback-banner');
+    const solutionCard = document.getElementById('solution-card');
+    const nextBtn = document.getElementById('next-btn');
+    if (feedbackBanner) feedbackBanner.style.display = 'none';
+    if (solutionCard) solutionCard.style.display = 'none';
+    if (nextBtn) nextBtn.style.display = 'none';
     hadStageMistake = false;
 
     const topic = state.selectedTopic || 'random';
@@ -208,10 +317,13 @@ function renderMultiStageUI() {
         container.appendChild(box);
     });
 
-    document.getElementById('stage-input-0').focus();
-    document.getElementById('stage-input-0').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') submitStage(0);
-    });
+    const firstInput = document.getElementById('stage-input-0');
+    if (firstInput) {
+        firstInput.focus();
+        firstInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') submitStage(0);
+        });
+    }
 }
 
 async function submitStage(idx) {
@@ -281,7 +393,8 @@ function unlockNextStage(idx) {
 }
 
 async function submitSingleAnswer() {
-    const rawVal = document.getElementById('answer-input').value.trim();
+    const input = document.getElementById('answer-input');
+    const rawVal = input.value.trim();
     if (!rawVal) return;
 
     const userVal = parseFloat(rawVal);
@@ -298,7 +411,7 @@ async function submitSingleAnswer() {
     finalizeProblem(data.correct);
 
     document.getElementById('submit-btn').style.display = 'none';
-    document.getElementById('answer-input').disabled = true;
+    input.disabled = true;
 }
 
 function finalizeProblem(isSuccess) {
@@ -326,14 +439,18 @@ function finalizeProblem(isSuccess) {
     }
 
     saveState();
-    document.getElementById('next-btn').style.display = 'inline-block';
-    document.getElementById('next-btn').focus();
+    const nextBtn = document.getElementById('next-btn');
+    nextBtn.style.display = 'inline-block';
+    nextBtn.focus();
 }
 
 window.addEventListener('load', () => {
-    loadSavedState();
+    initAuth();
     loadProblem();
-    document.getElementById('answer-input').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') submitSingleAnswer();
-    });
+    const ansInput = document.getElementById('answer-input');
+    if (ansInput) {
+        ansInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') submitSingleAnswer();
+        });
+    }
 });

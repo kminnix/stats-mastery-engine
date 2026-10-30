@@ -3,320 +3,209 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Komore - Stats Practice</title>
-    <!-- KaTeX CDN -->
+    <title>Komore - Procedural Statistics Mastery</title>
+    <link rel="stylesheet" href="/static/style.css?v=4">
+    <!-- KaTeX for math rendering -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
-
-    <!-- MathLive & Math.js Engines -->
+    <!-- MathLive for 2D Calculator Display -->
     <script defer src="https://unpkg.com/mathlive"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.1/math.js"></script>
-
-    <!-- App Stylesheet & Scripts -->
-    <link rel="stylesheet" href="/static/style.css?v=22">
-    <script defer src="/static/tables.js?v=22"></script>
-    <script defer src="/static/calculator.js?v=22"></script>
-    <script defer src="/static/app.js?v=22"></script>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        window.SUPABASE_URL = "{{ supabase_url }}";
+        window.SUPABASE_KEY = "{{ supabase_key }}";
+    </script>
 </head>
 <body>
+    <header class="app-header">
+        <div class="logo-area">
+            <h1>komore<span class="domain-tag">.org</span></h1>
+            <span class="subtitle">MTH 245 Procedural Engine</span>
+        </div>
+        <div class="header-controls">
+            <button id="auth-btn" class="header-btn" onclick="toggleAuth()">
+                <span id="auth-user-label">Sign In with Google</span>
+            </button>
+            <button class="header-btn" onclick="toggleFloatingWindow()">📋 Formulas & Tables</button>
+            <button id="calc-toggle-btn" class="header-btn" onclick="toggleCalculator()">🖩 Calculator</button>
+        </div>
+    </header>
+
     <div id="page-wrapper">
-        <div id="page-container">
-            <header>
-                <div class="brand">
-                    <h1>Komore</h1>
-                    <span class="tagline">Clear, procedural statistics practice</span>
+        <div class="card">
+            <div class="card-header">
+                <div class="topic-selector-group">
+                    <label for="topic-select">Skill:</label>
+                    <select id="topic-select" onchange="onTopicChange()">
+                        <optgroup label="Normal Distributions">
+                            <option value="random">Normal: Random Type</option>
+                            <option value="between">Normal: Between Bounds</option>
+                            <option value="left_tail">Normal: Left-Tail Area</option>
+                            <option value="right_tail">Normal: Right-Tail Area</option>
+                            <option value="inverse">Normal: Inverse / Cutoff</option>
+                        </optgroup>
+                        <optgroup label="Confidence Intervals">
+                            <option value="ci_mean_t">1-Sample t-Interval for Mean (μ)</option>
+                            <option value="ci_prop_z">1-Sample z-Interval for Proportion (p)</option>
+                        </optgroup>
+                    </select>
                 </div>
-                <div class="header-controls">
-                    <button class="btn-secondary" onclick="toggleFloatingWindow()">📋 Formulas &amp; Tables</button>
-                    <div id="mastery-pill" class="mastery-badge">Streak: 0 / 5</div>
-                    <button id="reset-progress-btn" class="text-btn" onclick="resetCurrentSkill()">Reset Skill</button>
-                    <button class="btn-secondary" onclick="toggleCalculatorWindow()">🖩 Calculator</button>
+                <div class="stats-group">
+                    <div id="mastery-pill" class="mastery-badge">Streak: <span>0</span> / 5</div>
+                    <div id="session-stats" class="session-stats">Attempts: 0 | Accuracy: 0%</div>
+                    <button class="reset-btn" onclick="resetCurrentSkill()" title="Reset streak for this skill">&#x21bb;</button>
                 </div>
-            </header>
+            </div>
 
-            <main>
-                <div class="card">
-                    <div class="topic-header">
-                        <div class="selector-group">
-                            <label for="topic-select" class="selector-label">Skill:</label>
-                            <select id="topic-select" onchange="onTopicChange()">
-                                <optgroup label="Normal Distributions">
-                                    <option value="random">Mixed Normal Practice</option>
-                                    <option value="between">Area Between: P(x₁ &lt; X &lt; x₂)</option>
-                                    <option value="left_tail">Left-Tail: P(X &lt; x)</option>
-                                    <option value="right_tail">Right-Tail: P(X &gt; x)</option>
-                                    <option value="inverse">Inverse Normal: Find Cutoff (x)</option>
-                                </optgroup>
-                                <optgroup label="Confidence Intervals">
-                                    <option value="ci_mean_t">1-Sample t-Interval for Mean (μ)</option>
-                                    <option value="ci_prop_z">1-Sample z-Interval for Proportion (p)</option>
-                                </optgroup>
-                            </select>
-                        </div>
-                        <span id="session-stats" class="session-stats">Attempts: 0 | Accuracy: 0%</span>
-                    </div>
-
-                    <div id="problem-prompt" class="prompt">Loading problem...</div>
-
-                    <div id="single-input-panel" class="input-row">
-                        <label for="answer-input"><strong id="input-label">Answer:</strong></label>
-                        <input type="number" step="any" id="answer-input" placeholder="e.g. 0.4532" autocomplete="off">
-                        <button id="submit-btn" onclick="submitSingleAnswer()">Submit Answer</button>
-                    </div>
-
-                    <div id="multi-stage-panel" style="display: none;"></div>
-
-                    <button id="next-btn" onclick="loadProblem()" style="display: none; margin-top: 15px;">Next Problem &rarr;</button>
-                    <div id="feedback-banner" style="display: none; margin-top: 15px;"></div>
+            <div class="card-body">
+                <div id="problem-prompt" class="math-content">Loading question...</div>
+                
+                <div id="single-input-panel" class="input-row">
+                    <label id="input-label" for="answer-input">Answer:</label>
+                    <input type="number" step="any" id="answer-input" placeholder="e.g. 0.4532" autocomplete="off">
+                    <button id="submit-btn" onclick="submitSingleAnswer()">Submit Answer</button>
+                    <button id="next-btn" style="display: none;" onclick="loadProblem()">Next Problem &rarr;</button>
                 </div>
 
-                <div id="solution-card" class="card solution" style="display: none;">
+                <div id="multi-stage-panel" style="display: none;"></div>
+
+                <div id="feedback-banner" class="banner" style="display: none;"></div>
+
+                <div id="solution-card" class="solution-card" style="display: none;">
                     <h3>Step-by-Step Worked Solution</h3>
-                    <div class="graph-container" id="graph-wrapper">
-                        <svg id="normal-curve-svg" viewBox="0 0 600 220" preserveAspectRatio="xMidYMid meet"></svg>
+                    <div id="graph-wrapper" class="graph-wrapper">
+                        <svg id="normal-curve-svg" viewBox="0 0 600 200"></svg>
                     </div>
-                    <div id="solution-content"></div>
+                    <div id="solution-content" class="math-content"></div>
                 </div>
-            </main>
+            </div>
         </div>
     </div>
 
-    <!-- FLOATING REFERENCE TABLES WINDOW -->
-    <div id="floating-tables-window">
-        <div id="tables-dock-resizer" class="dock-edge-resizer"></div>
+    <!-- Floating Draggable & Snappable Reference Window -->
+    <div id="floating-tables-window" class="floating-window" style="display: none;">
+        <div id="tables-dock-resizer" class="dock-resizer-strip"></div>
         <div id="window-titlebar" class="window-titlebar">
-            <span>📊 Tables &amp; Formulas</span>
-            <div class="controls">
-                <button onclick="snapWindow('left')" title="Snap Left">◧</button>
-                <button onclick="snapWindow('right')" title="Snap Right">◨</button>
+            <span class="window-title">AP Statistics Tables & Formulas</span>
+            <div class="window-controls">
+                <button onclick="snapWindow('left')" title="Snap Left Side">◧</button>
+                <button onclick="snapWindow('right')" title="Snap Right Side">◨</button>
                 <button id="btn-maximize-restore" onclick="toggleMaximizeWindow()" title="Full Screen / Maximize">🗖</button>
-                <button onclick="closeFloatingWindow()" title="Close">&times;</button>
+                <button onclick="closeFloatingWindow()" title="Close Window">✕</button>
             </div>
         </div>
-        
-        <div class="window-tab-bar">
-            <button class="window-tab-btn active" id="btn-tab-table-a" onclick="switchTab('tab-table-a')">Table A (Z)</button>
-            <button class="window-tab-btn" id="btn-tab-table-b" onclick="switchTab('tab-table-b')">Table B (t)</button>
-            <button class="window-tab-btn" id="btn-tab-table-c" onclick="switchTab('tab-table-c')">Table C (χ²)</button>
-            <button class="window-tab-btn" id="btn-tab-form-inf" onclick="switchTab('tab-form-inf')">Inference Formulas</button>
-            <button class="window-tab-btn" id="btn-tab-form-desc" onclick="switchTab('tab-form-desc')">Descriptive Formulas</button>
+        <div class="window-nav">
+            <button id="btn-tab-table-a" class="window-tab-btn active" onclick="switchTab('tab-table-a')">Table A (Standard Normal)</button>
+            <button id="btn-tab-table-b" class="window-tab-btn" onclick="switchTab('tab-table-b')">Table B (t-Distribution)</button>
+            <button id="btn-tab-table-c" class="window-tab-btn" onclick="switchTab('tab-table-c')">Table C (Chi-Square)</button>
+            <button id="btn-tab-formulas" class="window-tab-btn" onclick="switchTab('tab-formulas')">Inference Formulas</button>
         </div>
-
         <div class="window-body">
             <div id="tab-table-a" class="tab-pane active">
-                <div class="table-intro">
-                    <strong>Table A: Standard Normal Probabilities.</strong> Cumulative area to the left of \(z\).
-                </div>
-                <div style="margin-bottom: 8px; flex-shrink: 0;">
-                    <label style="font-weight: 600; font-size: 0.8rem;">Values: </label>
-                    <select id="table-a-mode" onchange="renderTableA()" style="padding: 2px 6px; font-size: 0.8rem;">
-                        <option value="positive">Positive z (0.0 to 3.4)</option>
-                        <option value="negative">Negative z (-3.4 to 0.0)</option>
+                <div class="table-toolbar">
+                    <label for="table-a-mode">Tail Selection:</label>
+                    <select id="table-a-mode" onchange="renderTableA()">
+                        <option value="positive">Positive z (Right of Mean: .5000 to .9998)</option>
+                        <option value="negative">Negative z (Left of Mean: .0002 to .5000)</option>
                     </select>
                 </div>
                 <div class="table-scroll-container">
-                    <table class="ap-table" id="table-a-content"></table>
+                    <table id="table-a-content" class="stat-table"></table>
                 </div>
             </div>
-
             <div id="tab-table-b" class="tab-pane">
-                <div class="table-intro">
-                    <strong>Table B: t-Distribution Critical Values (\(t^*\)).</strong>
-                </div>
                 <div class="table-scroll-container">
-                    <table class="ap-table">
+                    <table class="stat-table">
                         <thead>
-                            <tr>
-                                <th>df</th>
-                                <th>Tail: .10<br>(80%)</th>
-                                <th>Tail: .05<br>(90%)</th>
-                                <th>Tail: .025<br>(95%)</th>
-                                <th>Tail: .02<br>(96%)</th>
-                                <th>Tail: .01<br>(98%)</th>
-                                <th>Tail: .005<br>(99%)</th>
-                            </tr>
+                            <tr><th>df</th><th>80% (t*)</th><th>90% (t*)</th><th>95% (t*)</th><th>98% (t*)</th><th>99% (t*)</th></tr>
                         </thead>
                         <tbody>
-                            <tr><td>1</td><td>3.078</td><td>6.314</td><td>12.71</td><td>15.89</td><td>31.82</td><td>63.66</td></tr>
-                            <tr><td>2</td><td>1.886</td><td>2.920</td><td>4.303</td><td>4.849</td><td>6.965</td><td>9.925</td></tr>
-                            <tr><td>3</td><td>1.638</td><td>2.353</td><td>3.182</td><td>3.482</td><td>4.541</td><td>5.841</td></tr>
-                            <tr><td>4</td><td>1.533</td><td>2.132</td><td>2.776</td><td>2.999</td><td>3.747</td><td>4.604</td></tr>
-                            <tr><td>5</td><td>1.476</td><td>2.015</td><td>2.571</td><td>2.757</td><td>3.365</td><td>4.032</td></tr>
-                            <tr><td>10</td><td>1.372</td><td>1.812</td><td>2.228</td><td>2.359</td><td>2.764</td><td>3.169</td></tr>
-                            <tr><td>15</td><td>1.341</td><td>1.753</td><td>2.131</td><td>2.249</td><td>2.602</td><td>2.947</td></tr>
-                            <tr><td>19</td><td>1.328</td><td>1.729</td><td>2.093</td><td>2.205</td><td>2.539</td><td>2.861</td></tr>
-                            <tr><td>20</td><td>1.325</td><td>1.725</td><td>2.086</td><td>2.197</td><td>2.528</td><td>2.845</td></tr>
-                            <tr><td>24</td><td>1.318</td><td>1.711</td><td>2.064</td><td>2.172</td><td>2.492</td><td>2.797</td></tr>
-                            <tr><td>29</td><td>1.311</td><td>1.699</td><td>2.045</td><td>2.150</td><td>2.462</td><td>2.756</td></tr>
-                            <tr><td>30</td><td>1.310</td><td>1.697</td><td>2.042</td><td>2.147</td><td>2.457</td><td>2.750</td></tr>
-                            <tr><td>39</td><td>1.304</td><td>1.685</td><td>2.023</td><td>2.124</td><td>2.426</td><td>2.708</td></tr>
-                            <tr><td>49</td><td>1.299</td><td>1.677</td><td>2.010</td><td>2.110</td><td>2.405</td><td>2.680</td></tr>
-                            <tr><td><strong>∞ (z*)</strong></td><td><strong>1.282</strong></td><td><strong>1.645</strong></td><td><strong>1.960</strong></td><td><strong>2.054</strong></td><td><strong>2.326</strong></td><td><strong>2.576</strong></td></tr>
+                            <tr><td>5</td><td>1.476</td><td>2.015</td><td>2.571</td><td>3.365</td><td>4.032</td></tr>
+                            <tr><td>10</td><td>1.372</td><td>1.812</td><td>2.228</td><td>2.764</td><td>3.169</td></tr>
+                            <tr><td>15</td><td>1.341</td><td>1.753</td><td>2.131</td><td>2.602</td><td>2.947</td></tr>
+                            <tr><td>20</td><td>1.325</td><td>1.725</td><td>2.086</td><td>2.528</td><td>2.845</td></tr>
+                            <tr><td>25</td><td>1.316</td><td>1.708</td><td>2.060</td><td>2.485</td><td>2.787</td></tr>
+                            <tr><td>30</td><td>1.310</td><td>1.697</td><td>2.042</td><td>2.457</td><td>2.750</td></tr>
+                            <tr><td>&infin; (z*)</td><td>1.282</td><td>1.645</td><td>1.960</td><td>2.326</td><td>2.576</td></tr>
                         </tbody>
                     </table>
                 </div>
             </div>
-
             <div id="tab-table-c" class="tab-pane">
-                <div class="table-intro">
-                    <strong>Table C: Chi-Square (\(\chi^2\)) Critical Values.</strong> Right-tail probability \(p\).
-                </div>
                 <div class="table-scroll-container">
-                    <table class="ap-table">
+                    <table class="stat-table">
                         <thead>
-                            <tr>
-                                <th>df</th>
-                                <th>p = 0.10</th>
-                                <th>p = 0.05</th>
-                                <th>p = 0.025</th>
-                                <th>p = 0.01</th>
-                                <th>p = 0.001</th>
-                            </tr>
+                            <tr><th>df</th><th>p = 0.10</th><th>p = 0.05</th><th>p = 0.01</th><th>p = 0.001</th></tr>
                         </thead>
                         <tbody>
-                            <tr><td>1</td><td>2.71</td><td>3.84</td><td>5.02</td><td>6.63</td><td>10.83</td></tr>
-                            <tr><td>2</td><td>4.61</td><td>5.99</td><td>7.38</td><td>9.21</td><td>13.82</td></tr>
-                            <tr><td>3</td><td>6.25</td><td>7.81</td><td>9.35</td><td>11.34</td><td>16.27</td></tr>
-                            <tr><td>4</td><td>7.78</td><td>9.49</td><td>11.14</td><td>13.28</td><td>18.47</td></tr>
-                            <tr><td>5</td><td>9.24</td><td>11.07</td><td>12.83</td><td>15.09</td><td>20.51</td></tr>
-                            <tr><td>10</td><td>15.99</td><td>18.31</td><td>20.48</td><td>23.21</td><td>29.59</td></tr>
+                            <tr><td>1</td><td>2.71</td><td>3.84</td><td>6.63</td><td>10.83</td></tr>
+                            <tr><td>2</td><td>4.61</td><td>5.99</td><td>9.21</td><td>13.82</td></tr>
+                            <tr><td>3</td><td>6.25</td><td>7.81</td><td>11.34</td><td>16.27</td></tr>
+                            <tr><td>4</td><td>7.78</td><td>9.49</td><td>13.28</td><td>18.47</td></tr>
                         </tbody>
                     </table>
                 </div>
             </div>
-
-            <div id="tab-form-inf" class="tab-pane">
-                <div class="table-intro"><strong>Section II: Inference Formulas</strong></div>
-                <div class="table-scroll-container" style="font-size: 0.9rem; line-height: 1.6;">
-                    <p>$$\text{Confidence Interval: } \quad \text{statistic} \pm (\text{critical value})(\text{standard error})$$</p>
-                    <p><strong>Sample Mean (\(\mu\)):</strong><br>
-                    \(SE = \frac{s}{\sqrt{n}}, \quad \text{Interval: } \bar{x} \pm t^* \left(\frac{s}{\sqrt{n}}\right)\)</p>
-                    <p><strong>Sample Proportion (\(p\)):</strong><br>
-                    \(SE = \sqrt{\frac{\hat{p}(1-\hat{p})}{n}}, \quad \text{Interval: } \hat{p} \pm z^* \sqrt{\frac{\hat{p}(1-\hat{p})}{n}}\)</p>
-                </div>
-            </div>
-
-            <div id="tab-form-desc" class="tab-pane">
-                <div class="table-intro"><strong>Section I: Descriptive &amp; Probability Formulas</strong></div>
-                <div class="table-scroll-container" style="font-size: 0.9rem; line-height: 1.6;">
-                    <p>$$\bar{x} = \frac{\sum x_i}{n}, \quad s_x = \sqrt{\frac{\sum (x_i - \bar{x})^2}{n - 1}}$$</p>
-                    <p>$$P(A \cup B) = P(A) + P(B) - P(A \cap B)$$</p>
-                    <p>$$P(A \mid B) = \frac{P(A \cap B)}{P(B)}$$</p>
+            <div id="tab-formulas" class="tab-pane">
+                <div class="formula-box">
+                    <h4>Confidence Interval Formulas</h4>
+                    <p>$$\text{Point Estimate} \pm (\text{Critical Value}) \times (\text{Standard Error})$$</p>
+                    <p>$$\text{Mean (}\mu\text{), }\sigma\text{ unknown: } \bar{x} \pm t^* \left(\frac{s}{\sqrt{n}}\right), \quad df = n - 1$$</p>
+                    <p>$$\text{Proportion (}p\text{): } \hat{p} \pm z^* \sqrt{\frac{\hat{p}(1-\hat{p})}{n}}$$</p>
                 </div>
             </div>
         </div>
-        <div id="window-resize-grip" class="window-resize-grip" title="Drag to resize"></div>
+        <div id="window-resize-grip" class="window-resize-grip"></div>
     </div>
 
-    <!-- MULTI-EDGE DOCKED & FLOATING CALCULATOR -->
-    <div id="calc-dock" class="dock-bottom">
-        <div id="calc-dock-resizer" class="dock-edge-resizer"></div>
-        <div class="calc-header" id="calc-titlebar">
-            <div class="calc-display-section">
-                <div id="calc-history-list" class="calc-history-list"></div>
-                <math-field id="calc-mathfield" virtual-keyboard-mode="manual"></math-field>
-            </div>
-            <div class="calc-header-actions">
-                <div class="calc-dock-controls">
-                    <button class="calc-header-btn" onclick="setCalcDockMode('left')" title="Dock Left">◧</button>
-                    <button class="calc-header-btn active" id="btn-dock-bottom" onclick="setCalcDockMode('bottom')" title="Dock Bottom">&#11027;</button>
-                    <button class="calc-header-btn" onclick="setCalcDockMode('right')" title="Dock Right">◨</button>
-                    <button class="calc-header-btn" onclick="setCalcDockMode('float')" title="Float / Undock">⬈</button>
-                </div>
-                <div style="display: flex; gap: 4px; align-items: center; width: 100%; justify-content: flex-end;">
-                    <button class="calc-header-btn" onclick="toggleCalculatorAngleMode()" id="calc-angle-btn">DEG</button>
-                    <button class="calc-header-btn calc-header-close" onclick="closeCalculatorWindow()">&times;</button>
-                </div>
+    <!-- Calculator Dock -->
+    <div id="calc-dock" class="calc-dock" style="display: none;">
+        <div id="calc-dock-resizer" class="dock-resizer-strip"></div>
+        <div class="calc-header">
+            <span class="calc-title">Scientific Graphing / Matrix Calculator</span>
+            <div class="calc-controls">
+                <button onclick="setCalcDockMode('left')" title="Dock Left">◧</button>
+                <button onclick="setCalcDockMode('right')" title="Dock Right">◨</button>
+                <button onclick="setCalcDockMode('bottom')" title="Dock Bottom">⬋</button>
+                <button onclick="toggleCalculator()" title="Close Calculator">✕</button>
             </div>
         </div>
-
-        <div class="calc-tray">
-            <!-- Main Variable/Power Bank -->
-            <div id="calc-bank-main" class="calc-keypad-block calc-block-vars">
-                <button class="calc-key-btn" onclick="calcInsert('x')">x</button>
-                <button class="calc-key-btn" onclick="calcInsert('y')">y</button>
-                <button class="calc-key-btn" onclick="calcInsert('(')">(</button>
-                <button class="calc-key-btn" onclick="calcInsert(')')">)</button>
-
-                <button class="calc-key-btn calc-btn-op" onclick="calcEvaluate()">=</button>
-                <button class="calc-key-btn" onclick="calcInsertSqrt()">√</button>
-                <button class="calc-key-btn" onclick="calcInsert('^2')">a²</button>
-                <button class="calc-key-btn" onclick="calcInsert('^')">a^b</button>
-
-                <button class="calc-key-btn calc-btn-funcs" onclick="toggleKeypadBank('funcs')">Funcs</button>
-                <button class="calc-key-btn" onclick="calcInsertAns()">Ans</button>
-                <button class="calc-key-btn" onclick="calcInsertFraction()">a/b</button>
-                <button class="calc-key-btn" onclick="calcInsert(',')">,</button>
-
-                <button class="calc-key-btn" onclick="calcInsert('\\pi')">π</button>
-                <button class="calc-key-btn" onclick="calcInsert('e')">e</button>
-                <button class="calc-key-btn" onclick="calcInsertAbs()">|x|</button>
-                <button class="calc-key-btn" onclick="calcInsertNthRoot()">ⁿ√</button>
-            </div>
-
-            <!-- Functions Bank (Trig, Logs, Stats) -->
-            <div id="calc-bank-funcs" class="calc-keypad-block calc-block-vars" style="display: none;">
-                <button class="calc-key-btn" onclick="calcInsert('\\sin(')">sin</button>
-                <button class="calc-key-btn" onclick="calcInsert('\\cos(')">cos</button>
-                <button class="calc-key-btn" onclick="calcInsert('\\tan(')">tan</button>
-                <button class="calc-key-btn" onclick="calcInsert('!')">!</button>
-
-                <button class="calc-key-btn" onclick="calcInsert('\\arcsin(')">sin⁻¹</button>
-                <button class="calc-key-btn" onclick="calcInsert('\\arccos(')">cos⁻¹</button>
-                <button class="calc-key-btn" onclick="calcInsert('\\arctan(')">tan⁻¹</button>
-                <button class="calc-key-btn" onclick="calcInsert('\\ln(')">ln</button>
-
-                <button class="calc-key-btn calc-btn-funcs" onclick="toggleKeypadBank('main')">123</button>
-                <button class="calc-key-btn" onclick="calcInsert('\\log_{10}(')">log</button>
-                <button class="calc-key-btn" onclick="calcInsert('nCr(')">nCr</button>
-                <button class="calc-key-btn" onclick="calcInsert('nPr(')">nPr</button>
-
-                <button class="calc-key-btn" onclick="calcInsert('mean(')">mean</button>
-                <button class="calc-key-btn" onclick="calcInsert('std(')">stdev</button>
-                <button class="calc-key-btn" onclick="calcInsertAbs()">|x|</button>
-                <button class="calc-key-btn" onclick="calcInsertNthRoot()">ⁿ√</button>
-            </div>
-
-            <!-- 10-Key Numpad -->
-            <div class="calc-keypad-block calc-block-numpad">
-                <button class="calc-key-btn" onclick="calcInsert('7')">7</button>
-                <button class="calc-key-btn" onclick="calcInsert('8')">8</button>
-                <button class="calc-key-btn" onclick="calcInsert('9')">9</button>
-                <button class="calc-key-btn calc-btn-op" onclick="calcInsertFraction()" title="Divide (Creates Fraction)">÷</button>
-
-                <button class="calc-key-btn" onclick="calcInsert('4')">4</button>
-                <button class="calc-key-btn" onclick="calcInsert('5')">5</button>
-                <button class="calc-key-btn" onclick="calcInsert('6')">6</button>
-                <button class="calc-key-btn calc-btn-op" onclick="calcInsert('\\times ')">×</button>
-
-                <button class="calc-key-btn" onclick="calcInsert('1')">1</button>
-                <button class="calc-key-btn" onclick="calcInsert('2')">2</button>
-                <button class="calc-key-btn" onclick="calcInsert('3')">3</button>
-                <button class="calc-key-btn calc-btn-op" onclick="calcInsert('-')">−</button>
-
-                <button class="calc-key-btn" onclick="calcInsert('0')">0</button>
-                <button class="calc-key-btn" onclick="calcInsert('.')">.</button>
-                <button class="calc-key-btn" onclick="calcInsert('\\pi')">π</button>
-                <button class="calc-key-btn calc-btn-op" onclick="calcInsert('+')">+</button>
-            </div>
-
-            <!-- Navigation & Actions -->
-            <div class="calc-keypad-block calc-block-nav">
-                <button class="calc-key-btn calc-btn-del" onclick="calcBackspace()" title="Backspace">⌫</button>
-                <button class="calc-key-btn" onclick="calcClear()" title="Clear">AC</button>
-
-                <button class="calc-key-btn" onclick="calcNav('left')">←</button>
-                <button class="calc-key-btn" onclick="calcNav('right')">→</button>
-
-                <button class="calc-key-btn" onclick="calcNav('up')">↑</button>
-                <button class="calc-key-btn" onclick="calcNav('down')">↓</button>
-
-                <button class="calc-key-btn calc-btn-enter" onclick="calcEvaluate()">ENTER</button>
-            </div>
+        <div class="calc-display-area">
+            <math-field id="calc-mathfield" virtual-keyboard-mode="manual"></math-field>
+            <div id="calc-history-preview" class="calc-history-preview"></div>
         </div>
-        <!-- Corner Resize Handle for Floating Calculator -->
-        <div id="calc-resize-grip" class="window-resize-grip" title="Drag to resize"></div>
+        <div class="calc-keypad-grid">
+            <button class="calc-key op-key" onclick="calcAction('fraction')">a/b</button>
+            <button class="calc-key op-key" onclick="calcAction('sqrt')">√x</button>
+            <button class="calc-key op-key" onclick="calcAction('square')">x²</button>
+            <button class="calc-key op-key" onclick="calcAction('power')">x^y</button>
+            <button class="calc-key clear-key" onclick="calcAction('clear')">AC</button>
+            <button class="calc-key" onclick="calcInsert('(')">(</button>
+            <button class="calc-key" onclick="calcInsert(')')">)</button>
+            <button class="calc-key op-key" onclick="calcAction('divide')">÷</button>
+            <button class="calc-key" onclick="calcInsert('7')">7</button>
+            <button class="calc-key" onclick="calcInsert('8')">8</button>
+            <button class="calc-key" onclick="calcInsert('9')">9</button>
+            <button class="calc-key op-key" onclick="calcInsert('*')">×</button>
+            <button class="calc-key" onclick="calcInsert('4')">4</button>
+            <button class="calc-key" onclick="calcInsert('5')">5</button>
+            <button class="calc-key" onclick="calcInsert('6')">6</button>
+            <button class="calc-key op-key" onclick="calcInsert('-')">-</button>
+            <button class="calc-key" onclick="calcInsert('1')">1</button>
+            <button class="calc-key" onclick="calcInsert('2')">2</button>
+            <button class="calc-key" onclick="calcInsert('3')">3</button>
+            <button class="calc-key op-key" onclick="calcInsert('+')">+</button>
+            <button class="calc-key" onclick="calcInsert('0')">0</button>
+            <button class="calc-key" onclick="calcInsert('.')">.</button>
+            <button class="calc-key" onclick="calcAction('backspace')">⌫</button>
+            <button class="calc-key eval-key" onclick="calcEvaluate()">=</button>
+        </div>
     </div>
+
+    <script src="/static/calculator.js?v=4"></script>
+    <script src="/static/tables.js?v=4"></script>
+    <script src="/static/app.js?v=5"></script>
 </body>
 </html>
