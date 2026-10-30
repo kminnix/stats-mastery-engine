@@ -33,7 +33,6 @@ function setCalcDockMode(mode) {
     const dock = document.getElementById('calc-dock');
     if (!dock) return;
 
-    // 1. Immediately apply our own target dock state FIRST
     currentDockMode = mode;
     dock.className = `dock-${mode}`;
     updateBodyDockGutters(mode);
@@ -44,29 +43,28 @@ function setCalcDockMode(mode) {
     const activeBtn = document.querySelector(`.calc-dock-controls button[onclick*="'${mode}'"]`);
     if (activeBtn) activeBtn.classList.add('active');
 
-    if (mode !== 'float') {
-        dock.style.left = '';
-        dock.style.top = '';
-        dock.style.right = '';
-        dock.style.bottom = '';
-        dock.style.width = '';
-        dock.style.height = '';
+    // Reset inline dimensions when changing modes
+    dock.style.left = '';
+    dock.style.top = '';
+    dock.style.right = '';
+    dock.style.bottom = '';
+    dock.style.width = '';
+    dock.style.height = '';
+
+    if (mode === 'bottom') {
+        const savedH = getComputedStyle(document.documentElement).getPropertyValue('--calc-dock-h').trim() || '320px';
+        dock.style.height = savedH;
     }
 
-    // 2. Safely resolve collision without re-triggering recursive loops
     if (!isResolvingCalcCollision) {
         isResolvingCalcCollision = true;
         const isTablesOnRight = document.body.classList.contains('snap-mode-right');
         const isTablesOnLeft = document.body.classList.contains('snap-mode-left');
 
         if (mode === 'right' && isTablesOnRight) {
-            if (typeof window.snapWindow === 'function') {
-                window.snapWindow('left');
-            }
+            if (typeof window.snapWindow === 'function') window.snapWindow('left');
         } else if (mode === 'left' && isTablesOnLeft) {
-            if (typeof window.snapWindow === 'function') {
-                window.snapWindow('right');
-            }
+            if (typeof window.snapWindow === 'function') window.snapWindow('right');
         }
         isResolvingCalcCollision = false;
     }
@@ -217,24 +215,7 @@ function latexToMathJs(latex) {
     let clean = latex;
 
     clean = clean.replace(/\\(mathrm|mathit|mathbf|text|operatorname)\{([^{}]+)\}/g, '$2')
-                 .replace(/\\[,;!]|\\quad|\\qquad|\\enspace/g, ' ')
-                 .replace(/\\left|\\right/g, '')
-                 .replace(/\\placeholder\{([^{}]*)\}/g, '$1')
-                 .replace(/\\placeholder/g, '');
-
-    clean = convertLatexFractions(clean);
-
-    clean = clean.replace(/\\times/g, '*')
-                 .replace(/\\cdot/g, '*')
-                 .replace(/\\ast/g, '*')
-                 .replace(/\\div/g, '/')
-                 .replace(/\\pi\b/g, 'pi')
-                 .replace(/\\exponentialE\b|\\mathrm\{e\}\b/g, 'e')
-                 .replace(/\\ln\b/g, 'log')
-                 .replace(/\\log_\{?10\}?/g, 'log10')
-                 .replace(/\\log\b/g, 'log10');
-
-    while (/\\sqrt\[([^\]]+)\]\{([^{}]+)\}/.test(clean)) {
+                 .replace(/\\[,;!]\vert{}\\quad\vert{}\\qquad\vert{}\\enspace/g, ' ') .replace(/\\left\vert{}\\right/g, '') .replace(/\\placeholder\{([^{}]*)\}/g, '$1') .replace(/\\placeholder/g, '');      clean = convertLatexFractions(clean);      clean = clean.replace(/\\times/g, '*') .replace(/\\cdot/g, '*') .replace(/\\ast/g, '*') .replace(/\\div/g, '/') .replace(/\\pi\b/g, 'pi') .replace(/\\exponentialE\b\vert{}\\mathrm\{e\}\b/g, 'e') .replace(/\\ln\b/g, 'log') .replace(/\\log_\{?10\}?/g, 'log10') .replace(/\\log\b/g, 'log10');      while (/\\sqrt\[([^\]]+)\]\{([^{}]+)\}/.test(clean)) {
         clean = clean.replace(/\\sqrt\[([^\]]+)\]\{([^{}]+)\}/g, 'nthRoot($2, $1)');
     }
     clean = clean.replace(/\\sqrt\[([^\]]+)\]\s*([0-9.]+|[a-zA-Z]+)/g, 'nthRoot($2, $1)');
@@ -243,29 +224,7 @@ function latexToMathJs(latex) {
         clean = clean.replace(/\\sqrt\s*\{([^{}]+)\}/g, 'sqrt($1)');
     }
 
-    clean = clean.replace(/\\sqrt\s*\(/g, 'sqrt(');
-    clean = clean.replace(/\\sqrt\s*([0-9.]+|[a-zA-Z]+)/g, 'sqrt($1)');
-    clean = clean.replace(/\\sqrt\{\s*\}/g, 'sqrt(0)')
-                 .replace(/\\sqrt\b/g, 'sqrt');
-
-    clean = clean.replace(/\\sin\b/g, 'sin')
-                 .replace(/\\cos\b/g, 'cos')
-                 .replace(/\\tan\b/g, 'tan')
-                 .replace(/\\arcsin\b/g, 'asin')
-                 .replace(/\\arccos\b/g, 'acos')
-                 .replace(/\\arctan\b/g, 'atan')
-                 .replace(/\\binom\{([^{}]+)\}\{([^{}]+)\}/g, 'combinations($1, $2)')
-                 .replace(/nCr\b/g, 'combinations')
-                 .replace(/nPr\b/g, 'permutations');
-
-    clean = clean.replace(/\b(sin|cos|tan|asin|acos|atan|log|log10)\s+([0-9.]+|[a-zA-Z]+)/g, '$1($2)');
-    clean = clean.replace(/\{/g, '(').replace(/\}/g, ')');
-
-    clean = clean.replace(/(\d)\s*\(/g, '$1*(')
-                 .replace(/\)\s*(\d)/g, ')*$1')
-                 .replace(/\)\s*\(/g, ')*(')
-                 .replace(/(\d)\s*(sqrt|sin|cos|tan|asin|acos|atan|log|pi|e)\b/g, '$1*$2')
-                 .replace(/\)\s*(sqrt|sin|cos|tan|asin|acos|atan|log|pi|e)\b/g, ')*$1');
+    clean = clean.replace(/\\sqrt\s*\(/g, 'sqrt('); clean = clean.replace(/\\sqrt\s*([0-9.]+\vert{}[a-zA-Z]+)/g, 'sqrt($1)'); clean = clean.replace(/\\sqrt\{\s*\}/g, 'sqrt(0)') .replace(/\\sqrt\b/g, 'sqrt');      clean = clean.replace(/\\sin\b/g, 'sin') .replace(/\\cos\b/g, 'cos') .replace(/\\tan\b/g, 'tan') .replace(/\\arcsin\b/g, 'asin') .replace(/\\arccos\b/g, 'acos') .replace(/\\arctan\b/g, 'atan') .replace(/\\binom\{([^{}]+)\}\{([^{}]+)\}/g, 'combinations($1, $2)') .replace(/nCr\b/g, 'combinations') .replace(/nPr\b/g, 'permutations');      clean = clean.replace(/\b(sin\vert{}cos\vert{}tan\vert{}asin\vert{}acos\vert{}atan\vert{}log\vert{}log10)\s+([0-9.]+\vert{}[a-zA-Z]+)/g, '$1($2)'); clean = clean.replace(/\{/g, '(').replace(/\}/g, ')');      clean = clean.replace(/(\d)\s*\(/g, '$1*(') .replace(/\)\s*(\d)/g, ')*$1') .replace(/\)\s*\(/g, ')*(') .replace(/(\d)\s*(sqrt\vert{}sin\vert{}cos\vert{}tan\vert{}asin\vert{}acos\vert{}atan\vert{}log\vert{}pi\vert{}e)\b/g, '$1*$2') .replace(/\)\s*(sqrt|sin|cos|tan|asin|acos|atan|log|pi|e)\b/g, ')*$1');
 
     if (isDegreeMode) {
         clean = clean
@@ -423,7 +382,7 @@ window.addEventListener('DOMContentLoaded', () => {
             const dw = e.clientX - startFX;
             const dh = e.clientY - startFY;
             dock.style.width = `${Math.max(340, startFloatW + dw)}px`;
-            dock.style.height = `${Math.max(220, startFloatH + dh)}px`;
+            dock.style.height = `${Math.max(260, startFloatH + dh)}px`;
         });
 
         window.addEventListener('mouseup', () => {
@@ -457,15 +416,18 @@ window.addEventListener('DOMContentLoaded', () => {
 
         if (dockResizeMode === 'bottom') {
             const dh = startCoord - e.clientY;
-            const newH = Math.max(240, Math.min(window.innerHeight * 0.75, startDim + dh));
+            const newH = Math.max(220, Math.min(window.innerHeight * 0.8, startDim + dh));
+            dock.style.height = `${newH}px`;
             document.documentElement.style.setProperty('--calc-dock-h', `${newH}px`);
         } else if (dockResizeMode === 'right') {
             const dw = startCoord - e.clientX;
             const newW = Math.max(320, Math.min(window.innerWidth * 0.7, startDim + dw));
+            dock.style.width = `${newW}px`;
             document.documentElement.style.setProperty('--calc-dock-w', `${newW}px`);
         } else if (dockResizeMode === 'left') {
             const dw = e.clientX - startCoord;
             const newW = Math.max(320, Math.min(window.innerWidth * 0.7, startDim + dw));
+            dock.style.width = `${newW}px`;
             document.documentElement.style.setProperty('--calc-dock-w', `${newW}px`);
         }
     });

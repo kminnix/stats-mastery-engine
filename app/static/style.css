@@ -1,6 +1,6 @@
 ﻿:root {
     --calc-dock-w: 460px;
-    --calc-dock-h: 310px;
+    --calc-dock-h: 320px;
     --tables-dock-w: 460px;
 }
 
@@ -394,7 +394,7 @@ button:hover { background-color: #1d4ed8; }
 }
 
 /* ============================================================ */
-/* DOCK EDGE RESIZER (CRITICAL FIX FOR DOCKED DRAG)             */
+/* DOCK EDGE RESIZER                                            */
 /* ============================================================ */
 .dock-edge-resizer {
     display: none;
@@ -402,7 +402,6 @@ button:hover { background-color: #1d4ed8; }
     z-index: 10030;
 }
 
-/* Tables Dock Resizer Strip */
 #floating-tables-window.is-snapped-right #tables-dock-resizer {
     display: block;
     top: 0;
@@ -420,7 +419,6 @@ button:hover { background-color: #1d4ed8; }
     cursor: col-resize;
 }
 
-/* Calculator Dock Resizer Strip */
 #calc-dock.dock-bottom #calc-dock-resizer {
     display: block;
     top: -6px;
@@ -446,7 +444,7 @@ button:hover { background-color: #1d4ed8; }
     cursor: col-resize;
 }
 
-/* Resize Grip for Floating State (Corner) */
+/* Resize Grip for Floating State */
 .window-resize-grip {
     position: absolute;
     right: 0;
@@ -478,6 +476,7 @@ button:hover { background-color: #1d4ed8; }
     display: none;
     flex-direction: column;
     box-sizing: border-box;
+    overflow: hidden;
 }
 
 #calc-dock.dock-bottom {
@@ -486,7 +485,8 @@ button:hover { background-color: #1d4ed8; }
     right: 0 !important;
     top: auto !important;
     width: 100vw !important;
-    height: var(--calc-dock-h, 310px) !important;
+    min-height: 220px;
+    max-height: 85vh;
     border-top: 6px solid #475569;
     border-radius: 0;
 }
@@ -521,22 +521,28 @@ button:hover { background-color: #1d4ed8; }
     left: auto;
     bottom: auto;
     width: 580px;
+    min-height: 280px;
     max-width: 96vw;
+    max-height: 92vh;
     border-radius: 10px;
     border: 1px solid #475569;
     box-shadow: 0 16px 40px rgba(15, 23, 42, 0.35);
 }
 
+/* Header & Display Section: Fills All Available Vertical Space */
 .calc-header {
     background: #ffffff;
     border-bottom: 1px solid #cbd5e1;
-    padding: 6px 14px;
+    padding: 8px 14px;
     display: flex;
     align-items: stretch;
     justify-content: space-between;
     gap: 12px;
     cursor: default;
     box-sizing: border-box;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow: hidden;
 }
 #calc-dock.dock-float .calc-header {
     cursor: move;
@@ -547,25 +553,29 @@ button:hover { background-color: #1d4ed8; }
 .calc-display-section {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    flex: 1;
+    gap: 6px;
+    flex: 1 1 auto !important;
     min-width: 0;
+    min-height: 0 !important;
+    height: 100%;
 }
 
+/* Multi-Line History Container: Freely Expands */
 .calc-history-list {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    height: 58px;
-    max-height: 58px;
-    overflow-y: scroll;
+    flex: 1 1 auto !important;
+    min-height: 48px !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow-y: auto !important;
     overflow-x: hidden;
-    padding: 4px 8px;
+    padding: 6px 8px;
     background: #f8fafc;
     border: 1px solid #e2e8f0;
     border-radius: 4px;
     box-sizing: border-box;
-    flex-shrink: 0;
 }
 .calc-history-list::-webkit-scrollbar { width: 6px; }
 .calc-history-list::-webkit-scrollbar-track { background: #f1f5f9; }
@@ -602,10 +612,11 @@ button:hover { background-color: #1d4ed8; }
     background: #ffffff;
     outline: none;
     min-height: 38px;
+    height: 38px;
     box-sizing: border-box;
     display: flex;
     align-items: center;
-    flex-shrink: 0;
+    flex: 0 0 38px !important;
 }
 #calc-mathfield:focus-within {
     border-color: #2563eb;
@@ -653,6 +664,7 @@ button:hover { background-color: #1d4ed8; }
     padding: 2px 8px;
 }
 
+/* Keypad Tray: Rigidly Fixed to its Content Height */
 .calc-tray {
     padding: 8px 14px 10px 14px;
     display: flex;
@@ -660,6 +672,7 @@ button:hover { background-color: #1d4ed8; }
     gap: 12px;
     background: #73808c;
     flex-wrap: wrap;
+    flex: 0 0 auto !important;
 }
 .calc-keypad-block { display: grid; gap: 6px; }
 .calc-block-vars { grid-template-columns: repeat(4, 48px); grid-template-rows: repeat(4, 38px); }
