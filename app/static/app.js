@@ -73,10 +73,13 @@ async function toggleAuth() {
             await supabaseClient.auth.signOut();
         }
     } else {
+        const redirectTarget = window.location.hostname.includes('127.0.0.1') || window.location.hostname.includes('localhost')
+            ? window.location.origin
+            : 'https://qederam.org';
         await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: window.location.origin
+                redirectTo: redirectTarget
             }
         });
     }
@@ -454,3 +457,4 @@ window.addEventListener('load', () => {
         });
     }
 });
+
