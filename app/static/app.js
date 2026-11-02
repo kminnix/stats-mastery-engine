@@ -1,4 +1,4 @@
-﻿const STORAGE_KEY = 'komore_state_v7';
+﻿const STORAGE_KEY = 'qederam_state_v1';
 const TARGET_MASTERY = 5;
 
 let currentProblem = null;
