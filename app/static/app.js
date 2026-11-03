@@ -458,3 +458,32 @@ window.addEventListener('load', () => {
     }
 });
 
+
+// --- Student Join Class Handler ---
+async function promptJoinClass() {
+    if (!currentUser) {
+        alert("Please sign in with Google first before joining a class.");
+        return;
+    }
+    const code = prompt("Enter 6-character class code from your teacher (e.g., STAT24):");
+    if (!code || !code.trim()) return;
+
+    try {
+        const res = await fetch('/api/classes/join', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                student_id: currentUser.id,
+                join_code: code.trim()
+            })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            alert(data.message);
+        } else {
+            alert(data.detail || "Could not join class.");
+        }
+    } catch (e) {
+        alert("Connection error. Try again.");
+    }
+}
