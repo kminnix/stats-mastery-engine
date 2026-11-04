@@ -10,6 +10,18 @@ function getMathField() {
     return document.getElementById('calc-mathfield');
 }
 
+function bringToFront(el) {
+    const calc = document.getElementById('calc-dock');
+    const tables = document.getElementById('floating-tables-window');
+    if (el === calc) {
+        if (calc) calc.style.zIndex = '10025';
+        if (tables) tables.style.zIndex = '10010';
+    } else if (el === tables) {
+        if (tables) tables.style.zIndex = '10025';
+        if (calc) calc.style.zIndex = '10010';
+    }
+}
+
 function suppressMathLiveIcons() {
     if (window.mathVirtualKeyboard) {
         window.mathVirtualKeyboard.policy = "manual";
@@ -33,6 +45,27 @@ function setCalcDockMode(mode) {
     const dock = document.getElementById('calc-dock');
     if (!dock) return;
 
+    bringToFront(dock);
+
+    // Mutual Collision Check against Tables
+    if (!isResolvingCalcCollision) {
+        isResolvingCalcCollision = true;
+        const tablesWin = document.getElementById('floating-tables-window');
+        const isTablesOpen = tablesWin && (tablesWin.style.display === 'flex' || getComputedStyle(tablesWin).display === 'flex');
+
+        if (isTablesOpen) {
+            const isTablesRight = document.body.classList.contains('snap-mode-right') || (tablesWin && tablesWin.classList.contains('is-snapped-right'));
+            const isTablesLeft = document.body.classList.contains('snap-mode-left') || (tablesWin && tablesWin.classList.contains('is-snapped-left'));
+
+            if (mode === 'right' && isTablesRight) {
+                if (typeof window.snapWindow === 'function') window.snapWindow('left');
+            } else if (mode === 'left' && isTablesLeft) {
+                if (typeof window.snapWindow === 'function') window.snapWindow('right');
+            }
+        }
+        isResolvingCalcCollision = false;
+    }
+
     currentDockMode = mode;
     dock.className = `dock-${mode}`;
     updateBodyDockGutters(mode);
@@ -43,6 +76,7 @@ function setCalcDockMode(mode) {
     const activeBtn = document.querySelector(`.calc-dock-controls button[onclick*="'${mode}'"]`);
     if (activeBtn) activeBtn.classList.add('active');
 
+    // Clear conflicting inline styles
     dock.style.left = '';
     dock.style.top = '';
     dock.style.right = '';
@@ -51,22 +85,8 @@ function setCalcDockMode(mode) {
     dock.style.height = '';
 
     if (mode === 'bottom') {
-        const savedH = getComputedStyle(document.documentElement).getPropertyValue('--calc-dock-h').trim() || '340px';
+        const savedH = getComputedStyle(document.documentElement).getPropertyValue('--calc-dock-h').trim() || '320px';
         dock.style.height = savedH;
-    }
-
-    // Bidirectional exclusion: Move Tables if currently on this side
-    if (!isResolvingCalcCollision) {
-        isResolvingCalcCollision = true;
-        const isTablesOnRight = document.body.classList.contains('snap-mode-right');
-        const isTablesOnLeft = document.body.classList.contains('snap-mode-left');
-
-        if (mode === 'right' && isTablesOnRight && typeof window.snapWindow === 'function') {
-            window.snapWindow('left');
-        } else if (mode === 'left' && isTablesOnLeft && typeof window.snapWindow === 'function') {
-            window.snapWindow('right');
-        }
-        isResolvingCalcCollision = false;
     }
 
     const mf = getMathField();
@@ -76,38 +96,23 @@ window.setCalcDockMode = setCalcDockMode;
 
 function toggleCalculatorWindow() {
     const dock = document.getElementById('calc-dock');
-    if (!dock) return;
-
     if (dock.style.display === 'flex') {
         closeCalculatorWindow();
     } else {
         dock.style.display = 'flex';
-        
-        // Check if Tables window is currently snapped and apply body clearance classes immediately
-        const tablesWin = document.getElementById('floating-tables-window');
-        if (tablesWin && tablesWin.style.display === 'flex') {
-            if (tablesWin.classList.contains('is-snapped-left')) {
-                document.body.classList.add('snap-mode-left');
-            } else if (tablesWin.classList.contains('is-snapped-right')) {
-                document.body.classList.add('snap-mode-right');
-            }
-        }
-
+        bringToFront(dock);
         setCalcDockMode(currentDockMode || 'bottom');
         suppressMathLiveIcons();
         const mf = getMathField();
         if (mf) setTimeout(() => mf.focus(), 60);
     }
 }
-window.toggleCalculatorWindow = toggleCalculatorWindow;
-window.toggleCalculator = toggleCalculatorWindow;
 
 function closeCalculatorWindow() {
     const dock = document.getElementById('calc-dock');
-    if (dock) dock.style.display = 'none';
+    dock.style.display = 'none';
     document.body.classList.remove('calc-docked-bottom', 'calc-docked-left', 'calc-docked-right');
 }
-window.closeCalculatorWindow = closeCalculatorWindow;
 
 function toggleKeypadBank(bank) {
     const mainBank = document.getElementById('calc-bank-main');
@@ -122,14 +127,11 @@ function toggleKeypadBank(bank) {
     const mf = getMathField();
     if (mf) mf.focus();
 }
-window.toggleKeypadBank = toggleKeypadBank;
 
 function toggleCalculatorAngleMode() {
     isDegreeMode = !isDegreeMode;
-    const btn = document.getElementById('calc-angle-btn');
-    if (btn) btn.innerText = isDegreeMode ? 'DEG' : 'RAD';
+    document.getElementById('calc-angle-btn').innerText = isDegreeMode ? 'DEG' : 'RAD';
 }
-window.toggleCalculatorAngleMode = toggleCalculatorAngleMode;
 
 function calcInsert(text) {
     const mf = getMathField();
@@ -137,7 +139,6 @@ function calcInsert(text) {
     mf.executeCommand(['insert', text]);
     mf.focus();
 }
-window.calcInsert = calcInsert;
 
 function calcInsertFraction() {
     const mf = getMathField();
@@ -145,7 +146,6 @@ function calcInsertFraction() {
     mf.executeCommand(['insert', '\\frac{#?}{#?}']);
     mf.focus();
 }
-window.calcInsertFraction = calcInsertFraction;
 
 function calcInsertSqrt() {
     const mf = getMathField();
@@ -153,7 +153,6 @@ function calcInsertSqrt() {
     mf.executeCommand(['insert', '\\sqrt{#?}']);
     mf.focus();
 }
-window.calcInsertSqrt = calcInsertSqrt;
 
 function calcInsertNthRoot() {
     const mf = getMathField();
@@ -161,7 +160,6 @@ function calcInsertNthRoot() {
     mf.executeCommand(['insert', '\\sqrt[#?]{#?}']);
     mf.focus();
 }
-window.calcInsertNthRoot = calcInsertNthRoot;
 
 function calcInsertAbs() {
     const mf = getMathField();
@@ -169,12 +167,10 @@ function calcInsertAbs() {
     mf.executeCommand(['insert', '|#0|']);
     mf.focus();
 }
-window.calcInsertAbs = calcInsertAbs;
 
 function calcInsertAns() {
     calcInsert(lastAnswer.toString());
 }
-window.calcInsertAns = calcInsertAns;
 
 function calcClear() {
     const mf = getMathField();
@@ -183,7 +179,6 @@ function calcClear() {
     historyIndex = -1;
     mf.focus();
 }
-window.calcClear = calcClear;
 
 function calcBackspace() {
     const mf = getMathField();
@@ -191,7 +186,6 @@ function calcBackspace() {
     mf.executeCommand('deleteBackward');
     mf.focus();
 }
-window.calcBackspace = calcBackspace;
 
 function calcNav(dir) {
     const mf = getMathField();
@@ -227,7 +221,6 @@ function calcNav(dir) {
     }
     mf.focus();
 }
-window.calcNav = calcNav;
 
 function convertLatexFractions(expr) {
     let prev;
@@ -241,24 +234,9 @@ function convertLatexFractions(expr) {
 
 function latexToMathJs(latex) {
     let clean = latex;
+
     clean = clean.replace(/\\(mathrm|mathit|mathbf|text|operatorname)\{([^{}]+)\}/g, '$2')
-                 .replace(/\\[,;!]|\\quad|\\qquad|\\enspace/g, ' ')
-                 .replace(/\\left|\\right/g, '')
-                 .replace(/\\placeholder\{([^{}]*)\}/g, '$1')
-                 .replace(/\\placeholder/g, '');
-
-    clean = convertLatexFractions(clean);
-    clean = clean.replace(/\\times/g, '*')
-                 .replace(/\\cdot/g, '*')
-                 .replace(/\\ast/g, '*')
-                 .replace(/\\div/g, '/')
-                 .replace(/\\pi\b/g, 'pi')
-                 .replace(/\\exponentialE\b|\\mathrm\{e\}\b/g, 'e')
-                 .replace(/\\ln\b/g, 'log')
-                 .replace(/\\log_\{?10\}?/g, 'log10')
-                 .replace(/\\log\b/g, 'log10');
-
-    while (/\\sqrt\[([^\]]+)\]\{([^{}]+)\}/.test(clean)) {
+                 .replace(/\\[,;!]\vert{}\\quad\vert{}\\qquad\vert{}\\enspace/g, ' ') .replace(/\\left\vert{}\\right/g, '') .replace(/\\placeholder\{([^{}]*)\}/g, '$1') .replace(/\\placeholder/g, '');      clean = convertLatexFractions(clean);      clean = clean.replace(/\\times/g, '*') .replace(/\\cdot/g, '*') .replace(/\\ast/g, '*') .replace(/\\div/g, '/') .replace(/\\pi\b/g, 'pi') .replace(/\\exponentialE\b\vert{}\\mathrm\{e\}\b/g, 'e') .replace(/\\ln\b/g, 'log') .replace(/\\log_\{?10\}?/g, 'log10') .replace(/\\log\b/g, 'log10');      while (/\\sqrt\[([^\]]+)\]\{([^{}]+)\}/.test(clean)) {
         clean = clean.replace(/\\sqrt\[([^\]]+)\]\{([^{}]+)\}/g, 'nthRoot($2, $1)');
     }
     clean = clean.replace(/\\sqrt\[([^\]]+)\]\s*([0-9.]+|[a-zA-Z]+)/g, 'nthRoot($2, $1)');
@@ -266,27 +244,8 @@ function latexToMathJs(latex) {
     while (/\\sqrt\s*\{([^{}]+)\}/.test(clean)) {
         clean = clean.replace(/\\sqrt\s*\{([^{}]+)\}/g, 'sqrt($1)');
     }
-    clean = clean.replace(/\\sqrt\s*\(/g, 'sqrt(');
-    clean = clean.replace(/\\sqrt\s*([0-9.]+|[a-zA-Z]+)/g, 'sqrt($1)');
-    clean = clean.replace(/\\sqrt\{\s*\}/g, 'sqrt(0)').replace(/\\sqrt\b/g, 'sqrt');
 
-    clean = clean.replace(/\\sin\b/g, 'sin')
-                 .replace(/\\cos\b/g, 'cos')
-                 .replace(/\\tan\b/g, 'tan')
-                 .replace(/\\arcsin\b/g, 'asin')
-                 .replace(/\\arccos\b/g, 'acos')
-                 .replace(/\\arctan\b/g, 'atan')
-                 .replace(/\\binom\{([^{}]+)\}\{([^{}]+)\}/g, 'combinations($1, $2)')
-                 .replace(/nCr\b/g, 'combinations')
-                 .replace(/nPr\b/g, 'permutations');
-
-    clean = clean.replace(/\b(sin|cos|tan|asin|acos|atan|log|log10)\s+([0-9.]+|[a-zA-Z]+)/g, '$1($2)');
-    clean = clean.replace(/\{/g, '(').replace(/\}/g, ')');
-    clean = clean.replace(/(\d)\s*\(/g, '$1*(')
-                 .replace(/\)\s*(\d)/g, ')*$1')
-                 .replace(/\)\s*\(/g, ')*(')
-                 .replace(/(\d)\s*(sqrt|sin|cos|tan|asin|acos|atan|log|pi|e)\b/g, '$1*$2')
-                 .replace(/\)\s*(sqrt|sin|cos|tan|asin|acos|atan|log|pi|e)\b/g, ')*$1');
+    clean = clean.replace(/\\sqrt\s*\(/g, 'sqrt('); clean = clean.replace(/\\sqrt\s*([0-9.]+\vert{}[a-zA-Z]+)/g, 'sqrt($1)'); clean = clean.replace(/\\sqrt\{\s*\}/g, 'sqrt(0)') .replace(/\\sqrt\b/g, 'sqrt');      clean = clean.replace(/\\sin\b/g, 'sin') .replace(/\\cos\b/g, 'cos') .replace(/\\tan\b/g, 'tan') .replace(/\\arcsin\b/g, 'asin') .replace(/\\arccos\b/g, 'acos') .replace(/\\arctan\b/g, 'atan') .replace(/\\binom\{([^{}]+)\}\{([^{}]+)\}/g, 'combinations($1, $2)') .replace(/nCr\b/g, 'combinations') .replace(/nPr\b/g, 'permutations');      clean = clean.replace(/\b(sin\vert{}cos\vert{}tan\vert{}asin\vert{}acos\vert{}atan\vert{}log\vert{}log10)\s+([0-9.]+\vert{}[a-zA-Z]+)/g, '$1($2)'); clean = clean.replace(/\{/g, '(').replace(/\}/g, ')');      clean = clean.replace(/(\d)\s*\(/g, '$1*(') .replace(/\)\s*(\d)/g, ')*$1') .replace(/\)\s*\(/g, ')*(') .replace(/(\d)\s*(sqrt\vert{}sin\vert{}cos\vert{}tan\vert{}asin\vert{}acos\vert{}atan\vert{}log\vert{}pi\vert{}e)\b/g, '$1*$2') .replace(/\)\s*(sqrt|sin|cos|tan|asin|acos|atan|log|pi|e)\b/g, ')*$1');
 
     if (isDegreeMode) {
         clean = clean
@@ -297,6 +256,7 @@ function latexToMathJs(latex) {
             .replace(/\bcos\(([^)]+)\)/g, 'cos(($1) * (pi / 180))')
             .replace(/\btan\(([^)]+)\)/g, 'tan(($1) * (pi / 180))');
     }
+
     clean = clean.replace(/\\/g, '');
     return clean;
 }
@@ -306,8 +266,6 @@ function addHistoryEntry(latex, result) {
     historyIndex = -1;
 
     const list = document.getElementById('calc-history-list');
-    if (!list) return;
-
     const row = document.createElement('div');
     row.className = 'calc-history-row';
 
@@ -335,6 +293,7 @@ function addHistoryEntry(latex, result) {
     row.appendChild(exprChip);
     row.appendChild(eqSpan);
     row.appendChild(resChip);
+
     list.appendChild(row);
 
     if (window.renderMathInElement) {
@@ -344,7 +303,9 @@ function addHistoryEntry(latex, result) {
         });
     }
 
-    setTimeout(() => { list.scrollTop = list.scrollHeight; }, 10);
+    setTimeout(() => {
+        list.scrollTop = list.scrollHeight;
+    }, 10);
 }
 
 function calcEvaluate() {
@@ -355,7 +316,7 @@ function calcEvaluate() {
 
     try {
         const mathjsExpr = latexToMathJs(latex);
-        const rawResult = window.math ? window.math.evaluate(mathjsExpr) : eval(mathjsExpr);
+        const rawResult = math.evaluate(mathjsExpr);
         let formatted = rawResult;
 
         if (typeof rawResult === 'number') {
@@ -367,20 +328,18 @@ function calcEvaluate() {
         mf.setValue(formatted.toString());
         mf.focus();
     } catch (err) {
-        console.warn("Calculator error:", err, "Raw LaTeX:", latex);
+        console.warn("Calculator evaluation error:", err, "Raw LaTeX:", latex);
         const list = document.getElementById('calc-history-list');
-        if (list) {
-            const errRow = document.createElement('div');
-            errRow.className = 'calc-history-row';
-            errRow.style.color = '#dc2626';
-            errRow.innerText = 'Syntax Error';
-            list.appendChild(errRow);
-            list.scrollTop = list.scrollHeight;
-        }
+        const errRow = document.createElement('div');
+        errRow.className = 'calc-history-row';
+        errRow.style.color = '#dc2626';
+        errRow.innerText = 'Syntax Error';
+        list.appendChild(errRow);
+        list.scrollTop = list.scrollHeight;
     }
 }
-window.calcEvaluate = calcEvaluate;
 
+// Drag & Dock Resizing Listeners
 window.addEventListener('DOMContentLoaded', () => {
     suppressMathLiveIcons();
     const dock = document.getElementById('calc-dock');
@@ -388,6 +347,10 @@ window.addEventListener('DOMContentLoaded', () => {
     const grip = document.getElementById('calc-resize-grip');
     const dockResizer = document.getElementById('calc-dock-resizer');
     const mf = getMathField();
+
+    if (dock) {
+        dock.addEventListener('mousedown', () => bringToFront(dock));
+    }
 
     let isDragging = false;
     let startX, startY, startLeft, startTop;
@@ -421,7 +384,7 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Floating Corner Resize
+    // Floating Corner Resize for Calculator
     if (grip) {
         let isFloatResizing = false;
         let startFloatW, startFloatH, startFX, startFY;
@@ -520,3 +483,4 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+window.bringToFront = bringToFront;

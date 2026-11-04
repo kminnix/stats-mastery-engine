@@ -1,6 +1,5 @@
 ﻿let isSnapped = false;
 let isMaximized = false;
-let currentTablesDock = '';
 let isResolvingTableCollision = false;
 let savedFloatingRect = { left: 'auto', top: '75px', right: '25px', width: '600px', height: '520px' };
 
@@ -23,8 +22,8 @@ function toggleFloatingWindow() {
     if (win.style.display === 'flex') {
         closeFloatingWindow();
     } else {
-        win.style.display = 'flex';
-        renderTableA();
+        // Open docked to the right by default
+        snapWindow('right');
         const activePane = document.querySelector('.tab-pane.active');
         if (activePane && window.renderMathInElement) {
             renderMathInElement(activePane, {
@@ -37,7 +36,6 @@ function toggleFloatingWindow() {
         }
     }
 }
-window.toggleFloatingWindow = toggleFloatingWindow;
 
 function closeFloatingWindow() {
     const win = getFloatingWindow();
@@ -47,14 +45,12 @@ function closeFloatingWindow() {
     win.classList.remove('is-snapped-right', 'is-snapped-left', 'is-maximized');
     isSnapped = false;
     isMaximized = false;
-    currentTablesDock = '';
     const maxBtn = document.getElementById('btn-maximize-restore');
     if (maxBtn) {
         maxBtn.innerText = '🗖';
         maxBtn.title = 'Full Screen / Maximize';
     }
 }
-window.closeFloatingWindow = closeFloatingWindow;
 
 function snapWindow(side) {
     const win = getFloatingWindow();
@@ -65,6 +61,8 @@ function snapWindow(side) {
         renderTableA();
     }
 
+    if (typeof window.bringToFront === 'function') window.bringToFront(win);
+
     clearWindowInlineStyles(win);
     win.classList.remove('is-snapped-right', 'is-snapped-left', 'is-maximized');
     document.body.classList.remove('snap-mode-right', 'snap-mode-left');
@@ -72,11 +70,9 @@ function snapWindow(side) {
     if (side === 'right') {
         win.classList.add('is-snapped-right');
         document.body.classList.add('snap-mode-right');
-        currentTablesDock = 'right';
     } else {
         win.classList.add('is-snapped-left');
         document.body.classList.add('snap-mode-left');
-        currentTablesDock = 'left';
     }
 
     isSnapped = true;
@@ -87,21 +83,26 @@ function snapWindow(side) {
         maxBtn.title = 'Full Screen / Maximize';
     }
 
-    // Bidirectional exclusion: Move Calculator if currently occupying this side
+    // Safely resolve mutual collisions
     if (!isResolvingTableCollision) {
         isResolvingTableCollision = true;
         const calcDock = document.getElementById('calc-dock');
-        const isCalcActive = calcDock && calcDock.style.display === 'flex';
-        const isCalcOnTarget = document.body.classList.contains(side === 'right' ? 'calc-docked-right' : 'calc-docked-left');
+        const isCalcOpen = calcDock && (calcDock.style.display === 'flex' || getComputedStyle(calcDock).display === 'flex');
 
-        if (isCalcActive && isCalcOnTarget && typeof window.setCalcDockMode === 'function') {
-            window.setCalcDockMode(side === 'right' ? 'left' : 'right');
+        if (isCalcOpen) {
+            const isCalcOnRight = document.body.classList.contains('calc-docked-right') || (calcDock && calcDock.classList.contains('dock-right'));
+            const isCalcOnLeft = document.body.classList.contains('calc-docked-left') || (calcDock && calcDock.classList.contains('dock-left'));
+
+            if (side === 'right' && isCalcOnRight) {
+                if (typeof window.setCalcDockMode === 'function') window.setCalcDockMode('left');
+            } else if (side === 'left' && isCalcOnLeft) {
+                if (typeof window.setCalcDockMode === 'function') window.setCalcDockMode('right');
+            }
         }
         isResolvingTableCollision = false;
     }
 }
 window.snapWindow = snapWindow;
-window.getTablesDockMode = () => currentTablesDock;
 
 function toggleMaximizeWindow() {
     const win = getFloatingWindow();
@@ -125,7 +126,6 @@ function toggleMaximizeWindow() {
         win.classList.add('is-maximized');
         isMaximized = true;
         isSnapped = false;
-        currentTablesDock = '';
         if (btn) {
             btn.innerText = '🗗';
             btn.title = 'Restore Window Size';
@@ -145,7 +145,6 @@ function toggleMaximizeWindow() {
         win.style.height = savedFloatingRect.height || '520px';
     }
 }
-window.toggleMaximizeWindow = toggleMaximizeWindow;
 
 function unsnapToFloating(clientX, clientY) {
     const win = getFloatingWindow();
@@ -155,7 +154,6 @@ function unsnapToFloating(clientX, clientY) {
     document.body.classList.remove('snap-mode-right', 'snap-mode-left');
     isSnapped = false;
     isMaximized = false;
-    currentTablesDock = '';
 
     const maxBtn = document.getElementById('btn-maximize-restore');
     if (maxBtn) {
@@ -193,7 +191,6 @@ function switchTab(tabId) {
         });
     }
 }
-window.switchTab = switchTab;
 
 function normalCDF(z) {
     const b1 = 0.319381530, b2 = -0.356563782, b3 = 1.781477937, b4 = -1.821255978, b5 = 1.330274429;
@@ -243,8 +240,8 @@ function renderTableA() {
     html += '</tbody>';
     tableEl.innerHTML = html;
 }
-window.renderTableA = renderTableA;
 
+// 2D Movement and Resizing Listeners
 window.addEventListener('DOMContentLoaded', () => {
     const win = getFloatingWindow();
     const titlebar = document.getElementById('window-titlebar');
@@ -252,12 +249,19 @@ window.addEventListener('DOMContentLoaded', () => {
     const dockResizer = document.getElementById('tables-dock-resizer');
     if (!win || !titlebar) return;
 
+    win.addEventListener('mousedown', () => {
+        if (typeof window.bringToFront === 'function') window.bringToFront(win);
+    });
+
     let isDragging = false;
     let startX, startY, startLeft, startTop;
 
     titlebar.addEventListener('mousedown', (e) => {
         if (e.target.tagName.toLowerCase() === 'button') return;
-        if (isSnapped || isMaximized) unsnapToFloating(e.clientX, e.clientY);
+
+        if (isSnapped || isMaximized) {
+            unsnapToFloating(e.clientX, e.clientY);
+        }
 
         isDragging = true;
         startX = e.clientX;
@@ -282,7 +286,7 @@ window.addEventListener('DOMContentLoaded', () => {
         document.body.style.userSelect = '';
     });
 
-    // Dock Edge Resizing
+    // Dedicated Edge Drag Resizer on the dock-resizer strip
     let isTablesDockResizing = false;
     let dockResizeSide = '';
     let startDockW = 0;
@@ -327,7 +331,7 @@ window.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Floating Corner Grip
+    // Floating corner grip
     if (grip) {
         let isResizing = false;
         let startRWidth, startRHeight, startRX, startRY;
