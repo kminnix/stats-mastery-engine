@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Qederam - Procedural Statistics Mastery</title>
-    <link rel="stylesheet" href="/static/style.css?v=35">
+    <link rel="stylesheet" href="/static/style.css?v=40">
     <!-- KaTeX for math rendering -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
@@ -27,6 +27,7 @@
             <span class="subtitle">MTH 245 Procedural Engine</span>
         </div>
         <div class="header-controls">
+            <button id="join-class-btn" class="header-btn" onclick="openJoinModal()" style="display: none; background: #0284c7; color: white;">🎓 Join Class</button>
             <button id="auth-btn" class="header-btn" onclick="toggleAuth()">
                 <span id="auth-user-label">Sign In with Google</span>
             </button>
@@ -82,6 +83,20 @@
                     </div>
                     <div id="solution-content" class="math-content"></div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Join Class Modal -->
+    <div id="join-modal" style="display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.6); align-items: center; justify-content: center; z-index: 9999;">
+        <div style="background: white; padding: 28px; border-radius: 12px; max-width: 380px; width: 90%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2);">
+            <h2 style="margin: 0 0 8px; font-size: 1.3rem; color: #0f172a;">Join Course Section</h2>
+            <p style="margin: 0 0 16px; font-size: 0.9rem; color: #64748b;">Enter the 6-character code displayed on your teacher's board.</p>
+            <input type="text" id="join-code-input" maxlength="6" placeholder="e.g. 8K2X9P" style="width: 100%; box-sizing: border-box; text-transform: uppercase; font-family: monospace; font-size: 1.5rem; text-align: center; letter-spacing: 4px; padding: 10px; border: 2px solid #cbd5e1; border-radius: 8px; margin-bottom: 16px;">
+            <div id="join-feedback" style="display: none; font-size: 0.9rem; margin-bottom: 12px; font-weight: 500;"></div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button type="button" class="btn-secondary" onclick="closeJoinModal()" style="padding: 8px 16px;">Cancel</button>
+                <button type="button" class="btn-primary" onclick="submitJoinClass()" style="padding: 8px 16px;">Enroll</button>
             </div>
         </div>
     </div>
@@ -187,23 +202,19 @@
 
         <div class="calc-tray">
             <div class="calc-keypad-container">
-                <!-- Left Function/Variable Pod -->
                 <div id="calc-bank-main" class="calc-pod calc-pod-left">
                     <button class="calc-key" onclick="calcInsert('x')">x</button>
                     <button class="calc-key" onclick="calcInsert('y')">y</button>
                     <button class="calc-key op-key" onclick="calcInsert('^2')">x²</button>
                     <button class="calc-key op-key" onclick="calcInsert('^')">a^b</button>
-                    
                     <button class="calc-key op-key" onclick="calcInsertFraction()">a/b</button>
                     <button class="calc-key op-key" onclick="calcInsertSqrt()">√</button>
                     <button class="calc-key op-key" onclick="calcInsertNthRoot()">ⁿ√</button>
                     <button class="calc-key op-key" onclick="calcInsertAbs()">|x|</button>
-                    
                     <button class="calc-key op-key" onclick="calcInsert('(')">(</button>
                     <button class="calc-key op-key" onclick="calcInsert(')')">)</button>
                     <button class="calc-key op-key" onclick="calcInsert('<')">&lt;</button>
                     <button class="calc-key op-key" onclick="calcInsert('>')">&gt;</button>
-                    
                     <button class="calc-key bank-btn" onclick="toggleKeypadBank('funcs')">Funcs</button>
                     <button class="calc-key" onclick="calcInsertAns()">ans</button>
                     <button class="calc-key" onclick="calcInsert(',')">,</button>
@@ -215,45 +226,37 @@
                     <button class="calc-key" onclick="calcInsert('cos(')">cos</button>
                     <button class="calc-key" onclick="calcInsert('tan(')">tan</button>
                     <button class="calc-key" onclick="calcInsert('asin(')">sin⁻¹</button>
-                    
                     <button class="calc-key" onclick="calcInsert('acos(')">cos⁻¹</button>
                     <button class="calc-key" onclick="calcInsert('atan(')">tan⁻¹</button>
                     <button class="calc-key" onclick="calcInsert('ln(')">ln</button>
                     <button class="calc-key" onclick="calcInsert('log(')">log</button>
-                    
                     <button class="calc-key" onclick="calcInsert('combinations(')">nCr</button>
                     <button class="calc-key" onclick="calcInsert('permutations(')">nPr</button>
                     <button class="calc-key" onclick="calcInsert('!')">!</button>
                     <button class="calc-key" onclick="calcInsert('e')">e</button>
-                    
                     <button class="calc-key bank-btn" onclick="toggleKeypadBank('main')">123</button>
                     <button class="calc-key" onclick="calcInsert('mean(')">mean</button>
                     <button class="calc-key" onclick="calcInsert('std(')">stdev</button>
                     <button class="calc-key clear-key" onclick="calcClear()">clear</button>
                 </div>
 
-                <!-- Right 10-Key Numpad & Navigation Pod -->
                 <div class="calc-pod calc-pod-right">
                     <button class="calc-key num-key" onclick="calcInsert('7')">7</button>
                     <button class="calc-key num-key" onclick="calcInsert('8')">8</button>
                     <button class="calc-key num-key" onclick="calcInsert('9')">9</button>
                     <button class="calc-key op-key" onclick="calcInsertFraction()">÷</button>
-                    
                     <button class="calc-key num-key" onclick="calcInsert('4')">4</button>
                     <button class="calc-key num-key" onclick="calcInsert('5')">5</button>
                     <button class="calc-key num-key" onclick="calcInsert('6')">6</button>
                     <button class="calc-key op-key" onclick="calcInsert('*')">×</button>
-                    
                     <button class="calc-key num-key" onclick="calcInsert('1')">1</button>
                     <button class="calc-key num-key" onclick="calcInsert('2')">2</button>
                     <button class="calc-key num-key" onclick="calcInsert('3')">3</button>
                     <button class="calc-key op-key" onclick="calcInsert('-')">-</button>
-                    
                     <button class="calc-key num-key" onclick="calcInsert('0')">0</button>
                     <button class="calc-key num-key" onclick="calcInsert('.')">.</button>
                     <button class="calc-key" onclick="calcInsert('pi')">π</button>
                     <button class="calc-key op-key" onclick="calcInsert('+')">+</button>
-
                     <button class="calc-key nav-key" onclick="calcNav('left')">◀</button>
                     <button class="calc-key nav-key" onclick="calcNav('right')">▶</button>
                     <button class="calc-key backspace-key" onclick="calcBackspace()">⌫</button>
@@ -264,9 +267,8 @@
         <div id="calc-resize-grip" class="window-resize-grip"></div>
     </div>
 
-    <script src="/static/tables.js?v=35"></script>
-    <script src="/static/calculator.js?v=35"></script>
-    <script src="/static/app.js?v=35"></script>
+    <script src="/static/tables.js?v=40"></script>
+    <script src="/static/calculator.js?v=40"></script>
+    <script src="/static/app.js?v=40"></script>
 </body>
 </html>
-
