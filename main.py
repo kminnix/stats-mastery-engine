@@ -61,8 +61,20 @@ def generate_join_code(length=6) -> str:
     chars = chars.replace('O', '').replace('0', '').replace('I', '').replace('1', '')
     return ''.join(random.choices(chars, k=length))
 
+# --- PAGE ROUTING ---
+
 @app.get("/", response_class=HTMLResponse)
-async def serve_index(request: Request):
+async def serve_landing(request: Request):
+    """Initial landing gateway: logs in and branches to student or teacher."""
+    return templates.TemplateResponse(
+        request=request,
+        name="landing.html",
+        context={"supabase_url": SUPABASE_URL, "supabase_key": SUPABASE_KEY}
+    )
+
+@app.get("/practice", response_class=HTMLResponse)
+async def serve_student_practice(request: Request):
+    """Student problem generator and procedural practice arena."""
     return templates.TemplateResponse(
         request=request,
         name="index.html",
@@ -71,11 +83,14 @@ async def serve_index(request: Request):
 
 @app.get("/teacher", response_class=HTMLResponse)
 async def serve_teacher_dashboard(request: Request):
+    """Teacher dashboard for roster and section management."""
     return templates.TemplateResponse(
         request=request,
         name="teacher.html",
         context={"supabase_url": SUPABASE_URL, "supabase_key": SUPABASE_KEY}
     )
+
+# --- PROBLEM & VERIFICATION APIS ---
 
 @app.get("/api/health")
 async def health_check():

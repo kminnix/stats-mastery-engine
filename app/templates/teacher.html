@@ -96,11 +96,13 @@
 <div class="dashboard-container">
     <div class="dashboard-header">
         <div>
-            <h1 style="margin: 0; font-size: 1.5rem; color: #1e293b;">Qederam Teacher Dashboard</h1>
+            <a href="/" style="text-decoration: none; color: inherit; display: inline-block;">
+                <h1 style="margin: 0; font-size: 1.5rem; color: #1e293b;">Qederam Teacher Dashboard</h1>
+            </a>
             <p style="margin: 4px 0 0; color: #64748b; font-size: 0.9rem;" id="teacher-profile-status">Checking credentials...</p>
         </div>
         <div style="display: flex; gap: 12px; align-items: center;">
-            <a href="/" class="btn-secondary" style="text-decoration: none; padding: 8px 14px; font-size: 0.9rem;">Student View</a>
+            <a href="/practice" class="btn-secondary" style="text-decoration: none; padding: 8px 14px; font-size: 0.9rem;">Student View</a>
             <button id="auth-btn" class="btn-primary" onclick="handleAuthClick()" style="padding: 8px 14px; font-size: 0.9rem;">Sign In</button>
         </div>
     </div>
