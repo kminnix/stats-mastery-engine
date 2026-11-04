@@ -12,7 +12,7 @@ if (window.SUPABASE_URL && window.SUPABASE_KEY && window.supabase) {
     try {
         supabaseClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_KEY);
     } catch (e) {
-        console.warn("Supabase initialization error:", e);
+        console.warn("Supabase init error:", e);
     }
 }
 
@@ -37,7 +37,7 @@ function getActiveSkillState() {
     return state.skills[topic];
 }
 
-// Authentication Handlers
+// Authentication
 async function initAuth() {
     if (!supabaseClient) return;
 
@@ -49,106 +49,61 @@ async function initAuth() {
     });
 }
 
-function handleSession(session) {
+async function handleSession(session) {
     currentSession = session;
     currentUser = session ? session.user : null;
     const authBtnLabel = document.getElementById('auth-user-label');
-    const joinBtn = document.getElementById('join-class-btn');
+    const teacherBtn = document.getElementById('teacher-portal-btn');
     
     if (currentUser) {
-        const name = currentUser.user_metadata?.full_name || currentUser.email || 'Student';
-        authBtnLabel.innerText = `${name} (Sign Out)`;
-        if (joinBtn) joinBtn.style.display = 'inline-block';
+        const name = currentUser.user_metadata?.full_name || currentUser.email || 'User';
+        if (authBtnLabel) authBtnLabel.innerText = `${name} (Sign Out)`;
+
+        // Check if user is a teacher
+        try {
+            const { data } = await supabaseClient
+                .from('profiles')
+                .select('role')
+                .eq('id', currentUser.id)
+                .single();
+
+            if (data && data.role === 'teacher') {
+                if (teacherBtn) teacherBtn.style.display = 'inline-block';
+            } else {
+                if (teacherBtn) teacherBtn.style.display = 'none';
+            }
+        } catch (e) {
+            console.warn("Role lookup failed:", e);
+            if (teacherBtn) teacherBtn.style.display = 'none';
+        }
+
         loadCloudState();
     } else {
-        authBtnLabel.innerText = 'Sign In with Google';
-        if (joinBtn) joinBtn.style.display = 'none';
+        if (authBtnLabel) authBtnLabel.innerText = 'Sign In';
+        if (teacherBtn) teacherBtn.style.display = 'none';
         loadSavedState();
     }
 }
 
 async function toggleAuth() {
     if (!supabaseClient) {
-        alert("Authentication client is not configured.");
+        alert("Supabase is not configured.");
         return;
     }
     if (currentUser) {
         if (confirm("Sign out of your account?")) {
             await supabaseClient.auth.signOut();
+            window.location.reload();
         }
     } else {
         const redirectTarget = window.location.hostname.includes('127.0.0.1') || window.location.hostname.includes('localhost')
-            ? window.location.origin
-            : 'https://qederam.org';
+            ? window.location.origin + '/practice'
+            : 'https://qederam.org/practice';
 
         await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
             options: { redirectTo: redirectTarget }
         });
-    }
-}
-
-// Join Class Modal Handlers
-function openJoinModal() {
-    const modal = document.getElementById('join-modal');
-    const input = document.getElementById('join-code-input');
-    const fb = document.getElementById('join-feedback');
-    if (!currentUser) {
-        alert("Please sign in with Google first before joining a class.");
-        return;
-    }
-    fb.style.display = 'none';
-    input.value = '';
-    modal.style.display = 'flex';
-    input.focus();
-}
-
-function closeJoinModal() {
-    document.getElementById('join-modal').style.display = 'none';
-}
-
-async function submitJoinClass() {
-    const input = document.getElementById('join-code-input');
-    const code = input.value.trim().toUpperCase();
-    const fb = document.getElementById('join-feedback');
-
-    if (!code || code.length < 4) {
-        fb.style.display = 'block';
-        fb.style.color = '#ef4444';
-        fb.innerText = 'Please enter a valid class code.';
-        return;
-    }
-
-    fb.style.display = 'block';
-    fb.style.color = '#0284c7';
-    fb.innerText = 'Enrolling...';
-
-    const headers = { 'Content-Type': 'application/json' };
-    if (currentSession && currentSession.access_token) {
-        headers['Authorization'] = `Bearer ${currentSession.access_token}`;
-    }
-
-    try {
-        const res = await fetch('/api/classes/join', {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify({
-                student_id: currentUser.id,
-                join_code: code
-            })
-        });
-        const data = await res.json();
-        if (res.ok) {
-            fb.style.color = '#10b981';
-            fb.innerText = data.message;
-            setTimeout(() => closeJoinModal(), 1500);
-        } else {
-            fb.style.color = '#ef4444';
-            fb.innerText = data.detail || 'Code not recognized.';
-        }
-    } catch (err) {
-        fb.style.color = '#ef4444';
-        fb.innerText = 'Connection error. Please try again.';
     }
 }
 
@@ -521,12 +476,6 @@ window.addEventListener('load', () => {
     if (ansInput) {
         ansInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') submitSingleAnswer();
-        });
-    }
-    const codeInput = document.getElementById('join-code-input');
-    if (codeInput) {
-        codeInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') submitJoinClass();
         });
     }
 });
