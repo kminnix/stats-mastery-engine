@@ -1,7 +1,7 @@
 ﻿import os
 import random
 import string
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, Request, HTTPException, Header
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -55,6 +55,14 @@ class CreateClassPayload(BaseModel):
 class JoinClassPayload(BaseModel):
     student_id: str
     join_code: str
+
+class AssessmentCreateRequest(BaseModel):
+    class_id: str
+    title: str
+    type: str  # 'assignment', 'test', or 'test_correction'
+    parent_assessment_id: Optional[str] = None
+    config: Dict[str, Any]
+    due_date: Optional[str] = None
 
 def generate_join_code(length=6) -> str:
     chars = string.ascii_uppercase + string.digits
@@ -204,3 +212,38 @@ async def get_class_roster(class_id: str, authorization: Optional[str] = Header(
             }
 
     return list(student_records.values())
+
+# --- ASSIGNMENT & ASSESSMENT ENDPOINTS ---
+
+@app.post("/api/teacher/assessments/create")
+async def create_assessment(req: AssessmentCreateRequest, authorization: Optional[str] = Header(None)):
+    """Creates a new assignment, test, or correction block for a section."""
+    db = get_scoped_supabase(authorization)
+    
+    payload = {
+        "class_id": req.class_id,
+        "title": req.title,
+        "type": req.type,
+        "parent_assessment_id": req.parent_assessment_id,
+        "config": req.config,
+        "due_date": req.due_date,
+        "is_active": True
+    }
+    
+    try:
+        res = db.table("assessments").insert(payload).execute()
+        if res.data:
+            return {"status": "success", "assessment": res.data[0]}
+    except Exception as e:
+        print(f"Error creating assessment: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+    raise HTTPException(status_code=400, detail="Could not create assessment")
+
+@app.get("/api/teacher/assessments/{class_id}")
+async def get_class_assessments(class_id: str, authorization: Optional[str] = Header(None)):
+    """Retrieves all assessments and student submission counts for a section."""
+    db = get_scoped_supabase(authorization)
+    
+    res = db.table("assessments").select("*, assessment_submissions(count)").eq("class_id", class_id).order("created_at", desc=True).execute()
+    return res.data or []

@@ -29,38 +29,64 @@
             margin-bottom: 20px;
             flex-wrap: wrap;
         }
-        .roster-card {
+        .view-nav {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 8px;
+        }
+        .view-nav-btn {
+            background: none;
+            border: none;
+            padding: 8px 16px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #64748b;
+            cursor: pointer;
+            border-radius: 6px;
+        }
+        .view-nav-btn.active {
+            background: #0f172a;
+            color: #ffffff;
+        }
+        .card-panel {
             background: #ffffff;
             border-radius: 12px;
             padding: 24px;
             box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
             overflow-x: auto;
         }
-        table.roster-table {
+        table.data-table {
             width: 100%;
             border-collapse: collapse;
             font-size: 0.95rem;
             margin-top: 12px;
         }
-        table.roster-table th, table.roster-table td {
+        table.data-table th, table.data-table td {
             border: 1px solid #e5e7eb;
             padding: 10px 14px;
             text-align: center;
         }
-        table.roster-table th {
+        table.data-table th {
             background: #f8fafc;
             color: #334155;
             font-weight: 600;
         }
-        table.roster-table th.col-student {
+        table.data-table th.col-left, table.data-table td.col-left {
             text-align: left;
-            min-width: 180px;
         }
-        table.roster-table td.col-student {
-            text-align: left;
-            font-weight: 500;
-            color: #1e293b;
+        .badge-type {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 3px 8px;
+            border-radius: 4px;
+            display: inline-block;
         }
+        .badge-assignment { background: #e0f2fe; color: #0369a1; }
+        .badge-test { background: #fef3c7; color: #b45309; }
+        .badge-correction { background: #fce7f3; color: #be185d; }
         .badge-mastered {
             background: #d1fae5;
             color: #065f46;
@@ -89,6 +115,24 @@
             letter-spacing: 2px;
             border: 1px dashed #3b82f6;
         }
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-card {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            max-width: 480px;
+            width: 90%;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2);
+        }
     </style>
 </head>
 <body style="background: #f1f5f9;">
@@ -115,23 +159,30 @@
             </select>
 
             <span id="active-code-container" style="display: none; align-items: center; gap: 8px;">
-                <span style="font-size: 0.85rem; color: #64748b;">Student Join Code:</span>
+                <span style="font-size: 0.85rem; color: #64748b;">Join Code:</span>
                 <span id="active-code-badge" class="code-display">------</span>
             </span>
 
             <button class="btn-secondary" onclick="promptCreateClass()" style="margin-left: auto; padding: 8px 14px;">+ Create New Class</button>
         </div>
 
-        <div class="roster-card">
+        <!-- Section Navigation -->
+        <div class="view-nav">
+            <button id="nav-roster-btn" class="view-nav-btn active" onclick="switchView('roster')">📊 Roster &amp; Mastery Matrix</button>
+            <button id="nav-assess-btn" class="view-nav-btn" onclick="switchView('assessments')">📝 Assignments &amp; Tests</button>
+        </div>
+
+        <!-- 1. Roster View -->
+        <div id="roster-view" class="card-panel">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h2 id="roster-heading" style="margin: 0; font-size: 1.2rem; color: #1e293b;">Class Roster &amp; Mastery Matrix</h2>
+                <h2 style="margin: 0; font-size: 1.2rem; color: #1e293b;">Live Class Mastery Matrix</h2>
                 <button class="btn-secondary" onclick="refreshRoster()" style="font-size: 0.85rem; padding: 6px 12px;">↻ Refresh Matrix</button>
             </div>
             
-            <table class="roster-table" id="roster-table">
+            <table class="data-table" id="roster-table">
                 <thead>
                     <tr>
-                        <th class="col-student">Student Name</th>
+                        <th class="col-left" style="min-width: 180px;">Student Name</th>
                         <th>Between (P)</th>
                         <th>Left Tail (P)</th>
                         <th>Right Tail (P)</th>
@@ -141,9 +192,31 @@
                     </tr>
                 </thead>
                 <tbody id="roster-tbody">
+                    <tr><td colspan="7" style="color: #94a3b8; padding: 24px;">Select a class to view student progress.</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 2. Assignments & Tests View -->
+        <div id="assess-view" class="card-panel" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h2 style="margin: 0; font-size: 1.2rem; color: #1e293b;">Assigned Tasks &amp; Exams</h2>
+                <button class="btn-primary" onclick="openCreateAssessmentModal()" style="font-size: 0.85rem; padding: 6px 14px;">+ Create Assignment / Test</button>
+            </div>
+
+            <table class="data-table" id="assess-table">
+                <thead>
                     <tr>
-                        <td colspan="7" style="color: #94a3b8; padding: 24px;">Select or create a class to display student progress.</td>
+                        <th class="col-left">Title</th>
+                        <th>Type</th>
+                        <th>Topics Covered</th>
+                        <th>Due Date</th>
+                        <th>Submissions</th>
+                        <th>Actions</th>
                     </tr>
+                </thead>
+                <tbody id="assess-tbody">
+                    <tr><td colspan="6" style="color: #94a3b8; padding: 24px;">Loading assessments...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -156,6 +229,56 @@
     </div>
 </div>
 
+<!-- Modal: Create Assignment or Test -->
+<div id="create-assess-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+        <h2 style="margin: 0 0 16px; font-size: 1.25rem; color: #1e293b;">Create Task or Assessment</h2>
+        
+        <label style="display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 4px;">Task Type:</label>
+        <select id="modal-assess-type" onchange="onModalTypeChange()" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; margin-bottom: 12px;">
+            <option value="assignment">Homework Assignment (Practice &amp; Feedback)</option>
+            <option value="test">Secure Test / Exam (Suppressed Solutions)</option>
+            <option value="test_correction">Test Corrections (Target Missed Questions)</option>
+        </select>
+
+        <label style="display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 4px;">Title:</label>
+        <input type="text" id="modal-assess-title" placeholder="e.g., Unit 3 Normal Distributions Exam" style="width: 100%; box-sizing: border-box; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; margin-bottom: 12px;">
+
+        <div id="parent-test-field" style="display: none; margin-bottom: 12px;">
+            <label style="display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 4px;">Link to Exam for Corrections:</label>
+            <select id="modal-parent-test-select" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;"></select>
+        </div>
+
+        <div id="topic-config-fields">
+            <label style="display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 4px;">Include Skills:</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 0.85rem; margin-bottom: 12px;">
+                <label><input type="checkbox" name="task-skill" value="between" checked> Between Bounds</label>
+                <label><input type="checkbox" name="task-skill" value="left_tail" checked> Left Tail</label>
+                <label><input type="checkbox" name="task-skill" value="right_tail" checked> Right Tail</label>
+                <label><input type="checkbox" name="task-skill" value="inverse" checked> Inverse Cutoff</label>
+                <label><input type="checkbox" name="task-skill" value="ci_mean_t"> Mean (t) CI</label>
+                <label><input type="checkbox" name="task-skill" value="ci_prop_z"> Prop (z) CI</label>
+            </div>
+
+            <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+                <div style="flex: 1;">
+                    <label style="display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 4px;">Question Count:</label>
+                    <input type="number" id="modal-question-count" value="5" min="1" max="25" style="width: 100%; box-sizing: border-box; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;">
+                </div>
+                <div style="flex: 1;">
+                    <label style="display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 4px;">Due Date (Optional):</label>
+                    <input type="date" id="modal-due-date" style="width: 100%; box-sizing: border-box; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;">
+                </div>
+            </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px;">
+            <button class="btn-secondary" onclick="closeCreateAssessmentModal()" style="padding: 8px 16px;">Cancel</button>
+            <button class="btn-primary" onclick="submitCreateAssessment()" style="padding: 8px 16px;">Publish to Class</button>
+        </div>
+    </div>
+</div>
+
 <script>
     window.SUPABASE_URL = "{{ supabase_url }}";
     window.SUPABASE_KEY = "{{ supabase_key }}";
@@ -164,6 +287,8 @@
     let currentUser = null;
     let currentSession = null;
     let currentClasses = [];
+    let currentAssessments = [];
+    let activeView = 'roster';
 
     if (window.SUPABASE_URL && window.SUPABASE_KEY && window.supabase) {
         try {
@@ -174,17 +299,10 @@
     }
 
     async function initTeacherAuth() {
-        if (!supabaseClient) {
-            document.getElementById('teacher-profile-status').innerText = "Authentication client unavailable";
-            return;
-        }
-
+        if (!supabaseClient) return;
         const { data: { session } } = await supabaseClient.auth.getSession();
         handleSession(session);
-
-        supabaseClient.auth.onAuthStateChange((_event, session) => {
-            handleSession(session);
-        });
+        supabaseClient.auth.onAuthStateChange((_event, session) => handleSession(session));
     }
 
     function handleSession(session) {
@@ -221,9 +339,7 @@
     async function handleAuthClick() {
         if (!supabaseClient) return;
         if (currentUser) {
-            if (confirm("Sign out of the teacher dashboard?")) {
-                await supabaseClient.auth.signOut();
-            }
+            if (confirm("Sign out of the teacher dashboard?")) await supabaseClient.auth.signOut();
         } else {
             const redirectTarget = window.location.hostname.includes('127.0.0.1') || window.location.hostname.includes('localhost')
                 ? window.location.origin + '/teacher'
@@ -236,12 +352,21 @@
         }
     }
 
+    function switchView(viewName) {
+        activeView = viewName;
+        document.getElementById('nav-roster-btn').className = viewName === 'roster' ? 'view-nav-btn active' : 'view-nav-btn';
+        document.getElementById('nav-assess-btn').className = viewName === 'assessments' ? 'view-nav-btn active' : 'view-nav-btn';
+        document.getElementById('roster-view').style.display = viewName === 'roster' ? 'block' : 'none';
+        document.getElementById('assess-view').style.display = viewName === 'assessments' ? 'block' : 'none';
+
+        if (viewName === 'assessments') loadAssessments();
+        else refreshRoster();
+    }
+
     async function loadTeacherClasses() {
         if (!currentUser) return;
         try {
-            const res = await fetch(`/api/teacher/classes/${currentUser.id}`, {
-                headers: getAuthHeaders()
-            });
+            const res = await fetch(`/api/teacher/classes/${currentUser.id}`, { headers: getAuthHeaders() });
             currentClasses = await res.json();
             const select = document.getElementById('class-select');
             select.innerHTML = '<option value="">Select a class...</option>';
@@ -262,32 +387,6 @@
         }
     }
 
-    async function promptCreateClass() {
-        if (!currentUser) return;
-        const name = prompt("Enter course section name (e.g., MTH 245 - Period 2):");
-        if (!name || !name.trim()) return;
-
-        try {
-            const res = await fetch('/api/classes/create', {
-                method: 'POST',
-                headers: getAuthHeaders(),
-                body: JSON.stringify({
-                    teacher_id: currentUser.id,
-                    name: name.trim()
-                })
-            });
-            if (res.ok) {
-                await loadTeacherClasses();
-            } else {
-                const err = await res.json();
-                alert(err.detail || "Error creating class section.");
-            }
-        } catch (e) {
-            console.error(e);
-            alert("Network error creating class.");
-        }
-    }
-
     function onClassSelected() {
         const select = document.getElementById('class-select');
         const codeContainer = document.getElementById('active-code-container');
@@ -296,9 +395,6 @@
 
         if (!classId) {
             codeContainer.style.display = 'none';
-            document.getElementById('roster-tbody').innerHTML = `
-                <tr><td colspan="7" style="color: #94a3b8; padding: 24px;">Select a class to display student progress.</td></tr>
-            `;
             return;
         }
 
@@ -306,28 +402,24 @@
         if (activeCls) {
             codeBadge.innerText = activeCls.join_code;
             codeContainer.style.display = 'inline-flex';
-            refreshRoster();
+            if (activeView === 'roster') refreshRoster();
+            else loadAssessments();
         }
     }
 
     async function refreshRoster() {
-        const select = document.getElementById('class-select');
-        const classId = select.value;
+        const classId = document.getElementById('class-select').value;
         if (!classId) return;
 
         const tbody = document.getElementById('roster-tbody');
         tbody.innerHTML = `<tr><td colspan="7" style="color: #94a3b8; padding: 24px;">Loading student matrix...</td></tr>`;
 
         try {
-            const res = await fetch(`/api/teacher/roster/${classId}`, {
-                headers: getAuthHeaders()
-            });
+            const res = await fetch(`/api/teacher/roster/${classId}`, { headers: getAuthHeaders() });
             const students = await res.json();
 
             if (students.length === 0) {
-                tbody.innerHTML = `
-                    <tr><td colspan="7" style="color: #94a3b8; padding: 24px;">No students enrolled yet. Share the join code with your class!</td></tr>
-                `;
+                tbody.innerHTML = `<tr><td colspan="7" style="color: #94a3b8; padding: 24px;">No students enrolled yet.</td></tr>`;
                 return;
             }
 
@@ -335,7 +427,7 @@
             students.forEach(st => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td class="col-student">${st.name}</td>
+                    <td class="col-left">${st.name}</td>
                     <td>${renderSkillCell(st.skills['between'])}</td>
                     <td>${renderSkillCell(st.skills['left_tail'])}</td>
                     <td>${renderSkillCell(st.skills['right_tail'])}</td>
@@ -346,20 +438,165 @@
                 tbody.appendChild(tr);
             });
         } catch (e) {
-            console.error(e);
             tbody.innerHTML = `<tr><td colspan="7" style="color: #ef4444; padding: 24px;">Failed to fetch roster.</td></tr>`;
         }
     }
 
+    async function loadAssessments() {
+        const classId = document.getElementById('class-select').value;
+        if (!classId) return;
+
+        const tbody = document.getElementById('assess-tbody');
+        tbody.innerHTML = `<tr><td colspan="6" style="color: #94a3b8; padding: 24px;">Loading assessments...</td></tr>`;
+
+        try {
+            const res = await fetch(`/api/teacher/assessments/${classId}`, { headers: getAuthHeaders() });
+            currentAssessments = await res.json();
+
+            if (currentAssessments.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="color: #94a3b8; padding: 24px;">No assignments or tests created yet.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = '';
+            currentAssessments.forEach(item => {
+                const tr = document.createElement('tr');
+                const badgeClass = item.type === 'test' ? 'badge-test' : (item.type === 'test_correction' ? 'badge-correction' : 'badge-assignment');
+                const topics = item.config?.topics ? item.config.topics.join(', ') : 'Custom';
+                const count = item.assessment_submissions?.[0]?.count || 0;
+
+                tr.innerHTML = `
+                    <td class="col-left"><strong>${item.title}</strong></td>
+                    <td><span class="badge-type ${badgeClass}">${item.type.replace('_', ' ')}</span></td>
+                    <td style="font-size: 0.85rem; color: #475569;">${topics}</td>
+                    <td style="font-size: 0.85rem;">${item.due_date ? new Date(item.due_date).toLocaleDateString() : 'None'}</td>
+                    <td>${count} completed</td>
+                    <td>
+                        ${item.type === 'test' ? `<button class="btn-secondary" onclick="promptCreateCorrections('${item.id}', '${item.title}')" style="font-size: 0.8rem; padding: 4px 8px;">Create Corrections</button>` : ''}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="6" style="color: #ef4444; padding: 24px;">Failed to load assessments.</td></tr>`;
+        }
+    }
+
+    function openCreateAssessmentModal() {
+        document.getElementById('create-assess-modal').style.display = 'flex';
+        document.getElementById('modal-assess-title').value = '';
+    }
+
+    function closeCreateAssessmentModal() {
+        document.getElementById('create-assess-modal').style.display = 'none';
+    }
+
+    function onModalTypeChange() {
+        const type = document.getElementById('modal-assess-type').value;
+        const parentField = document.getElementById('parent-test-field');
+        const topicFields = document.getElementById('topic-config-fields');
+
+        if (type === 'test_correction') {
+            parentField.style.display = 'block';
+            topicFields.style.display = 'none';
+            const select = document.getElementById('modal-parent-test-select');
+            select.innerHTML = '';
+            const tests = currentAssessments.filter(a => a.type === 'test');
+            tests.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.id;
+                opt.innerText = t.title;
+                select.appendChild(opt);
+            });
+        } else {
+            parentField.style.display = 'none';
+            topicFields.style.display = 'block';
+        }
+    }
+
+    async function submitCreateAssessment() {
+        const classId = document.getElementById('class-select').value;
+        const type = document.getElementById('modal-assess-type').value;
+        const title = document.getElementById('modal-assess-title').value.trim();
+        const dueDate = document.getElementById('modal-due-date').value || null;
+
+        if (!title) {
+            alert("Please enter a title for this assignment or test.");
+            return;
+        }
+
+        let parentId = null;
+        let config = {};
+
+        if (type === 'test_correction') {
+            parentId = document.getElementById('modal-parent-test-select').value;
+            if (!parentId) {
+                alert("Please select a completed test to generate corrections for.");
+                return;
+            }
+        } else {
+            const selectedTopics = Array.from(document.querySelectorAll('input[name="task-skill"]:checked')).map(cb => cb.value);
+            const count = parseInt(document.getElementById('modal-question-count').value, 10) || 5;
+            config = { topics: selectedTopics, count: count };
+        }
+
+        try {
+            const res = await fetch('/api/teacher/assessments/create', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({
+                    class_id: classId,
+                    title: title,
+                    type: type,
+                    parent_assessment_id: parentId,
+                    config: config,
+                    due_date: dueDate
+                })
+            });
+
+            if (res.ok) {
+                closeCreateAssessmentModal();
+                loadAssessments();
+            } else {
+                alert("Could not create assessment.");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Network error.");
+        }
+    }
+
+    function promptCreateCorrections(testId, testTitle) {
+        document.getElementById('modal-assess-type').value = 'test_correction';
+        onModalTypeChange();
+        document.getElementById('modal-assess-title').value = `Corrections: ${testTitle}`;
+        document.getElementById('modal-parent-test-select').value = testId;
+        openCreateAssessmentModal();
+    }
+
     function renderSkillCell(skillData) {
         if (!skillData) return `<span style="color: #cbd5e1;">—</span>`;
-        if (skillData.mastered) {
-            return `<span class="badge-mastered">✔ Mastered</span>`;
-        }
-        if (skillData.streak > 0) {
-            return `<span class="badge-streak">Streak: ${skillData.streak}/5</span>`;
-        }
+        if (skillData.mastered) return `<span class="badge-mastered">✔ Mastered</span>`;
+        if (skillData.streak > 0) return `<span class="badge-streak">Streak: ${skillData.streak}/5</span>`;
         return `<span style="color: #94a3b8; font-size: 0.85rem;">0/5</span>`;
+    }
+
+    async function promptCreateClass() {
+        if (!currentUser) return;
+        const name = prompt("Enter course section name (e.g., MTH 245 - Period 2):");
+        if (!name || !name.trim()) return;
+
+        try {
+            const res = await fetch('/api/classes/create', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ teacher_id: currentUser.id, name: name.trim() })
+            });
+            if (res.ok) await loadTeacherClasses();
+            else alert("Error creating section.");
+        } catch (e) {
+            console.error(e);
+        }
     }
 
     window.addEventListener('load', initTeacherAuth);
