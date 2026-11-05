@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Qederam - Procedural Statistics Mastery</title>
-    <link rel="stylesheet" href="/static/style.css?v=61">
+    <link rel="stylesheet" href="/static/style.css?v=85">
     
     <!-- KaTeX CSS & JS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
@@ -21,12 +21,26 @@
     </script>
 
     <style>
+        #page-wrapper {
+            display: block;
+            width: 100%;
+            min-height: 100vh;
+            box-sizing: border-box;
+            transition: padding 0.15s ease-out;
+        }
+        #page-container {
+            max-width: 900px;
+            margin: 0 auto;
+            width: 100%;
+            box-sizing: border-box;
+            padding: 0 16px 40px;
+        }
+
         .student-subnav {
             display: flex;
             gap: 10px;
-            max-width: 900px;
             margin: 16px auto 0;
-            padding: 0 16px;
+            padding: 0;
         }
         .subnav-btn {
             background: #e2e8f0;
@@ -45,12 +59,11 @@
             box-shadow: 0 -2px 5px rgba(0,0,0,0.03);
         }
         .task-card-container {
-            max-width: 900px;
-            margin: 0 auto 30px;
             padding: 24px;
             background: #ffffff;
             border-radius: 0 8px 8px 8px;
             box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            margin-bottom: 30px;
         }
         .task-item {
             display: flex;
@@ -86,113 +99,157 @@
 </head>
 <body>
 
-<header>
-    <div class="brand">
-        <a href="/" style="text-decoration: none; color: inherit; display: inline-block;">
-            <h1>qederam.org</h1>
-        </a>
-        <span class="tagline">Procedural Statistics Engine</span>
-    </div>
-    <div class="header-controls">
-        <a href="/teacher" id="teacher-portal-btn" class="btn-primary" style="display: none; text-decoration: none; padding: 6px 12px; font-size: 0.85rem; background: #0f172a; color: #ffffff;">📊 Teacher Portal</a>
-        <button class="btn-secondary" id="join-class-btn" onclick="openJoinModal()" style="display: none;">🎓 Join Class</button>
-        <button class="btn-secondary" onclick="toggleFloatingWindow()">📋 Formulas &amp; Tables</button>
-        <div id="mastery-pill" class="mastery-badge">Streak: 0 / 5</div>
-        <button id="reset-progress-btn" class="text-btn" onclick="resetCurrentSkill()">Reset Skill</button>
-        <button class="btn-secondary" onclick="toggleCalculatorWindow()">🖩 Calculator</button>
-        <button id="auth-btn" class="btn-secondary" onclick="toggleAuth()" style="font-size: 0.85rem;">
-            <span id="auth-user-label">Sign In</span>
-        </button>
-    </div>
-</header>
+<div id="page-wrapper">
+    <div id="page-container">
+        <header>
+            <div class="brand">
+                <a href="/" style="text-decoration: none; color: inherit; display: inline-block;">
+                    <h1>qederam.org</h1>
+                </a>
+                <span class="tagline">Procedural Statistics Engine</span>
+            </div>
+            <div class="header-controls">
+                <a href="/teacher" id="teacher-portal-btn" class="btn-primary" style="display: none; text-decoration: none; padding: 6px 12px; font-size: 0.85rem; background: #0f172a; color: #ffffff;">📊 Teacher Portal</a>
+                <button class="btn-secondary" id="join-class-btn" onclick="openJoinModal()" style="display: none;">🎓 Join Class</button>
+                <button class="btn-secondary" onclick="toggleFloatingWindow()">📋 Formulas &amp; Tables</button>
+                <div id="mastery-pill" class="mastery-badge">Streak: 0 / 5</div>
+                <button id="reset-progress-btn" class="text-btn" onclick="resetCurrentSkill()">Reset Skill</button>
+                <button class="btn-secondary" onclick="toggleCalculatorWindow()">🖩 Calculator</button>
+                <button id="auth-btn" class="btn-secondary" onclick="toggleAuth()" style="font-size: 0.85rem;">
+                    <span id="auth-user-label">Sign In</span>
+                </button>
+            </div>
+        </header>
 
-<!-- Student View Switcher Subnav -->
-<div class="student-subnav">
-    <button id="tab-practice-btn" class="subnav-btn active" onclick="switchStudentTab('practice')">🎲 Free Practice</button>
-    <button id="tab-tasks-btn" class="subnav-btn" onclick="switchStudentTab('tasks')">📋 Assigned Tasks <span id="tasks-count-badge" style="display: none; background: #ef4444; color: white; border-radius: 9999px; font-size: 0.75rem; padding: 1px 6px; margin-left: 4px;">0</span></button>
+        <!-- Student View Switcher Subnav -->
+        <div class="student-subnav">
+            <button id="tab-practice-btn" class="subnav-btn active" onclick="switchStudentTab('practice')">🎲 Free Practice</button>
+            <button id="tab-tasks-btn" class="subnav-btn" onclick="switchStudentTab('tasks')">📋 Assigned Tasks <span id="tasks-count-badge" style="display: none; background: #ef4444; color: white; border-radius: 9999px; font-size: 0.75rem; padding: 1px 6px; margin-left: 4px;">0</span></button>
+        </div>
+
+        <!-- 1. Assigned Tasks View -->
+        <div id="student-tasks-view" class="task-card-container" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h2 style="margin: 0; font-size: 1.25rem; color: #1e293b;">Assignments &amp; Assessments</h2>
+                <button class="btn-secondary" onclick="fetchStudentTasks()" style="font-size: 0.85rem; padding: 6px 12px;">↻ Refresh</button>
+            </div>
+            <div id="tasks-list">
+                <p style="color: #64748b;">Sign in and join a class to access assigned homework, tests, and corrections.</p>
+            </div>
+        </div>
+
+        <!-- 2. Free Practice View -->
+        <div id="student-practice-view">
+            <main class="practice-card">
+                <div class="card-header">
+                    <div class="topic-selector-wrapper">
+                        <label for="topic-select" style="font-size: 0.85rem; font-weight: 600; color: #475569;">Topic Focus:</label>
+                        <select id="topic-select" onchange="onTopicChange()">
+                            <optgroup label="Normal Distributions">
+                                <option value="random">All Normal Distribution Types (Mixed)</option>
+                                <option value="between">Between Bounds P(a < X < b)</option>
+                                <option value="left_tail">Left Tail Area P(X < b)</option>
+                                <option value="right_tail">Right Tail Area P(X > a)</option>
+                                <option value="inverse">Inverse Cutoffs (Top/Bottom %)</option>
+                            </optgroup>
+                            <optgroup label="Confidence Intervals">
+                                <option value="ci_mean_t">1-Sample t-Interval for Mean (&mu;)</option>
+                                <option value="ci_prop_z">1-Sample z-Interval for Prop (p)</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    <div id="session-stats" class="session-stats">Attempts: 0 | Accuracy: 0%</div>
+                </div>
+
+                <div id="problem-prompt" class="problem-text">Loading procedural problem...</div>
+
+                <div class="graph-container" id="graph-wrapper">
+                    <svg id="normal-curve-svg" viewBox="0 0 600 200" preserveAspectRatio="xMidYMid meet"></svg>
+                </div>
+
+                <div id="single-input-panel">
+                    <div class="input-row">
+                        <label id="input-label" for="answer-input">Answer:</label>
+                        <input type="number" step="any" id="answer-input" placeholder="e.g. 0.4532" autocomplete="off">
+                        <button id="submit-btn" onclick="submitSingleAnswer()">Submit</button>
+                        <button id="next-btn" style="display: none;" onclick="loadProblem()">Next Problem &rarr;</button>
+                    </div>
+                </div>
+
+                <div id="multi-stage-panel" style="display: none;"></div>
+                <div id="feedback-banner" class="banner" style="display: none;"></div>
+
+                <div id="solution-card" class="solution-panel" style="display: none;">
+                    <h3>Step-by-Step Derivation</h3>
+                    <div id="solution-content"></div>
+                </div>
+            </main>
+        </div>
+    </div>
 </div>
 
-<!-- 1. Assigned Tasks View -->
-<div id="student-tasks-view" class="task-card-container" style="display: none;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-        <h2 style="margin: 0; font-size: 1.25rem; color: #1e293b;">Assignments &amp; Assessments</h2>
-        <button class="btn-secondary" onclick="fetchStudentTasks()" style="font-size: 0.85rem; padding: 6px 12px;">↻ Refresh</button>
+<!-- FLOATING REFERENCE TABLES WINDOW -->
+<div id="floating-tables-window">
+    <div id="tables-dock-resizer" class="dock-edge-resizer"></div>
+    <div id="window-titlebar" class="window-titlebar">
+        <span>📊 Tables &amp; Formulas</span>
+        <div class="controls">
+            <button onclick="snapWindow('left')" title="Snap Left">◧</button>
+            <button onclick="snapWindow('right')" title="Snap Right">◨</button>
+            <button id="btn-maximize-restore" onclick="toggleMaximizeWindow()" title="Full Screen / Maximize">🗖</button>
+            <button onclick="closeFloatingWindow()" title="Close">×</button>
+        </div>
     </div>
-    <div id="tasks-list">
-        <p style="color: #64748b;">Sign in and join a class to access assigned homework, tests, and corrections.</p>
+    <div class="window-tab-bar">
+        <button class="window-tab-btn active" id="btn-tab-table-a" onclick="switchTab('tab-table-a')">Table A (Z)</button>
+        <button class="window-tab-btn" id="btn-tab-table-b" onclick="switchTab('tab-table-b')">Table B (t)</button>
+        <button class="window-tab-btn" id="btn-tab-form-inf" onclick="switchTab('tab-form-inf')">Inference Formulas</button>
     </div>
-</div>
-
-<!-- 2. Free Practice View -->
-<div id="student-practice-view">
-    <main class="practice-card">
-        <div class="card-header">
-            <div class="topic-selector-wrapper">
-                <label for="topic-select" style="font-size: 0.85rem; font-weight: 600; color: #475569;">Topic Focus:</label>
-                <select id="topic-select" onchange="onTopicChange()">
-                    <optgroup label="Normal Distributions">
-                        <option value="random">All Normal Distribution Types (Mixed)</option>
-                        <option value="between">Between Bounds P(a < X < b)</option>
-                        <option value="left_tail">Left Tail Area P(X < b)</option>
-                        <option value="right_tail">Right Tail Area P(X > a)</option>
-                        <option value="inverse">Inverse Cutoffs (Top/Bottom %)</option>
-                    </optgroup>
-                    <optgroup label="Confidence Intervals">
-                        <option value="ci_mean_t">1-Sample t-Interval for Mean (&mu;)</option>
-                        <option value="ci_prop_z">1-Sample z-Interval for Prop (p)</option>
-                    </optgroup>
+    <div class="window-body">
+        <div id="tab-table-a" class="tab-pane active">
+            <div class="table-intro">
+                <strong>Table A: Standard Normal Probabilities.</strong> Cumulative area to the left of $z$.
+            </div>
+            <div style="margin-bottom: 8px; flex-shrink: 0;">
+                <label style="font-weight: 600; font-size: 0.8rem;">Values: </label>
+                <select id="table-a-mode" onchange="renderTableA()" style="padding: 2px 6px; font-size: 0.8rem;">
+                    <option value="positive">Positive z (0.0 to 3.4)</option>
+                    <option value="negative">Negative z (-3.4 to 0.0)</option>
                 </select>
             </div>
-            <div id="session-stats" class="session-stats">Attempts: 0 | Accuracy: 0%</div>
-        </div>
-
-        <div id="problem-prompt" class="problem-text">Loading procedural problem...</div>
-
-        <div class="graph-container" id="graph-wrapper">
-            <svg id="normal-curve-svg" viewBox="0 0 600 200" preserveAspectRatio="xMidYMid meet"></svg>
-        </div>
-
-        <div id="single-input-panel">
-            <div class="input-row">
-                <label id="input-label" for="answer-input">Answer:</label>
-                <input type="number" step="any" id="answer-input" placeholder="e.g. 0.4532" autocomplete="off">
-                <button id="submit-btn" onclick="submitSingleAnswer()">Submit</button>
-                <button id="next-btn" style="display: none;" onclick="loadProblem()">Next Problem &rarr;</button>
+            <div class="table-scroll-container">
+                <table class="ap-table" id="table-a-content"></table>
             </div>
         </div>
-
-        <div id="multi-stage-panel" style="display: none;"></div>
-        <div id="feedback-banner" class="banner" style="display: none;"></div>
-
-        <div id="solution-card" class="solution-panel" style="display: none;">
-            <h3>Step-by-Step Derivation</h3>
-            <div id="solution-content"></div>
+        <div id="tab-table-b" class="tab-pane" style="display: none;">
+            <div class="table-intro">
+                <strong>Table B: t-Distribution Critical Values ($t^*$).</strong> Tail probability $p$ and confidence level $C$.
+            </div>
+            <div class="table-scroll-container">
+                <table class="ap-table" id="table-b-content">
+                    <thead>
+                        <tr>
+                            <th>df</th>
+                            <th>80% (.10)</th>
+                            <th>90% (.05)</th>
+                            <th>95% (.025)</th>
+                            <th>98% (.01)</th>
+                            <th>99% (.005)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>1</td><td>3.078</td><td>6.314</td><td>12.71</td><td>31.82</td><td>63.66</td></tr>
+                        <tr><td>2</td><td>1.886</td><td>2.920</td><td>4.303</td><td>6.965</td><td>9.925</td></tr>
+                        <tr><td>5</td><td>1.476</td><td>2.015</td><td>2.571</td><td>3.365</td><td>4.032</td></tr>
+                        <tr><td>10</td><td>1.372</td><td>1.812</td><td>2.228</td><td>2.764</td><td>3.169</td></tr>
+                        <tr><td>20</td><td>1.325</td><td>1.725</td><td>2.086</td><td>2.528</td><td>2.845</td></tr>
+                        <tr><td>30</td><td>1.310</td><td>1.697</td><td>2.042</td><td>2.457</td><td>2.750</td></tr>
+                        <tr><td><strong>&infin; (z*)</strong></td><td><strong>1.282</strong></td><td><strong>1.645</strong></td><td><strong>1.960</strong></td><td><strong>2.326</strong></td><td><strong>2.576</strong></td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
-    </main>
-</div>
-
-<!-- FLOATING / DOCKED FORMULAS & TABLES WINDOW -->
-<div id="floating-tables-window" class="floating-window" style="display: none;">
-    <div id="tables-dock-resizer" class="dock-edge-resizer"></div>
-    <div class="window-header" id="floating-window-header">
-        <div class="window-title">
-            <span>📋 Reference Materials</span>
-        </div>
-        <div class="window-controls">
-            <button class="snap-btn" onclick="snapWindow('left')" title="Snap Left">◧</button>
-            <button class="snap-btn" onclick="snapWindow('right')" title="Snap Right">◨</button>
-            <button class="snap-btn" onclick="snapWindow('float')" title="Float">⬈</button>
-            <button class="close-btn" onclick="toggleFloatingWindow()">✕</button>
-        </div>
-    </div>
-    <div class="window-tabs">
-        <button class="tab-btn active" onclick="switchTableTab('formulas')">Formulas</button>
-        <button class="tab-btn" onclick="switchTableTab('z-neg')">Z-Table (Negative)</button>
-        <button class="tab-btn" onclick="switchTableTab('z-pos')">Z-Table (Positive)</button>
-        <button class="tab-btn" onclick="switchTableTab('t-table')">t-Distribution Table</button>
-    </div>
-    <div class="window-content" id="window-content">
-        <div id="content-formulas" class="tab-content active">
+        <div id="tab-form-inf" class="tab-pane" style="display: none;">
             <div class="formula-sheet">
                 <h3>Key Statistical Formulas</h3>
                 <div class="formula-item">
@@ -213,23 +270,8 @@
                 </div>
             </div>
         </div>
-        <div id="content-z-neg" class="tab-content">
-            <div class="table-scroll-container">
-                <table id="table-z-neg" class="stat-table"></table>
-            </div>
-        </div>
-        <div id="content-z-pos" class="tab-content">
-            <div class="table-scroll-container">
-                <table id="table-z-pos" class="stat-table"></table>
-            </div>
-        </div>
-        <div id="content-t-table" class="tab-content">
-            <div class="table-scroll-container">
-                <table id="table-t" class="stat-table"></table>
-            </div>
-        </div>
     </div>
-    <div id="floating-window-resize-grip" class="window-resize-grip"></div>
+    <div id="window-resize-grip" class="window-resize-grip"></div>
 </div>
 
 <!-- MULTI-EDGE DOCKED & FLOATING CALCULATOR -->
@@ -239,7 +281,7 @@
         <div class="calc-header-topbar">
             <div class="calc-dock-controls">
                 <button class="calc-header-btn" onclick="setCalcDockMode('left')" title="Dock Left">◧</button>
-                <button class="calc-header-btn active" id="btn-dock-bottom" onclick="setCalcDockMode('bottom')" title="Dock Bottom">⬓</button>
+                <button class="calc-header-btn active" id="btn-dock-bottom" onclick="setCalcDockMode('bottom')" title="Dock Bottom">&#11027;</button>
                 <button class="calc-header-btn" onclick="setCalcDockMode('right')" title="Dock Right">◨</button>
                 <button class="calc-header-btn" onclick="setCalcDockMode('float')" title="Float / Undock">⬈</button>
             </div>
@@ -254,7 +296,6 @@
         </div>
     </div>
     <div class="calc-tray">
-        <!-- Main Variable/Power Bank -->
         <div id="calc-bank-main" class="calc-keypad-block calc-block-vars">
             <button class="calc-key-btn" onclick="calcInsert('x')">x</button>
             <button class="calc-key-btn" onclick="calcInsert('y')">y</button>
@@ -273,7 +314,6 @@
             <button class="calc-key-btn" onclick="calcInsertAbs()">|x|</button>
             <button class="calc-key-btn" onclick="calcInsertNthRoot()">ⁿ√</button>
         </div>
-        <!-- Functions Bank (Trig, Logs, Stats) -->
         <div id="calc-bank-funcs" class="calc-keypad-block calc-block-vars" style="display: none;">
             <button class="calc-key-btn" onclick="calcInsert('\\sin(')">sin</button>
             <button class="calc-key-btn" onclick="calcInsert('\\cos(')">cos</button>
@@ -292,7 +332,6 @@
             <button class="calc-key-btn" onclick="calcInsertAbs()">|x|</button>
             <button class="calc-key-btn" onclick="calcInsertNthRoot()">ⁿ√</button>
         </div>
-        <!-- 10-Key Numpad -->
         <div class="calc-keypad-block calc-block-numpad">
             <button class="calc-key-btn" onclick="calcInsert('7')">7</button>
             <button class="calc-key-btn" onclick="calcInsert('8')">8</button>
@@ -311,7 +350,6 @@
             <button class="calc-key-btn" onclick="calcInsert('\\pi')">π</button>
             <button class="calc-key-btn calc-btn-op" onclick="calcInsert('+')">+</button>
         </div>
-        <!-- Navigation & Actions -->
         <div class="calc-keypad-block calc-block-nav">
             <button class="calc-key-btn calc-btn-del" onclick="calcBackspace()" title="Backspace">⌫</button>
             <button class="calc-key-btn" onclick="calcClear()" title="Clear">AC</button>
@@ -322,7 +360,6 @@
             <button class="calc-key-btn calc-btn-enter" onclick="calcEvaluate()">ENTER</button>
         </div>
     </div>
-    <!-- Corner Resize Handle for Floating Calculator -->
     <div id="calc-resize-grip" class="window-resize-grip" title="Drag to resize"></div>
 </div>
 
@@ -339,9 +376,9 @@
     </div>
 </div>
 
-<script src="/static/tables.js?v=61"></script>
-<script src="/static/calculator.js?v=61"></script>
-<script src="/static/app.js?v=61"></script>
+<script src="/static/tables.js?v=80"></script>
+<script src="/static/calculator.js?v=80"></script>
+<script src="/static/app.js?v=80"></script>
 <script>
     function getAuthHeaders() {
         const headers = { 'Content-Type': 'application/json' };
@@ -463,3 +500,4 @@
 </script>
 </body>
 </html>
+
