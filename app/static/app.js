@@ -50,6 +50,8 @@ async function initAuth() {
 }
 
 async function handleSession(session) {
+    window.currentSession = session;
+    window.currentUser = session ? session.user : null;
     currentSession = session;
     currentUser = session ? session.user : null;
     const authBtnLabel = document.getElementById('auth-user-label');
@@ -479,3 +481,4 @@ window.addEventListener('load', () => {
         });
     }
 });
+

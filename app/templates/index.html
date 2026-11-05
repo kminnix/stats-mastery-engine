@@ -3,334 +3,306 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QEDeram - Stats Practice</title>
-    <!-- KaTeX CDN -->
+    <title>Qederam - Procedural Statistics Mastery</title>
+    <link rel="stylesheet" href="/static/style.css">
+    
+    <!-- KaTeX CSS & JS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
-
-    <!-- MathLive & Math.js Engines -->
-    <script defer src="https://unpkg.com/mathlive"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.1/math.js"></script>
-
-    <!-- Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- Supabase Environment Injection -->
     <script>
         window.SUPABASE_URL = "{{ supabase_url }}";
         window.SUPABASE_KEY = "{{ supabase_key }}";
     </script>
 
-    <!-- App Stylesheet & Scripts -->
-    <link rel="stylesheet" href="/static/style.css?v=55">
-    <script defer src="/static/tables.js?v=55"></script>
-    <script defer src="/static/calculator.js?v=55"></script>
-    <script defer src="/static/app.js?v=55"></script>
+    <style>
+        .student-subnav {
+            display: flex;
+            gap: 10px;
+            max-width: 900px;
+            margin: 16px auto 0;
+            padding: 0 16px;
+        }
+        .subnav-btn {
+            background: #e2e8f0;
+            border: none;
+            padding: 10px 18px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #475569;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .subnav-btn.active {
+            background: #ffffff;
+            color: #0f172a;
+            box-shadow: 0 -2px 5px rgba(0,0,0,0.03);
+        }
+        .task-card-container {
+            max-width: 900px;
+            margin: 0 auto 30px;
+            padding: 24px;
+            background: #ffffff;
+            border-radius: 0 8px 8px 8px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+        }
+        .task-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 18px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            background: #f8fafc;
+        }
+        .task-badge {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 3px 8px;
+            border-radius: 4px;
+            margin-right: 8px;
+        }
+        .task-badge-assignment { background: #e0f2fe; color: #0369a1; }
+        .task-badge-test { background: #fef3c7; color: #b45309; }
+        .task-badge-correction { background: #fce7f3; color: #be185d; }
+        .status-badge {
+            font-size: 0.8rem;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-weight: 600;
+        }
+        .status-not_started { background: #f1f5f9; color: #64748b; }
+        .status-in_progress { background: #fef3c7; color: #b45309; }
+        .status-submitted { background: #dcfce7; color: #166534; }
+    </style>
 </head>
 <body>
-    <div id="page-wrapper">
-        <div id="page-container">
-            <header>
-                <div class="brand">
-                    <a href="/" style="text-decoration: none; color: inherit; display: inline-block;">
-                        <h1>qederam.org</h1>
-                    </a>
-                    <span class="tagline">Procedural Statistics Engine</span>
-                </div>
-                <div class="header-controls">
-                    <!-- Teacher Portal Navigation Button -->
-                    <a href="/teacher" id="teacher-portal-btn" class="btn-primary" style="display: none; text-decoration: none; padding: 6px 12px; font-size: 0.85rem; background: #0f172a; color: #ffffff;">📊 Teacher Portal</a>
 
-                    <button class="btn-secondary" onclick="toggleFloatingWindow()">📋 Formulas &amp; Tables</button>
-                    <div id="mastery-pill" class="mastery-badge">Streak: 0 / 5</div>
-                    <button id="reset-progress-btn" class="text-btn" onclick="resetCurrentSkill()">Reset Skill</button>
-                    <button class="btn-secondary" onclick="toggleCalculatorWindow()">🖩 Calculator</button>
-                    <button id="auth-btn" class="btn-secondary" onclick="toggleAuth()" style="font-size: 0.85rem;">
-                        <span id="auth-user-label">Sign In</span>
-                    </button>
-                </div>
-            </header>
+<header>
+    <div class="brand">
+        <a href="/" style="text-decoration: none; color: inherit; display: inline-block;">
+            <h1>qederam.org</h1>
+        </a>
+        <span class="tagline">Procedural Statistics Engine</span>
+    </div>
+    <div class="header-controls">
+        <a href="/teacher" id="teacher-portal-btn" class="btn-primary" style="display: none; text-decoration: none; padding: 6px 12px; font-size: 0.85rem; background: #0f172a; color: #ffffff;">📊 Teacher Portal</a>
+        <button class="btn-secondary" id="join-class-btn" onclick="openJoinModal()" style="display: none;">🎓 Join Class</button>
+        <button class="btn-secondary" onclick="toggleFloatingWindow()">📋 Formulas &amp; Tables</button>
+        <div id="mastery-pill" class="mastery-badge">Streak: 0 / 5</div>
+        <button id="reset-progress-btn" class="text-btn" onclick="resetCurrentSkill()">Reset Skill</button>
+        <button class="btn-secondary" onclick="toggleCalculatorWindow()">🖩 Calculator</button>
+        <button id="auth-btn" class="btn-secondary" onclick="toggleAuth()" style="font-size: 0.85rem;">
+            <span id="auth-user-label">Sign In</span>
+        </button>
+    </div>
+</header>
 
-            <main>
-                <div class="card">
-                    <div class="topic-header">
-                        <div class="selector-group">
-                            <label for="topic-select" class="selector-label">Skill:</label>
-                            <select id="topic-select" onchange="onTopicChange()">
-                                <optgroup label="Normal Distributions">
-                                    <option value="random">Mixed Normal Practice</option>
-                                    <option value="between">Area Between: P(x₁ &lt; X &lt; x₂)</option>
-                                    <option value="left_tail">Left-Tail: P(X &lt; x)</option>
-                                    <option value="right_tail">Right-Tail: P(X &gt; x)</option>
-                                    <option value="inverse">Inverse Normal: Find Cutoff (x)</option>
-                                </optgroup>
-                                <optgroup label="Confidence Intervals">
-                                    <option value="ci_mean_t">1-Sample t-Interval for Mean (μ)</option>
-                                    <option value="ci_prop_z">1-Sample z-Interval for Proportion (p)</option>
-                                </optgroup>
-                            </select>
+<!-- Student View Switcher Subnav -->
+<div class="student-subnav">
+    <button id="tab-practice-btn" class="subnav-btn active" onclick="switchStudentTab('practice')">🎲 Free Practice</button>
+    <button id="tab-tasks-btn" class="subnav-btn" onclick="switchStudentTab('tasks')">📋 Assigned Tasks <span id="tasks-count-badge" style="display: none; background: #ef4444; color: white; border-radius: 9999px; font-size: 0.75rem; padding: 1px 6px; margin-left: 4px;">0</span></button>
+</div>
+
+<!-- 1. Assigned Tasks View -->
+<div id="student-tasks-view" class="task-card-container" style="display: none;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h2 style="margin: 0; font-size: 1.25rem; color: #1e293b;">Assignments &amp; Assessments</h2>
+        <button class="btn-secondary" onclick="fetchStudentTasks()" style="font-size: 0.85rem; padding: 6px 12px;">↻ Refresh</button>
+    </div>
+    <div id="tasks-list">
+        <p style="color: #64748b;">Sign in and join a class to access assigned homework, tests, and corrections.</p>
+    </div>
+</div>
+
+<!-- 2. Free Practice View -->
+<div id="student-practice-view">
+    <main class="practice-card">
+        <div class="card-header">
+            <div class="topic-selector-wrapper">
+                <label for="topic-select" style="font-size: 0.85rem; font-weight: 600; color: #475569;">Topic Focus:</label>
+                <select id="topic-select" onchange="onTopicChange()">
+                    <optgroup label="Normal Distributions">
+                        <option value="random">All Normal Distribution Types (Mixed)</option>
+                        <option value="between">Between Bounds P(a < X < b)</option>
+                        <option value="left_tail">Left Tail Area P(X < b)</option>
+                        <option value="right_tail">Right Tail Area P(X > a)</option>
+                        <option value="inverse">Inverse Cutoffs (Top/Bottom %)</option>
+                    </optgroup>
+                    <optgroup label="Confidence Intervals">
+                        <option value="ci_mean_t">1-Sample t-Interval for Mean (&mu;)</option>
+                        <option value="ci_prop_z">1-Sample z-Interval for Prop (p)</option>
+                    </optgroup>
+                </select>
+            </div>
+            <div id="session-stats" class="session-stats">Attempts: 0 | Accuracy: 0%</div>
+        </div>
+
+        <div id="problem-prompt" class="problem-text">Loading procedural problem...</div>
+
+        <div class="graph-container" id="graph-wrapper">
+            <svg id="normal-curve-svg" viewBox="0 0 600 200" preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
+
+        <div id="single-input-panel">
+            <div class="input-row">
+                <label id="input-label" for="answer-input">Answer:</label>
+                <input type="number" step="any" id="answer-input" placeholder="e.g. 0.4532" autocomplete="off">
+                <button id="submit-btn" onclick="submitSingleAnswer()">Submit</button>
+                <button id="next-btn" style="display: none;" onclick="loadProblem()">Next Problem &rarr;</button>
+            </div>
+        </div>
+
+        <div id="multi-stage-panel" style="display: none;"></div>
+        <div id="feedback-banner" class="banner" style="display: none;"></div>
+
+        <div id="solution-card" class="solution-panel" style="display: none;">
+            <h3>Step-by-Step Derivation</h3>
+            <div id="solution-content"></div>
+        </div>
+    </main>
+</div>
+
+<!-- Class Join Modal -->
+<div id="join-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div style="background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+        <h3 style="margin: 0 0 12px; color: #1e293b;">Join Course Section</h3>
+        <p style="margin: 0 0 16px; font-size: 0.9rem; color: #64748b;">Enter the 6-character code provided by your teacher:</p>
+        <input type="text" id="join-code-input" maxlength="6" placeholder="e.g. 8K2X9P" style="width: 100%; box-sizing: border-box; font-family: monospace; font-size: 1.2rem; text-align: center; text-transform: uppercase; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1; margin-bottom: 16px;">
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+            <button class="btn-secondary" onclick="closeJoinModal()" style="padding: 8px 14px;">Cancel</button>
+            <button class="btn-primary" onclick="submitJoinClass()" style="padding: 8px 14px;">Join Section</button>
+        </div>
+    </div>
+</div>
+
+<script src="/static/tables.js?v=60"></script>
+<script src="/static/calculator.js?v=60"></script>
+<script src="/static/app.js?v=60"></script>
+<script>
+    function getAuthHeaders() {
+        const headers = { 'Content-Type': 'application/json' };
+        if (window.currentSession && window.currentSession.access_token) {
+            headers['Authorization'] = `Bearer ${window.currentSession.access_token}`;
+        }
+        return headers;
+    }
+
+    function switchStudentTab(tab) {
+        const practiceBtn = document.getElementById('tab-practice-btn');
+        const tasksBtn = document.getElementById('tab-tasks-btn');
+        const practiceView = document.getElementById('student-practice-view');
+        const tasksView = document.getElementById('student-tasks-view');
+
+        if (tab === 'tasks') {
+            tasksBtn.className = 'subnav-btn active';
+            practiceBtn.className = 'subnav-btn';
+            tasksView.style.display = 'block';
+            practiceView.style.display = 'none';
+            fetchStudentTasks();
+        } else {
+            practiceBtn.className = 'subnav-btn active';
+            tasksBtn.className = 'subnav-btn';
+            practiceView.style.display = 'block';
+            tasksView.style.display = 'none';
+        }
+    }
+
+    async function fetchStudentTasks() {
+        if (!window.currentUser) {
+            document.getElementById('tasks-list').innerHTML = `<p style="color: #64748b;">Please sign in with your student account to view assigned work.</p>`;
+            return;
+        }
+
+        const container = document.getElementById('tasks-list');
+        container.innerHTML = `<p style="color: #94a3b8;">Loading assignments and tests...</p>`;
+
+        try {
+            const res = await fetch(`/api/student/tasks/${window.currentUser.id}`, { headers: getAuthHeaders() });
+            const tasks = await res.json();
+
+            const badge = document.getElementById('tasks-count-badge');
+            if (tasks.length > 0) {
+                badge.innerText = tasks.length;
+                badge.style.display = 'inline-block';
+            } else {
+                badge.style.display = 'none';
+            }
+
+            if (tasks.length === 0) {
+                container.innerHTML = `<p style="color: #64748b;">No active tasks assigned for your enrolled classes.</p>`;
+                return;
+            }
+
+            container.innerHTML = '';
+            tasks.forEach(t => {
+                const item = document.createElement('div');
+                item.className = 'task-item';
+                const badgeClass = t.type === 'test' ? 'task-badge-test' : (t.type === 'test_correction' ? 'task-badge-correction' : 'task-badge-assignment');
+                const dueText = t.due_date ? `Due ${new Date(t.due_date).toLocaleDateString()}` : 'No due date';
+
+                item.innerHTML = `
+                    <div>
+                        <div style="margin-bottom: 4px;">
+                            <span class="task-badge ${badgeClass}">${t.type.replace('_', ' ')}</span>
+                            <strong>${t.title}</strong>
                         </div>
-                        <span id="session-stats" class="session-stats">Attempts: 0 | Accuracy: 0%</span>
+                        <div style="font-size: 0.85rem; color: #64748b;">
+                            ${t.class_name} • ${dueText}
+                        </div>
                     </div>
-
-                    <div id="problem-prompt" class="prompt">Loading problem...</div>
-
-                    <div id="single-input-panel" class="input-row">
-                        <label for="answer-input"><strong id="input-label">Answer:</strong></label>
-                        <input type="number" step="any" id="answer-input" placeholder="e.g. 0.4532" autocomplete="off">
-                        <button id="submit-btn" onclick="submitSingleAnswer()">Submit Answer</button>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span class="status-badge status-${t.status}">${t.status.replace('_', ' ')}</span>
+                        <button class="btn-primary" onclick="launchTask('${t.assessment_id}', '${t.type}')" style="padding: 6px 14px; font-size: 0.85rem;">
+                            ${t.status === 'not_started' ? 'Start' : 'Continue'}
+                        </button>
                     </div>
+                `;
+                container.appendChild(item);
+            });
+        } catch (e) {
+            container.innerHTML = `<p style="color: #ef4444;">Failed to load assignments.</p>`;
+        }
+    }
 
-                    <div id="multi-stage-panel" style="display: none;"></div>
+    function launchTask(assessmentId, type) {
+        alert("Launching " + type + " (" + assessmentId + ").");
+    }
 
-                    <button id="next-btn" onclick="loadProblem()" style="display: none; margin-top: 15px;">Next Problem &rarr;</button>
-                    <div id="feedback-banner" style="display: none; margin-top: 15px;"></div>
-                </div>
-
-                <div id="solution-card" class="card solution" style="display: none;">
-                    <h3>Step-by-Step Worked Solution</h3>
-                    <div class="graph-container" id="graph-wrapper">
-                        <svg id="normal-curve-svg" viewBox="0 0 600 220" preserveAspectRatio="xMidYMid meet"></svg>
-                    </div>
-                    <div id="solution-content"></div>
-                </div>
-            </main>
-        </div>
-    </div>
-
-    <!-- FLOATING REFERENCE TABLES WINDOW -->
-    <div id="floating-tables-window">
-        <div id="tables-dock-resizer" class="dock-edge-resizer"></div>
-        <div id="window-titlebar" class="window-titlebar">
-            <span>📊 Tables &amp; Formulas</span>
-            <div class="controls">
-                <button onclick="snapWindow('left')" title="Snap Left">◧</button>
-                <button onclick="snapWindow('right')" title="Snap Right">◨</button>
-                <button id="btn-maximize-restore" onclick="toggleMaximizeWindow()" title="Full Screen / Maximize">🗖</button>
-                <button onclick="closeFloatingWindow()" title="Close">&times;</button>
-            </div>
-        </div>
-        
-        <div class="window-tab-bar">
-            <button class="window-tab-btn active" id="btn-tab-table-a" onclick="switchTab('tab-table-a')">Table A (Z)</button>
-            <button class="window-tab-btn" id="btn-tab-table-b" onclick="switchTab('tab-table-b')">Table B (t)</button>
-            <button class="window-tab-btn" id="btn-tab-table-c" onclick="switchTab('tab-table-c')">Table C (χ²)</button>
-            <button class="window-tab-btn" id="btn-tab-form-inf" onclick="switchTab('tab-form-inf')">Inference Formulas</button>
-            <button class="window-tab-btn" id="btn-tab-form-desc" onclick="switchTab('tab-form-desc')">Descriptive Formulas</button>
-        </div>
-
-        <div class="window-body">
-            <div id="tab-table-a" class="tab-pane active">
-                <div class="table-intro">
-                    <strong>Table A: Standard Normal Probabilities.</strong> Cumulative area to the left of \(z\).
-                </div>
-                <div style="margin-bottom: 8px; flex-shrink: 0;">
-                    <label style="font-weight: 600; font-size: 0.8rem;">Values: </label>
-                    <select id="table-a-mode" onchange="renderTableA()" style="padding: 2px 6px; font-size: 0.8rem;">
-                        <option value="positive">Positive z (0.0 to 3.4)</option>
-                        <option value="negative">Negative z (-3.4 to 0.0)</option>
-                    </select>
-                </div>
-                <div class="table-scroll-container">
-                    <table class="ap-table" id="table-a-content"></table>
-                </div>
-            </div>
-
-            <div id="tab-table-b" class="tab-pane">
-                <div class="table-intro">
-                    <strong>Table B: t-Distribution Critical Values (\(t^*\)).</strong>
-                </div>
-                <div class="table-scroll-container">
-                    <table class="ap-table">
-                        <thead>
-                            <tr>
-                                <th>df</th>
-                                <th>Tail: .10<br>(80%)</th>
-                                <th>Tail: .05<br>(90%)</th>
-                                <th>Tail: .025<br>(95%)</th>
-                                <th>Tail: .02<br>(96%)</th>
-                                <th>Tail: .01<br>(98%)</th>
-                                <th>Tail: .005<br>(99%)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr><td>1</td><td>3.078</td><td>6.314</td><td>12.71</td><td>15.89</td><td>31.82</td><td>63.66</td></tr>
-                            <tr><td>2</td><td>1.886</td><td>2.920</td><td>4.303</td><td>4.849</td><td>6.965</td><td>9.925</td></tr>
-                            <tr><td>3</td><td>1.638</td><td>2.353</td><td>3.182</td><td>3.482</td><td>4.541</td><td>5.841</td></tr>
-                            <tr><td>4</td><td>1.533</td><td>2.132</td><td>2.776</td><td>2.999</td><td>3.747</td><td>4.604</td></tr>
-                            <tr><td>5</td><td>1.476</td><td>2.015</td><td>2.571</td><td>2.757</td><td>3.365</td><td>4.032</td></tr>
-                            <tr><td>10</td><td>1.372</td><td>1.812</td><td>2.228</td><td>2.359</td><td>2.764</td><td>3.169</td></tr>
-                            <tr><td>15</td><td>1.341</td><td>1.753</td><td>2.131</td><td>2.249</td><td>2.602</td><td>2.947</td></tr>
-                            <tr><td>19</td><td>1.328</td><td>1.729</td><td>2.093</td><td>2.205</td><td>2.539</td><td>2.861</td></tr>
-                            <tr><td>20</td><td>1.325</td><td>1.725</td><td>2.086</td><td>2.197</td><td>2.528</td><td>2.845</td></tr>
-                            <tr><td>24</td><td>1.318</td><td>1.711</td><td>2.064</td><td>2.172</td><td>2.492</td><td>2.797</td></tr>
-                            <tr><td>29</td><td>1.311</td><td>1.699</td><td>2.045</td><td>2.150</td><td>2.462</td><td>2.756</td></tr>
-                            <tr><td>30</td><td>1.310</td><td>1.697</td><td>2.042</td><td>2.147</td><td>2.457</td><td>2.750</td></tr>
-                            <tr><td>39</td><td>1.304</td><td>1.685</td><td>2.023</td><td>2.124</td><td>2.426</td><td>2.708</td></tr>
-                            <tr><td>49</td><td>1.299</td><td>1.677</td><td>2.010</td><td>2.110</td><td>2.405</td><td>2.680</td></tr>
-                            <tr><td><strong>∞ (z*)</strong></td><td><strong>1.282</strong></td><td><strong>1.645</strong></td><td><strong>1.960</strong></td><td><strong>2.054</strong></td><td><strong>2.326</strong></td><td><strong>2.576</strong></td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div id="tab-table-c" class="tab-pane">
-                <div class="table-intro">
-                    <strong>Table C: Chi-Square (\(\chi^2\)) Critical Values.</strong> Right-tail probability \(p\).
-                </div>
-                <div class="table-scroll-container">
-                    <table class="ap-table">
-                        <thead>
-                            <tr>
-                                <th>df</th>
-                                <th>p = 0.10</th>
-                                <th>p = 0.05</th>
-                                <th>p = 0.025</th>
-                                <th>p = 0.01</th>
-                                <th>p = 0.001</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr><td>1</td><td>2.71</td><td>3.84</td><td>5.02</td><td>6.63</td><td>10.83</td></tr>
-                            <tr><td>2</td><td>4.61</td><td>5.99</td><td>7.38</td><td>9.21</td><td>13.82</td></tr>
-                            <tr><td>3</td><td>6.25</td><td>7.81</td><td>9.35</td><td>11.34</td><td>16.27</td></tr>
-                            <tr><td>4</td><td>7.78</td><td>9.49</td><td>11.14</td><td>13.28</td><td>18.47</td></tr>
-                            <tr><td>5</td><td>9.24</td><td>11.07</td><td>12.83</td><td>15.09</td><td>20.51</td></tr>
-                            <tr><td>10</td><td>15.99</td><td>18.31</td><td>20.48</td><td>23.21</td><td>29.59</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div id="tab-form-inf" class="tab-pane">
-                <div class="table-intro"><strong>Section II: Inference Formulas</strong></div>
-                <div class="table-scroll-container" style="font-size: 0.9rem; line-height: 1.6;">
-                    <p>$$\text{Confidence Interval: } \quad \text{statistic} \pm (\text{critical value})(\text{standard error})$$</p>
-                    <p><strong>Sample Mean (\(\mu\)):</strong><br>
-                    \(SE = \frac{s}{\sqrt{n}}, \quad \text{Interval: } \bar{x} \pm t^* \left(\frac{s}{\sqrt{n}}\right)\)</p>
-                    <p><strong>Sample Proportion (\(p\)):</strong><br>
-                    \(SE = \sqrt{\frac{\hat{p}(1-\hat{p})}{n}}, \quad \text{Interval: } \hat{p} \pm z^* \sqrt{\frac{\hat{p}(1-\hat{p})}{n}}\)</p>
-                </div>
-            </div>
-
-            <div id="tab-form-desc" class="tab-pane">
-                <div class="table-intro"><strong>Section I: Descriptive &amp; Probability Formulas</strong></div>
-                <div class="table-scroll-container" style="font-size: 0.9rem; line-height: 1.6;">
-                    <p>$$\bar{x} = \frac{\sum x_i}{n}, \quad s_x = \sqrt{\frac{\sum (x_i - \bar{x})^2}{n - 1}}$$</p>
-                    <p>$$P(A \cup B) = P(A) + P(B) - P(A \cap B)$$</p>
-                    <p>$$P(A \mid B) = \frac{P(A \cap B)}{P(B)}$$</p>
-                </div>
-            </div>
-        </div>
-        <div id="window-resize-grip" class="window-resize-grip" title="Drag to resize"></div>
-    </div>
-
-    <!-- MULTI-EDGE DOCKED & FLOATING CALCULATOR -->
-    <div id="calc-dock" class="dock-bottom">
-        <div id="calc-dock-resizer" class="dock-edge-resizer"></div>
-        <div class="calc-header" id="calc-titlebar">
-            <div class="calc-header-topbar">
-                <div class="calc-dock-controls">
-                    <button class="calc-header-btn" onclick="setCalcDockMode('left')" title="Dock Left">◧</button>
-                    <button class="calc-header-btn active" id="btn-dock-bottom" onclick="setCalcDockMode('bottom')" title="Dock Bottom">&#11027;</button>
-                    <button class="calc-header-btn" onclick="setCalcDockMode('right')" title="Dock Right">◨</button>
-                    <button class="calc-header-btn" onclick="setCalcDockMode('float')" title="Float / Undock">⬈</button>
-                </div>
-                <div style="display: flex; gap: 6px; align-items: center;">
-                    <button class="calc-header-btn" onclick="toggleCalculatorAngleMode()" id="calc-angle-btn">DEG</button>
-                    <button class="calc-header-btn calc-header-close" onclick="closeCalculatorWindow()">&times;</button>
-                </div>
-            </div>
-            <div class="calc-display-section">
-                <div id="calc-history-list" class="calc-history-list"></div>
-                <math-field id="calc-mathfield" virtual-keyboard-mode="manual"></math-field>
-            </div>
-        </div>
-
-        <div class="calc-tray">
-            <!-- Main Variable/Power Bank -->
-            <div id="calc-bank-main" class="calc-keypad-block calc-block-vars">
-                <button class="calc-key-btn" onclick="calcInsert('x')">x</button>
-                <button class="calc-key-btn" onclick="calcInsert('y')">y</button>
-                <button class="calc-key-btn" onclick="calcInsert('(')">(</button>
-                <button class="calc-key-btn" onclick="calcInsert(')')">)</button>
-
-                <button class="calc-key-btn calc-btn-op" onclick="calcEvaluate()">=</button>
-                <button class="calc-key-btn" onclick="calcInsertSqrt()">√</button>
-                <button class="calc-key-btn" onclick="calcInsert('^2')">a²</button>
-                <button class="calc-key-btn" onclick="calcInsert('^')">a^b</button>
-
-                <button class="calc-key-btn calc-btn-funcs" onclick="toggleKeypadBank('funcs')">Funcs</button>
-                <button class="calc-key-btn" onclick="calcInsertAns()">Ans</button>
-                <button class="calc-key-btn" onclick="calcInsertFraction()">a/b</button>
-                <button class="calc-key-btn" onclick="calcInsert(',')">,</button>
-
-                <button class="calc-key-btn" onclick="calcInsert('\\pi')">π</button>
-                <button class="calc-key-btn" onclick="calcInsert('e')">e</button>
-                <button class="calc-key-btn" onclick="calcInsertAbs()">|x|</button>
-                <button class="calc-key-btn" onclick="calcInsertNthRoot()">ⁿ√</button>
-            </div>
-
-            <!-- Functions Bank (Trig, Logs, Stats) -->
-            <div id="calc-bank-funcs" class="calc-keypad-block calc-block-vars" style="display: none;">
-                <button class="calc-key-btn" onclick="calcInsert('\\sin(')">sin</button>
-                <button class="calc-key-btn" onclick="calcInsert('\\cos(')">cos</button>
-                <button class="calc-key-btn" onclick="calcInsert('\\tan(')">tan</button>
-                <button class="calc-key-btn" onclick="calcInsert('!')">!</button>
-
-                <button class="calc-key-btn" onclick="calcInsert('\\arcsin(')">sin⁻¹</button>
-                <button class="calc-key-btn" onclick="calcInsert('\\arccos(')">cos⁻¹</button>
-                <button class="calc-key-btn" onclick="calcInsert('\\arctan(')">tan⁻¹</button>
-                <button class="calc-key-btn" onclick="calcInsert('\\ln(')">ln</button>
-
-                <button class="calc-key-btn calc-btn-funcs" onclick="toggleKeypadBank('main')">123</button>
-                <button class="calc-key-btn" onclick="calcInsert('\\log_{10}(')">log</button>
-                <button class="calc-key-btn" onclick="calcInsert('nCr(')">nCr</button>
-                <button class="calc-key-btn" onclick="calcInsert('nPr(')">nPr</button>
-
-                <button class="calc-key-btn" onclick="calcInsert('mean(')">mean</button>
-                <button class="calc-key-btn" onclick="calcInsert('std(')">stdev</button>
-                <button class="calc-key-btn" onclick="calcInsertAbs()">|x|</button>
-                <button class="calc-key-btn" onclick="calcInsertNthRoot()">ⁿ√</button>
-            </div>
-
-            <!-- 10-Key Numpad -->
-            <div class="calc-keypad-block calc-block-numpad">
-                <button class="calc-key-btn" onclick="calcInsert('7')">7</button>
-                <button class="calc-key-btn" onclick="calcInsert('8')">8</button>
-                <button class="calc-key-btn" onclick="calcInsert('9')">9</button>
-                <button class="calc-key-btn calc-btn-op" onclick="calcInsertFraction()" title="Divide (Creates Fraction)">÷</button>
-
-                <button class="calc-key-btn" onclick="calcInsert('4')">4</button>
-                <button class="calc-key-btn" onclick="calcInsert('5')">5</button>
-                <button class="calc-key-btn" onclick="calcInsert('6')">6</button>
-                <button class="calc-key-btn calc-btn-op" onclick="calcInsert('\\times ')">×</button>
-
-                <button class="calc-key-btn" onclick="calcInsert('1')">1</button>
-                <button class="calc-key-btn" onclick="calcInsert('2')">2</button>
-                <button class="calc-key-btn" onclick="calcInsert('3')">3</button>
-                <button class="calc-key-btn calc-btn-op" onclick="calcInsert('-')">−</button>
-
-                <button class="calc-key-btn" onclick="calcInsert('0')">0</button>
-                <button class="calc-key-btn" onclick="calcInsert('.')">.</button>
-                <button class="calc-key-btn" onclick="calcInsert('\\pi')">π</button>
-                <button class="calc-key-btn calc-btn-op" onclick="calcInsert('+')">+</button>
-            </div>
-
-            <!-- Navigation & Actions -->
-            <div class="calc-keypad-block calc-block-nav">
-                <button class="calc-key-btn calc-btn-del" onclick="calcBackspace()" title="Backspace">⌫</button>
-                <button class="calc-key-btn" onclick="calcClear()" title="Clear">AC</button>
-
-                <button class="calc-key-btn" onclick="calcNav('left')">←</button>
-                <button class="calc-key-btn" onclick="calcNav('right')">→</button>
-
-                <button class="calc-key-btn" onclick="calcNav('up')">↑</button>
-                <button class="calc-key-btn" onclick="calcNav('down')">↓</button>
-
-                <button class="calc-key-btn calc-btn-enter" onclick="calcEvaluate()">ENTER</button>
-            </div>
-        </div>
-        <div id="calc-resize-grip" class="window-resize-grip" title="Drag to resize"></div>
-    </div>
+    function openJoinModal() {
+        document.getElementById('join-modal').style.display = 'flex';
+        document.getElementById('join-code-input').focus();
+    }
+    function closeJoinModal() {
+        document.getElementById('join-modal').style.display = 'none';
+    }
+    async function submitJoinClass() {
+        const code = document.getElementById('join-code-input').value.trim();
+        if (!code || !window.currentUser) return;
+        try {
+            const res = await fetch('/api/classes/join', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ student_id: window.currentUser.id, join_code: code })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                alert(data.message);
+                closeJoinModal();
+                fetchStudentTasks();
+            } else {
+                alert(data.detail || "Invalid code");
+            }
+        } catch (e) {
+            alert("Error joining class");
+        }
+    }
+</script>
 </body>
 </html>

@@ -245,5 +245,53 @@ async def get_class_assessments(class_id: str, authorization: Optional[str] = He
     """Retrieves all assessments and student submission counts for a section."""
     db = get_scoped_supabase(authorization)
     
-    res = db.table("assessments").select("*, assessment_submissions(count)").eq("class_id", class_id).order("created_at", desc=True).execute()
-    return res.data or []
+    try:
+        res = db.table("assessments").select("*, assessment_submissions(count)").eq("class_id", class_id).order("created_at", desc=True).execute()
+        return res.data or []
+    except Exception as e:
+        print(f"Error fetching class assessments: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/student/tasks/{student_id}")
+async def get_student_tasks(student_id: str, authorization: Optional[str] = Header(None)):
+    """Fetches all active assignments, tests, and corrections for classes the student is enrolled in."""
+    db = get_scoped_supabase(authorization)
+
+    # 1. Get the class IDs this student is enrolled in
+    enroll_res = db.table("enrollments").select("class_id, classes(name)").eq("student_id", student_id).execute()
+    enrolled_classes = enroll_res.data or []
+    if not enrolled_classes:
+        return []
+
+    class_ids = [item["class_id"] for item in enrolled_classes]
+    class_name_map = {item["class_id"]: item.get("classes", {}).get("name", "Class") for item in enrolled_classes}
+
+    # 2. Get active assessments for these classes
+    assess_res = db.table("assessments").select("*").in_("class_id", class_ids).eq("is_active", True).order("created_at", desc=True).execute()
+    assessments = assess_res.data or []
+    if not assessments:
+        return []
+
+    assessment_ids = [a["id"] for a in assessments]
+
+    # 3. Get existing student submission statuses
+    sub_res = db.table("assessment_submissions").select("*").eq("student_id", student_id).in_("assessment_id", assessment_ids).execute()
+    submission_map = {s["assessment_id"]: s for s in (sub_res.data or [])}
+
+    # 4. Assemble student task view
+    task_list = []
+    for a in assessments:
+        sub = submission_map.get(a["id"])
+        task_list.append({
+            "assessment_id": a["id"],
+            "title": a["title"],
+            "type": a["type"],
+            "class_name": class_name_map.get(a["class_id"], "Class"),
+            "due_date": a["due_date"],
+            "config": a["config"],
+            "parent_assessment_id": a.get("parent_assessment_id"),
+            "status": sub["status"] if sub else "not_started",
+            "score": sub.get("score") if sub else None
+        })
+
+    return task_list
