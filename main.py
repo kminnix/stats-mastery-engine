@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 
 from app.engine.normal_dist import generate_normal_problem, verify_normal_answer
 from app.engine.confidence_intervals import generate_ci_problem
+from app.engine.hypothesis_testing import generate_ht_problem
 
 load_dotenv()
 
@@ -20,9 +21,10 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "40"
+STATIC_VERSION = "70"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
+SUPABASE_ANON_KEY = SUPABASE_KEY
 
 # Base unauthenticated client
 supabase_client: Optional[Client] = None
@@ -63,6 +65,7 @@ class AssessmentCreateRequest(BaseModel):
     type: str  # 'assignment', 'test', or 'test_correction'
     parent_assessment_id: Optional[str] = None
     config: Dict[str, Any]
+    allow_hints: bool = True
     due_date: Optional[str] = None
 
 def generate_join_code(length=6) -> str:
@@ -112,6 +115,18 @@ async def serve_teacher_dashboard(request: Request):
         }
     )
 
+@app.get("/teacher/assignments/new", response_class=HTMLResponse)
+async def get_teacher_assessment_builder(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="create_assessment.html",
+        context={
+            "supabase_url": SUPABASE_URL,
+            "supabase_key": SUPABASE_ANON_KEY,
+            "static_version": STATIC_VERSION
+        }
+    )
+
 # --- PROBLEM & VERIFICATION APIS ---
 
 @app.get("/api/health")
@@ -138,6 +153,12 @@ async def get_ci_problem(topic: str = "mean_t", problem_type: str = "mean_t"):
         return generate_ci_problem(selected)
     except TypeError:
         return generate_ci_problem()
+
+@app.get("/api/problem/ht")
+async def get_hypothesis_testing_problem(topic: str = "ht_prop_z"):
+    if not topic.startswith("ht_"):
+        raise HTTPException(status_code=400, detail="Invalid hypothesis-testing topic")
+    return generate_ht_problem(topic)
 
 @app.post("/api/verify")
 async def check_answer(payload: VerifyPayload):
@@ -190,6 +211,53 @@ async def list_teacher_classes(teacher_id: str, authorization: Optional[str] = H
     classes_res = db.table("classes").select("*").eq("teacher_id", teacher_id).order("created_at").execute()
     return classes_res.data or []
 
+@app.get("/api/teacher/classes/{teacher_id}/tasks")
+async def get_teacher_class_tasks(
+    teacher_id: str,
+    class_id: Optional[str] = None,
+    authorization: Optional[str] = Header(None)
+):
+    """Fetches active assessments for one or all classes owned by a teacher."""
+    db = get_scoped_supabase(authorization)
+    classes_res = (
+        db.table("classes")
+        .select("id, name")
+        .eq("teacher_id", teacher_id)
+        .execute()
+    )
+    teacher_classes = classes_res.data or []
+    if not teacher_classes:
+        return {"classes": [], "tasks": []}
+
+    class_ids = [item["id"] for item in teacher_classes]
+    class_map = {item["id"]: item["name"] for item in teacher_classes}
+    target_ids = [class_id] if class_id in class_ids else class_ids
+    assessments_res = (
+        db.table("assessments")
+        .select("*")
+        .in_("class_id", target_ids)
+        .eq("is_active", True)
+        .order("created_at", desc=True)
+        .execute()
+    )
+
+    tasks = [
+        {
+            "assessment_id": assessment["id"],
+            "title": assessment["title"],
+            "type": assessment["type"],
+            "class_id": assessment["class_id"],
+            "class_name": class_map.get(assessment["class_id"], "Class"),
+            "due_date": assessment["due_date"],
+            "config": assessment["config"],
+            "parent_assessment_id": assessment.get("parent_assessment_id"),
+            "status": "preview",
+            "score": None
+        }
+        for assessment in (assessments_res.data or [])
+    ]
+    return {"classes": teacher_classes, "tasks": tasks}
+
 @app.get("/api/teacher/roster/{class_id}")
 async def get_class_roster(class_id: str, authorization: Optional[str] = Header(None)):
     db = get_scoped_supabase(authorization)
@@ -233,13 +301,14 @@ async def get_class_roster(class_id: str, authorization: Optional[str] = Header(
 async def create_assessment(req: AssessmentCreateRequest, authorization: Optional[str] = Header(None)):
     """Creates a new assignment, test, or correction block for a section."""
     db = get_scoped_supabase(authorization)
+    assessment_config = {**req.config, "allow_hints": req.allow_hints}
     
     payload = {
         "class_id": req.class_id,
         "title": req.title,
         "type": req.type,
         "parent_assessment_id": req.parent_assessment_id,
-        "config": req.config,
+        "config": assessment_config,
         "due_date": req.due_date,
         "is_active": True
     }
@@ -265,6 +334,106 @@ async def get_class_assessments(class_id: str, authorization: Optional[str] = He
     except Exception as e:
         print(f"Error fetching class assessments: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/teacher/assessment/{assessment_id}/submissions")
+async def get_assessment_submissions(assessment_id: str, authorization: Optional[str] = Header(None)):
+    """Fetches all student submissions, scores, and names for a specific assessment."""
+    db = get_scoped_supabase(authorization)
+
+    subs_res = (
+        db.table("assessment_submissions")
+        .select("id, student_id, status, score, responses, submitted_at")
+        .eq("assessment_id", assessment_id)
+        .order("submitted_at", desc=True)
+        .execute()
+    )
+    submissions = subs_res.data or []
+    if not submissions:
+        return []
+
+    student_ids = [submission["student_id"] for submission in submissions]
+    prof_res = (
+        db.table("profiles")
+        .select("id, full_name, email")
+        .in_("id", student_ids)
+        .execute()
+    )
+    profile_names = {
+        profile["id"]: profile.get("full_name") or profile.get("email") or "Student"
+        for profile in (prof_res.data or [])
+    }
+
+    return [
+        {
+            "submission_id": submission["id"],
+            "student_id": submission["student_id"],
+            "student_name": profile_names.get(submission["student_id"], "Unknown Student"),
+            "status": submission.get("status", "submitted"),
+            "score": submission.get("score"),
+            "submitted_at": submission.get("submitted_at")
+        }
+        for submission in submissions
+    ]
+
+@app.get("/api/teacher/gradebook/{class_id}")
+async def get_class_gradebook(class_id: str, authorization: Optional[str] = Header(None)):
+    """Fetches all enrolled students, section assessments, and student scores."""
+    db = get_scoped_supabase(authorization)
+
+    enroll_res = db.table("enrollments").select("student_id").eq("class_id", class_id).execute()
+    student_ids = [enrollment["student_id"] for enrollment in (enroll_res.data or [])]
+    if not student_ids:
+        return {"students": [], "assessments": [], "grades": {}}
+
+    prof_res = (
+        db.table("profiles")
+        .select("id, full_name, email")
+        .in_("id", student_ids)
+        .execute()
+    )
+    students = [
+        {
+            "id": profile["id"],
+            "name": profile.get("full_name") or profile.get("email") or "Student"
+        }
+        for profile in (prof_res.data or [])
+    ]
+    students.sort(key=lambda student: student["name"].lower())
+
+    assess_res = (
+        db.table("assessments")
+        .select("id, title, type, created_at")
+        .eq("class_id", class_id)
+        .order("created_at")
+        .execute()
+    )
+    assessments = assess_res.data or []
+    if not assessments:
+        return {"students": students, "assessments": [], "grades": {}}
+
+    assessment_ids = [assessment["id"] for assessment in assessments]
+    sub_res = (
+        db.table("assessment_submissions")
+        .select("assessment_id, student_id, score, status")
+        .in_("assessment_id", assessment_ids)
+        .in_("student_id", student_ids)
+        .execute()
+    )
+
+    grades: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    for submission in (sub_res.data or []):
+        student_id = submission["student_id"]
+        assessment_id = submission["assessment_id"]
+        grades.setdefault(student_id, {})[assessment_id] = {
+            "score": submission.get("score"),
+            "status": submission.get("status", "submitted")
+        }
+
+    return {
+        "students": students,
+        "assessments": assessments,
+        "grades": grades
+    }
 
 @app.get("/api/student/tasks/{student_id}")
 async def get_student_tasks(student_id: str, authorization: Optional[str] = Header(None)):

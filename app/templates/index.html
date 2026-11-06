@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Qederam - Procedural Statistics Mastery</title>
+    <title>QEDeram - Procedural Statistics Mastery</title>
+    <link rel="icon" type="image/png" href="/static/img/ram-icon.png">
     <link rel="stylesheet" href="/static/style.css?v={{ v }}">    
 
     <!-- KaTeX CSS & JS -->
@@ -38,11 +39,13 @@
 
         .student-subnav {
             display: flex;
+            align-items: center;
+            flex-wrap: wrap;
             gap: 10px;
             margin: 16px auto 0;
             padding: 0;
         }
-        .subnav-btn {
+        .view-nav-btn {
             background: #e2e8f0;
             border: none;
             padding: 10px 18px;
@@ -53,7 +56,7 @@
             cursor: pointer;
             transition: all 0.2s ease;
         }
-        .subnav-btn.active {
+        .view-nav-btn.active {
             background: #ffffff;
             color: #0f172a;
             box-shadow: 0 -2px 5px rgba(0,0,0,0.03);
@@ -108,7 +111,22 @@
             color: #1e3a8a;
         }
         #task-runner-banner strong { display: block; }
+        #task-runner-banner .task-runner-heading {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        #task-title-display { font-weight: 700; color: #1e293b; }
         #task-progress-display { font-size: 0.85rem; }
+        .btn-subtle {
+            padding: 6px 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background: white;
+            color: #334155;
+            cursor: pointer;
+        }
         .task-progress-track {
             height: 5px;
             margin-top: 5px;
@@ -124,29 +142,21 @@
             background: #2563eb;
             transition: width 0.2s ease;
         }
-        #task-completion-card {
-            margin-top: 20px;
-            padding: 20px;
-            border: 1px solid #86efac;
-            border-radius: 10px;
-            background: #f0fdf4;
-            color: #166534;
-            text-align: center;
-        }
-        #task-completion-card h2 { margin: 0 0 8px; }
-        #task-submission-status { color: #991b1b; }
     </style>
 </head>
 <body>
 
 <div id="page-wrapper">
     <div id="page-container">
-        <header>
-            <div class="brand">
-                <a href="/" style="text-decoration: none; color: inherit; display: inline-block;">
-                    <h1>qederam.org</h1>
+        <header class="app-header">
+            <div class="logo-area" style="display: flex; align-items: center; gap: 12px;">
+                <a href="/" style="text-decoration: none; color: inherit; display: flex; align-items: center; gap: 12px;">
+                    <img src="/static/img/ram-icon.png" alt="QEDeram logo" class="brand-avatar">
+                    <div>
+                        <h1>QEDeram<span class="domain-tag">.org</span></h1>
+                    <span class="subtitle">MTH 245 Procedural Engine</span>
+                    </div>
                 </a>
-                <span class="tagline">Procedural Statistics Engine</span>
             </div>
             <div class="header-controls">
                 <a href="/teacher" id="teacher-portal-btn" class="btn-primary" style="display: none; text-decoration: none; padding: 6px 12px; font-size: 0.85rem; background: #0f172a; color: #ffffff;">📊 Teacher Portal</a>
@@ -162,13 +172,21 @@
         </header>
 
         <!-- Student View Switcher Subnav -->
-        <div class="student-subnav">
-            <button id="tab-practice-btn" class="subnav-btn active" onclick="switchStudentTab('practice')">🎲 Free Practice</button>
-            <button id="tab-tasks-btn" class="subnav-btn" onclick="switchStudentTab('tasks')">📋 Assigned Tasks <span id="tasks-count-badge" style="display: none; background: #ef4444; color: white; border-radius: 9999px; font-size: 0.75rem; padding: 1px 6px; margin-left: 4px;">0</span></button>
+        <div class="student-subnav view-nav">
+            <button id="nav-tasks-btn" class="view-nav-btn active" onclick="switchPracticeView('tasks')">📋 Assigned Tasks <span id="tasks-count-badge" style="display: none; background: #ef4444; color: white; border-radius: 9999px; font-size: 0.75rem; padding: 1px 6px; margin-left: 4px;">0</span></button>
+            <button id="nav-topics-btn" class="view-nav-btn" onclick="switchPracticeView('catalog')">📚 Skill Directory</button>
+            <div class="active-skill-pill">Active: <strong id="current-skill-name">All Normal Types (Mixed)</strong></div>
         </div>
 
         <!-- 1. Assigned Tasks View -->
-        <div id="student-tasks-view" class="task-card-container" style="display: none;">
+        <div id="tasks-view" class="task-card-container" style="display: none;">
+            <div id="teacher-class-filter-bar" style="display: none; align-items: center; gap: 10px; margin-bottom: 16px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 14px; border-radius: 8px;">
+                <span style="font-size: 0.85rem; font-weight: 600; color: #475569;">👩‍🏫 Teacher View — Class:</span>
+                <select id="teacher-practice-class-select" onchange="onTeacherPracticeClassChanged()" style="padding: 6px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.85rem; font-weight: 500;">
+                    <option value="">All Classes</option>
+                </select>
+                <span style="font-size: 0.8rem; color: #64748b; margin-left: auto;">Previewing student assignment configurations</span>
+            </div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                 <h2 style="margin: 0; font-size: 1.25rem; color: #1e293b;">Assignments &amp; Assessments</h2>
                 <button class="btn-secondary" onclick="fetchStudentTasks()" style="font-size: 0.85rem; padding: 6px 12px;">↻ Refresh</button>
@@ -178,39 +196,46 @@
             </div>
         </div>
 
+        <div id="catalog-view" class="catalog-view" style="display: none;">
+            <div class="catalog-panel">
+                <div class="catalog-header">
+                    <div>
+                        <h2>Skill Directory</h2>
+                        <p>Browse and practice skills by topic.</p>
+                    </div>
+                </div>
+                <input type="text" id="topic-search-input" placeholder="🔍 Search skills (e.g. 'matched pairs', 'z-score', 'proportion')..." oninput="filterTopicCatalog()">
+                <div id="catalog-accordion" aria-live="polite"></div>
+            </div>
+        </div>
+
         <!-- 2. Free Practice View -->
-        <div id="student-practice-view">
+        <div id="practice-view" style="display: none;">
             <main class="practice-card">
                 <div class="card-header topic-header">
-                    <div class="topic-selector-wrapper">
-                        <label for="topic-select" style="font-size: 0.85rem; font-weight: 600; color: #475569;">Topic Focus:</label>
-                        <select id="topic-select" onchange="onTopicChange()">
-                            <optgroup label="Normal Distributions">
-                                <option value="random">All Normal Distribution Types (Mixed)</option>
-                                <option value="between">Between Bounds P(a < X < b)</option>
-                                <option value="left_tail">Left Tail Area P(X < b)</option>
-                                <option value="right_tail">Right Tail Area P(X > a)</option>
-                                <option value="inverse">Inverse Cutoffs (Top/Bottom %)</option>
-                            </optgroup>
-                            <optgroup label="Confidence Intervals">
-                                <option value="ci_mean_t">1-Sample t-Interval for Mean (&mu;)</option>
-                                <option value="ci_prop_z">1-Sample z-Interval for Prop (p)</option>
-                            </optgroup>
-                        </select>
-                    </div>
                     <div id="task-runner-banner" role="status" aria-live="polite">
                         <div>
-                            <strong id="task-title-display"></strong>
-                            <span id="task-progress-display"></span>
+                            <div class="task-runner-heading">
+                                <span id="task-title-display" style="font-weight: 700; color: #1e293b;"></span>
+                                <span id="task-progress-display" class="badge">Question 1 of N</span>
+                                <span id="task-mode-badges" style="display: inline-flex; flex-wrap: wrap; gap: 6px;"></span>
+                            </div>
                             <div class="task-progress-track" role="progressbar" aria-label="Task progress" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0">
                                 <span id="task-progress-fill"></span>
                             </div>
                         </div>
-                        <button class="btn-secondary" type="button" onclick="exitTask()">Exit Task</button>
+                        <button id="btn-exit-task" class="btn-subtle" type="button">← Exit Task</button>
                     </div>
                     <div id="session-stats" class="session-stats">Attempts: 0 | Accuracy: 0%</div>
                 </div>
 
+                <div id="task-nav-bar" style="display: none; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <div id="task-question-chips" style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;"></div>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <button id="btn-task-prev" class="btn-secondary" onclick="jumpToTaskQuestion(activeTaskState.blocks.length ? activeTaskState.currentBlockIndex - 1 : activeTaskState.currentIndex - 1)" style="font-size: 0.8rem; padding: 5px 10px;">← Prev</button>
+                        <button id="btn-task-next" class="btn-secondary" onclick="jumpToTaskQuestion(activeTaskState.blocks.length ? activeTaskState.currentBlockIndex + 1 : activeTaskState.currentIndex + 1)" style="font-size: 0.8rem; padding: 5px 10px;">Next →</button>
+                    </div>
+                </div>
                 <div id="problem-prompt" class="problem-text">Loading procedural problem...</div>
 
                 <div class="graph-container" id="graph-wrapper">
@@ -226,19 +251,15 @@
                     </div>
                 </div>
 
-                <div id="multi-stage-panel" style="display: none;"></div>
+                <div id="multi-stage-panel" class="multi-stage-panel" style="display: none;" aria-live="polite"></div>
                 <div id="feedback-banner" class="banner" style="display: none;"></div>
 
                 <div id="solution-card" class="solution-panel" style="display: none;">
                     <h3>Step-by-Step Derivation</h3>
                     <div id="solution-content"></div>
                 </div>
-                <div id="task-completion-card" style="display: none;" role="status">
-                    <h2>Task complete!</h2>
-                    <p id="task-completion-summary"></p>
-                    <p id="task-submission-status"></p>
-                    <button id="task-retry-submit" class="btn-secondary" type="button" onclick="retryTaskSubmission()" style="display: none;">Retry Submission</button>
-                    <button class="btn-primary" type="button" onclick="returnToTaskDashboard()">Return to Dashboard</button>
+                <div id="task-advance-container" style="display: none; text-align: right;">
+                    <button id="task-advance-btn" class="btn-primary" onclick="advanceToNextOrSummary()" style="margin-top: 15px; font-weight: 700; padding: 10px 20px;">Continue to Next Question →</button>
                 </div>
             </main>
         </div>
@@ -522,81 +543,132 @@
         return headers;
     }
 
-    function switchStudentTab(tab) {
-        const practiceBtn = document.getElementById('tab-practice-btn');
-        const tasksBtn = document.getElementById('tab-tasks-btn');
-        const practiceView = document.getElementById('student-practice-view');
-        const tasksView = document.getElementById('student-tasks-view');
+    function switchStudentTab(tab, shouldLoadTasks = true) {
+        switchPracticeView(tab, shouldLoadTasks);
+    }
 
-        if (tab === 'tasks') {
-            tasksBtn.className = 'subnav-btn active';
-            practiceBtn.className = 'subnav-btn';
-            tasksView.style.display = 'block';
-            practiceView.style.display = 'none';
-            fetchStudentTasks();
-        } else {
-            practiceBtn.className = 'subnav-btn active';
-            tasksBtn.className = 'subnav-btn';
-            practiceView.style.display = 'block';
-            tasksView.style.display = 'none';
+    function renderStudentTasks(tasks) {
+        const container = document.getElementById('tasks-list');
+        const badge = document.getElementById('tasks-count-badge');
+        badge.innerText = tasks.length;
+        badge.style.display = tasks.length > 0 ? 'inline-block' : 'none';
+
+        if (tasks.length === 0) {
+            const emptyMessage = window.currentUserRole === 'teacher'
+                ? 'No active assessments found for the selected class.'
+                : 'No active tasks assigned for your enrolled classes.';
+            container.innerHTML = `<p style="color: #64748b;">${emptyMessage}</p>`;
+            return;
         }
+
+        container.replaceChildren();
+        tasks.forEach(task => {
+            const item = document.createElement('div');
+            item.className = 'task-item';
+
+            const details = document.createElement('div');
+            const heading = document.createElement('div');
+            heading.style.marginBottom = '4px';
+            const type = task.type || task.task_type || 'assignment';
+            const typeBadge = document.createElement('span');
+            typeBadge.className = `task-badge ${type === 'test' ? 'task-badge-test' : (type === 'test_correction' ? 'task-badge-correction' : 'task-badge-assignment')}`;
+            typeBadge.textContent = type.replace('_', ' ');
+            const title = document.createElement('strong');
+            title.textContent = task.title || 'Assigned Task';
+            heading.append(typeBadge, title);
+
+            const metadata = document.createElement('div');
+            metadata.style.cssText = 'font-size: 0.85rem; color: #64748b;';
+            const dueText = task.due_date ? `Due ${new Date(task.due_date).toLocaleDateString()}` : 'No due date';
+            metadata.textContent = `${task.class_name || 'Class'} • ${dueText}`;
+            details.append(heading, metadata);
+
+            const actions = document.createElement('div');
+            actions.style.cssText = 'display: flex; align-items: center; gap: 12px;';
+            const status = task.status || 'not_started';
+            const statusBadge = document.createElement('span');
+            statusBadge.className = `status-badge status-${status}`;
+            statusBadge.textContent = status === 'submitted' && task.score !== null && task.score !== undefined
+                ? `Submitted · ${task.score}%`
+                : status.replace('_', ' ');
+            const button = document.createElement('button');
+            button.className = 'btn-primary';
+            button.style.cssText = 'padding: 6px 14px; font-size: 0.85rem;';
+            button.textContent = status === 'preview'
+                ? 'Preview'
+                : status === 'not_started' ? 'Start' : 'Continue';
+            button.addEventListener('click', () => {
+                window.startStudentTask(task).catch(error => {
+                    console.error('Could not start assigned task:', error);
+                    const message = document.createElement('p');
+                    message.setAttribute('role', 'alert');
+                    message.style.color = '#ef4444';
+                    message.textContent = error.message || 'Could not start this task.';
+                    container.prepend(message);
+                });
+            });
+            actions.append(statusBadge, button);
+            item.append(details, actions);
+            container.appendChild(item);
+        });
     }
 
     async function fetchStudentTasks() {
         if (!window.currentUser) {
             document.getElementById('tasks-list').innerHTML = `<p style="color: #64748b;">Please sign in with your student account to view assigned work.</p>`;
-            return;
+            return [];
         }
 
         const container = document.getElementById('tasks-list');
         container.innerHTML = `<p style="color: #94a3b8;">Loading assignments and tests...</p>`;
 
         try {
+            if (window.currentUserRole === 'teacher') {
+                const select = document.getElementById('teacher-practice-class-select');
+                const selectedClassId = select?.value || '';
+                const query = selectedClassId
+                    ? `?class_id=${encodeURIComponent(selectedClassId)}`
+                    : '';
+                const response = await fetch(
+                    `/api/teacher/classes/${encodeURIComponent(window.currentUser.id)}/tasks${query}`,
+                    { headers: getAuthHeaders() }
+                );
+                if (!response.ok) throw new Error(`Could not load class tasks (${response.status}).`);
+                const data = await response.json();
+
+                const filterBar = document.getElementById('teacher-class-filter-bar');
+                if (filterBar) filterBar.style.display = 'flex';
+                if (select && select.options.length <= 1 && Array.isArray(data.classes)) {
+                    select.replaceChildren(new Option('All Classes', ''));
+                    data.classes.forEach(course => select.add(new Option(course.name, course.id)));
+                    if (selectedClassId) select.value = selectedClassId;
+                }
+
+                renderStudentTasks(data.tasks || []);
+                return data.tasks || [];
+            }
+
+            const filterBar = document.getElementById('teacher-class-filter-bar');
+            if (filterBar) filterBar.style.display = 'none';
             const res = await fetch(`/api/student/tasks/${window.currentUser.id}`, { headers: getAuthHeaders() });
+            if (!res.ok) throw new Error(`Could not load assigned tasks (${res.status}).`);
             const tasks = await res.json();
-
-            const badge = document.getElementById('tasks-count-badge');
-            if (tasks.length > 0) {
-                badge.innerText = tasks.length;
-                badge.style.display = 'inline-block';
-            } else {
-                badge.style.display = 'none';
-            }
-
-            if (tasks.length === 0) {
-                container.innerHTML = `<p style="color: #64748b;">No active tasks assigned for your enrolled classes.</p>`;
-                return;
-            }
-
-            container.innerHTML = '';
-            tasks.forEach(t => {
-                const item = document.createElement('div');
-                item.className = 'task-item';
-                const badgeClass = t.type === 'test' ? 'task-badge-test' : (t.type === 'test_correction' ? 'task-badge-correction' : 'task-badge-assignment');
-                const dueText = t.due_date ? `Due ${new Date(t.due_date).toLocaleDateString()}` : 'No due date';
-
-                item.innerHTML = `
-                    <div>
-                        <div style="margin-bottom: 4px;">
-                            <span class="task-badge ${badgeClass}">${t.type.replace('_', ' ')}</span>
-                            <strong>${t.title}</strong>
-                        </div>
-                        <div style="font-size: 0.85rem; color: #64748b;">
-                            ${t.class_name} • ${dueText}
-                        </div>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <span class="status-badge status-${t.status}">${t.status.replace('_', ' ')}</span>
-                        <button class="btn-primary" onclick="launchTask('${t.assessment_id}')" style="padding: 6px 14px; font-size: 0.85rem;">
-                            ${t.status === 'not_started' ? 'Start' : 'Continue'}
-                        </button>
-                    </div>
-                `;
-                container.appendChild(item);
-            });
-        } catch (e) {
-            container.innerHTML = `<p style="color: #ef4444;">Failed to load assignments.</p>`;
+            renderStudentTasks(tasks);
+            return tasks;
+        } catch (error) {
+            const message = document.createElement('p');
+            message.style.color = '#ef4444';
+            message.textContent = error.message || 'Failed to load assignments.';
+            container.replaceChildren(message);
+            return [];
         }
+    }
+    function onTeacherPracticeClassChanged() {
+        return fetchStudentTasks();
+    }
+
+    function loadStudentTasks() {
+        return fetchStudentTasks();
     }
 
     function openJoinModal() {
@@ -628,5 +700,17 @@
         }
     }
 </script>
+<div id="task-completion-modal" class="modal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); z-index: 9999; align-items: center; justify-content: center;">
+    <div class="modal-card" style="background: #ffffff; padding: 32px; border-radius: 12px; max-width: 480px; width: 90%; text-align: center; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);">
+        <div style="font-size: 3rem; margin-bottom: 12px;" id="completion-icon">🎉</div>
+        <h2 id="completion-title" style="margin: 0 0 8px 0; color: #0f172a;">Task Complete!</h2>
+        <p id="completion-subtitle" style="color: #64748b; margin-bottom: 20px;">Here is how you performed:</p>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+            <div style="font-size: 2rem; font-weight: 800; color: #1e293b;" id="completion-score">0 / 0</div>
+            <div style="font-size: 0.9rem; color: #64748b;" id="completion-percent">(0%)</div>
+        </div>
+        <button id="btn-finish-task" class="btn-primary" style="width: 100%; padding: 12px; font-size: 1rem;">Return to Assigned Tasks</button>
+    </div>
+</div>
 </body>
 </html>

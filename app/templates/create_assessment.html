@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Assessment - Qederam</title>
+    <link rel="stylesheet" href="/static/style.css?v={{ static_version }}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #f1f5f9; color: #1e293b; }
+        .builder-page { min-height: 100vh; display: flex; flex-direction: column; }
+        .builder-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 14px 24px;
+            background: #fff;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .builder-header h2 { margin: 0; text-align: center; font-size: 1.25rem; }
+        .builder-header > * { flex: 1; }
+        .builder-header > :first-child { text-align: left; }
+        .builder-header > :last-child { text-align: right; }
+        .builder-header a { text-decoration: none; white-space: nowrap; }
+        .meta-bar {
+            display: grid;
+            grid-template-columns: minmax(160px, 1fr) minmax(200px, 1.4fr) minmax(170px, 1fr) minmax(155px, 0.9fr);
+            gap: 14px;
+            padding: 14px 24px;
+            background: #fff;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .meta-field label { display: block; margin-bottom: 5px; font-size: 0.85rem; font-weight: 600; }
+        .meta-field input,
+        .meta-field select,
+        .builder-search {
+            width: 100%;
+            padding: 9px 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background: #fff;
+            font: inherit;
+        }
+        #builder-split-workspace {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            height: calc(100vh - 160px);
+            min-height: 520px;
+            padding: 16px 24px;
+            box-sizing: border-box;
+        }
+        .builder-column { min-width: 0; overflow: hidden; }
+        .builder-column h3 { margin: 0 0 10px; font-size: 1.05rem; }
+        #builder-catalog-scroll,
+        #builder-blocks-list {
+            height: calc(100% - 60px);
+            overflow-y: auto;
+            padding-right: 8px;
+        }
+        #builder-blocks-list {
+            padding: 12px;
+            border: 2px dashed #cbd5e1;
+            border-radius: 8px;
+            background: #f8fafc;
+        }
+        .builder-skill-category { margin-top: 10px; overflow: hidden; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; }
+        .builder-skill-category summary { padding: 11px 12px; background: #f8fafc; cursor: pointer; font-weight: 700; }
+        .builder-skill-rows { padding: 8px; }
+        .builder-skill-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 7px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 7px; }
+        .builder-skill-info { min-width: 0; font-weight: 600; }
+        .math-pill { display: inline-block; margin-top: 4px; padding: 4px 8px; border-radius: 9999px; background: #f1f5f9; color: #475569; font-size: 0.8rem; }
+        .btn-subtle { padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #334155; cursor: pointer; font: inherit; }
+        .blocks-empty { padding: 30px 16px; border: 1px dashed #cbd5e1; border-radius: 8px; color: #64748b; text-align: center; }
+        .problem-block { margin-bottom: 10px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; }
+        .problem-block-header, .problem-block-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+        .problem-block-title { flex: 1; min-width: 100px; font-weight: 700; }
+        .block-actions { display: flex; gap: 4px; }
+        .block-actions button { padding: 4px 8px; }
+        .problem-block-controls { margin-top: 10px; }
+        .problem-block-controls label { color: #475569; font-size: 0.85rem; }
+        .problem-block-controls input, .problem-block-controls select { padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; font: inherit; }
+        .problem-block-controls input[type="number"] { width: 58px; text-align: center; }
+        .loop-indicator { display: inline-block; margin-top: 9px; padding: 4px 8px; border-radius: 9999px; background: #eff6ff; color: #1e40af; font-size: 0.78rem; }
+        .builder-error { display: none; margin: 0 24px 12px; padding: 10px 12px; border-radius: 6px; background: #fee2e2; color: #991b1b; }
+        @media (max-width: 800px) {
+            .builder-header { flex-wrap: wrap; padding: 12px 16px; }
+            .builder-header > * { flex: auto; }
+            .builder-header h2 { order: -1; flex-basis: 100%; }
+            .meta-bar { grid-template-columns: 1fr 1fr; padding: 12px 16px; }
+            #builder-split-workspace { grid-template-columns: 1fr; height: auto; padding: 12px 16px; }
+            .builder-column { height: min(60vh, 500px); }
+            #builder-catalog-scroll, #builder-blocks-list { height: calc(100% - 56px); }
+        }
+        @media (max-width: 480px) { .meta-bar { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+<main class="builder-page">
+    <header class="builder-header">
+        <a href="/teacher" class="btn-secondary">← Back to Dashboard</a>
+        <h2>Create Assignment or Assessment</h2>
+        <button id="publish-assessment-btn" class="btn-primary" type="button" onclick="publishAssessment()">🚀 Publish to Class</button>
+    </header>
+
+    <section class="meta-bar" aria-label="Assessment details">
+        <div class="meta-field">
+            <label for="class-select">Class</label>
+            <select id="class-select"><option value="">Loading classes...</option></select>
+        </div>
+        <div class="meta-field">
+            <label for="assessment-title">Title</label>
+            <input id="assessment-title" type="text" placeholder="e.g. Unit 4 Review Quiz">
+        </div>
+        <div class="meta-field">
+            <label for="assessment-type">Task Type</label>
+            <select id="assessment-type">
+                <option value="assignment">Homework Assignment</option>
+                <option value="test">Timed Test</option>
+                <option value="test_correction">Test Corrections</option>
+            </select>
+        </div>
+        <div class="meta-field">
+            <label for="assessment-due-date">Due Date (Optional)</label>
+            <input id="assessment-due-date" type="date">
+        </div>
+        <div class="meta-field" id="parent-test-field" style="display: none;">
+            <label for="parent-test-select">Exam for Corrections</label>
+            <select id="parent-test-select"><option value="">Select a test...</option></select>
+        </div>
+    </section>
+
+    <div id="builder-error" class="builder-error" role="alert"></div>
+    <section id="builder-split-workspace">
+        <section class="builder-column" id="builder-catalog-col">
+            <h3>Available Skills Catalog</h3>
+            <input class="builder-search" type="search" id="builder-skill-search" placeholder="🔍 Search skills..." autocomplete="off">
+            <div id="builder-catalog-scroll"><div id="builder-catalog-categories"></div></div>
+        </section>
+        <section class="builder-column" id="builder-queue-col">
+            <h3>Configured Problem Blocks (<span id="total-block-questions">0</span> Questions / <span id="total-block-count">0</span> Blocks)</h3>
+            <div id="builder-blocks-list"></div>
+        </section>
+    </section>
+</main>
+
+<script>
+    window.SUPABASE_URL = {{ supabase_url | tojson }};
+    window.SUPABASE_KEY = {{ supabase_key | tojson }};
+
+    let supabaseClient = null;
+    let currentUser = null;
+    let currentSession = null;
+    let currentClasses = [];
+    let currentAssessments = [];
+    let assessmentBlocks = [];
+
+    const ASSESSABLE_SKILLS = [
+        { id: 'random', title: 'All Normal Types (Mixed)', topic: 'Normal Distributions', notation: '\\mathcal{N}(\\mu, \\sigma)' },
+        { id: 'between', title: 'Between Bounds P(a < X < b)', topic: 'Normal Distributions', notation: 'P(a < X < b)' },
+        { id: 'left_tail', title: 'Left Tail Cumulative Area', topic: 'Normal Distributions', notation: 'P(X < b)' },
+        { id: 'right_tail', title: 'Right Tail Cumulative Area', topic: 'Normal Distributions', notation: 'P(X > a)' },
+        { id: 'inverse', title: 'Inverse Cutoffs & Percentiles', topic: 'Normal Distributions', notation: 'x = \\mu + z\\sigma' },
+        { id: 'ci_mean_t', title: '1-Sample t-Interval for Mean', topic: 'Confidence Intervals', notation: '\\mu' },
+        { id: 'ci_prop_z', title: '1-Sample z-Interval for Proportion', topic: 'Confidence Intervals', notation: 'p' },
+        { id: 'ci_mean_t_2samp', title: '2-Sample t-Interval for Means', topic: 'Confidence Intervals', notation: '\\mu_1 - \\mu_2' },
+        { id: 'ci_prop_z_2samp', title: '2-Sample z-Interval for Proportions', topic: 'Confidence Intervals', notation: 'p_1 - p_2' },
+        { id: 'ci_matched_pairs_t', title: 'Matched Pairs t-Interval', topic: 'Confidence Intervals', notation: '\\mu_{\\text{diff}}' },
+        { id: 'ht_prop_z', title: '1-Sample z-Test for Proportion', topic: 'Hypothesis Testing', notation: 'H_0: p = p_0' },
+        { id: 'ht_mean_t', title: '1-Sample t-Test for Mean', topic: 'Hypothesis Testing', notation: 'H_0: \\mu = \\mu_0' }
+    ];
+
+    function showBuilderError(message) {
+        const element = document.getElementById('builder-error');
+        element.textContent = message;
+        element.style.display = 'block';
+    }
+
+    function clearBuilderError() {
+        const element = document.getElementById('builder-error');
+        element.textContent = '';
+        element.style.display = 'none';
+    }
+
+    function getAuthHeaders() {
+        const headers = { 'Content-Type': 'application/json' };
+        if (currentSession?.access_token) headers.Authorization = `Bearer ${currentSession.access_token}`;
+        return headers;
+    }
+
+    function triggerKaTeX(element) {
+        if (window.renderMathInElement && element) {
+            window.renderMathInElement(element, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '\\(', right: '\\)', display: false }
+                ],
+                throwOnError: false
+            });
+        }
+    }
+
+    function renderCatalog() {
+        const container = document.getElementById('builder-catalog-categories');
+        container.replaceChildren();
+        const categories = new Map();
+        ASSESSABLE_SKILLS.forEach(skill => {
+            if (!categories.has(skill.topic)) categories.set(skill.topic, []);
+            categories.get(skill.topic).push(skill);
+        });
+        categories.forEach((skills, topic) => {
+            const category = document.createElement('details');
+            category.className = 'builder-skill-category';
+            category.open = true;
+            category.dataset.searchText = topic.toLowerCase();
+            const heading = document.createElement('summary');
+            heading.textContent = topic;
+            category.appendChild(heading);
+            const rows = document.createElement('div');
+            rows.className = 'builder-skill-rows';
+            skills.forEach(skill => {
+                const row = document.createElement('div');
+                row.className = 'builder-skill-row';
+                row.dataset.searchText = `${topic} ${skill.title} ${skill.notation}`.toLowerCase();
+                const info = document.createElement('div');
+                info.className = 'builder-skill-info';
+                const title = document.createElement('div');
+                title.textContent = skill.title;
+                const notation = document.createElement('span');
+                notation.className = 'math-pill';
+                notation.textContent = `\\(${skill.notation}\\)`;
+                info.append(title, notation);
+                const add = document.createElement('button');
+                add.type = 'button';
+                add.className = 'btn-subtle';
+                add.textContent = '+ Add Block';
+                add.addEventListener('click', () => addSkillBlock(skill.id, skill.title));
+                row.append(info, add);
+                rows.appendChild(row);
+            });
+            category.appendChild(rows);
+            container.appendChild(category);
+        });
+        filterBuilderCatalog();
+        triggerKaTeX(container);
+    }
+
+    function filterBuilderCatalog() {
+        const query = document.getElementById('builder-skill-search').value.trim().toLowerCase();
+        document.querySelectorAll('.builder-skill-category').forEach(category => {
+            const categoryMatches = query && category.dataset.searchText.includes(query);
+            let visible = 0;
+            category.querySelectorAll('.builder-skill-row').forEach(row => {
+                const matches = !query || categoryMatches || row.dataset.searchText.includes(query);
+                row.style.display = matches ? '' : 'none';
+                if (matches) visible += 1;
+            });
+            category.style.display = visible ? '' : 'none';
+            if (query && visible) category.open = true;
+            if (!query) category.open = true;
+        });
+    }
+
+    function addSkillBlock(skillId, title) {
+        assessmentBlocks.push({
+            id: `blk_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+            topic: skillId,
+            title,
+            count: 1,
+            mode: 'no_hints'
+        });
+        renderBlocksList();
+    }
+
+    function getTotalQuestionCount() {
+        return assessmentBlocks.reduce((total, block) => total + block.count, 0);
+    }
+
+    function renderBlocksList() {
+        const container = document.getElementById('builder-blocks-list');
+        container.replaceChildren();
+        document.getElementById('total-block-questions').textContent = String(getTotalQuestionCount());
+        document.getElementById('total-block-count').textContent = String(assessmentBlocks.length);
+
+        if (!assessmentBlocks.length) {
+            const empty = document.createElement('div');
+            empty.className = 'blocks-empty';
+            empty.textContent = "👈 Click '+ Add Block' on any skill on the left to start building your assignment.";
+            container.appendChild(empty);
+            return;
+        }
+
+        assessmentBlocks.forEach((block, index) => {
+            const card = document.createElement('article');
+            card.className = 'problem-block';
+            const header = document.createElement('div');
+            header.className = 'problem-block-header';
+            const title = document.createElement('span');
+            title.className = 'problem-block-title';
+            title.textContent = block.title;
+            const skill = ASSESSABLE_SKILLS.find(item => item.id === block.topic);
+            const notation = document.createElement('span');
+            notation.className = 'math-pill';
+            notation.textContent = skill ? `\\(${skill.notation}\\)` : '';
+            const actions = document.createElement('div');
+            actions.className = 'block-actions';
+            [
+                { label: '▲', title: 'Move Up', direction: -1, disabled: index === 0 },
+                { label: '▼', title: 'Move Down', direction: 1, disabled: index === assessmentBlocks.length - 1 }
+            ].forEach(control => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'btn-subtle';
+                button.textContent = control.label;
+                button.title = control.title;
+                button.disabled = control.disabled;
+                button.addEventListener('click', () => moveBlock(index, control.direction));
+                actions.appendChild(button);
+            });
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'btn-subtle';
+            remove.textContent = '✕';
+            remove.title = 'Remove block';
+            remove.addEventListener('click', () => removeBlock(block.id));
+            actions.appendChild(remove);
+            header.append(title, notation, actions);
+
+            const controls = document.createElement('div');
+            controls.className = 'problem-block-controls';
+            const countLabel = document.createElement('label');
+            countLabel.textContent = 'Questions: ';
+            const count = document.createElement('input');
+            count.id = `count-block-${block.id}`;
+            count.type = 'number';
+            count.min = '1';
+            count.max = '50';
+            count.value = String(block.count);
+            count.addEventListener('input', () => updateBlockCount(block.id, count.value));
+            countLabel.appendChild(count);
+
+            const modeLabel = document.createElement('label');
+            modeLabel.textContent = 'Mode: ';
+            const mode = document.createElement('select');
+            mode.id = `mode-block-${block.id}`;
+            [
+                ['no_hints', '📝 Test Mode (No Hints)'],
+                ['all_hints', '📘 Guided Practice (All Hints ON)'],
+                ['scaffold', '🎓 Scaffold (1st Hint ON, 2nd Hint OFF; Retry on mistake)'],
+                ['mastery', '🎯 Mastery Loop (Must solve clean with Hint OFF)']
+            ].forEach(([value, label]) => {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = label;
+                option.selected = block.mode === value;
+                mode.appendChild(option);
+            });
+            mode.addEventListener('change', () => updateBlockMode(block.id, mode.value));
+            modeLabel.appendChild(mode);
+            controls.append(countLabel, modeLabel);
+
+            const adaptive = document.createElement('div');
+            adaptive.className = 'loop-indicator';
+            adaptive.textContent = block.mode === 'scaffold'
+                ? 'Adaptive: Miss unassisted → extra problem with Hint ON'
+                : block.mode === 'mastery'
+                    ? 'Adaptive: Repeats until answered correctly with Hint OFF'
+                    : block.mode === 'all_hints'
+                        ? 'Guided: Hints ON for every question'
+                        : 'Independent: Hints OFF for every question';
+            const masteryLimit = document.createElement('div');
+            masteryLimit.id = `mastery-limit-wrap-${block.id}`;
+            masteryLimit.style.cssText = `display: ${block.mode === 'mastery' ? 'flex' : 'none'}; align-items: center; gap: 6px; font-size: 0.85rem; color: #475569; margin-top: 6px;`;
+            const limitLabel = document.createElement('span');
+            limitLabel.textContent = 'Max Attempts per Student:';
+            const limitInput = document.createElement('input');
+            limitInput.type = 'number';
+            limitInput.id = `max-attempts-${block.id}`;
+            limitInput.min = '2';
+            limitInput.max = '15';
+            limitInput.value = String(block.max_attempts || 4);
+            limitInput.style.cssText = 'width: 50px; text-align: center; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 4px;';
+            limitInput.addEventListener('input', () => updateBlockMaxAttempts(block.id, limitInput.value));
+            const limitHelp = document.createElement('span');
+            limitHelp.style.cssText = 'font-size: 0.75rem; color: #64748b;';
+            limitHelp.textContent = '(Prevents endless looping)';
+            masteryLimit.append(limitLabel, limitInput, limitHelp);
+            const thresholdWrap = document.createElement('div');
+            thresholdWrap.id = `mastery-threshold-wrap-${block.id}`;
+            thresholdWrap.style.cssText = `display: ${block.mode === 'mastery' ? 'flex' : 'none'}; align-items: center; gap: 6px; font-size: 0.85rem; color: #475569; margin-top: 6px;`;
+            const thresholdLabel = document.createElement('span');
+            thresholdLabel.textContent = 'Required Unassisted Passes:';
+            const thresholdInput = document.createElement('input');
+            thresholdInput.type = 'number';
+            thresholdInput.id = `required-passes-${block.id}`;
+            thresholdInput.min = '1';
+            thresholdInput.max = '5';
+            thresholdInput.value = String(block.required_clean_passes || 1);
+            thresholdInput.style.cssText = 'width: 50px; text-align: center; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 4px;';
+            thresholdInput.addEventListener('input', () => updateBlockCleanPasses(block.id, thresholdInput.value));
+            const thresholdHelp = document.createElement('span');
+            thresholdHelp.style.cssText = 'font-size: 0.75rem; color: #64748b;';
+            thresholdHelp.textContent = '(Unhinted correct answers needed to master)';
+            thresholdWrap.append(thresholdLabel, thresholdInput, thresholdHelp);
+            card.append(header, controls, adaptive, masteryLimit, thresholdWrap);
+            container.appendChild(card);
+        });
+        triggerKaTeX(container);
+    }
+
+    function updateBlockCleanPasses(blockId, value) {
+        const block = assessmentBlocks.find(item => item.id === blockId);
+        const parsed = parseInt(value, 10);
+        if (block && Number.isInteger(parsed)) {
+            block.required_clean_passes = Math.min(5, Math.max(1, parsed));
+            const input = document.getElementById(`required-passes-${blockId}`);
+            if (input && parsed !== block.required_clean_passes) input.value = String(block.required_clean_passes);
+        }
+    }
+
+    function updateBlockMaxAttempts(blockId, value) {
+        const block = assessmentBlocks.find(item => item.id === blockId);
+        const parsed = parseInt(value, 10);
+        if (block && Number.isInteger(parsed)) {
+            block.max_attempts = Math.min(15, Math.max(2, parsed));
+            const input = document.getElementById(`max-attempts-${blockId}`);
+            if (input && parsed !== block.max_attempts) input.value = String(block.max_attempts);
+        }
+    }
+
+    function updateBlockCount(blockId, value) {
+        const block = assessmentBlocks.find(item => item.id === blockId);
+        const parsed = parseInt(value, 10);
+        if (!block || !Number.isInteger(parsed)) return;
+        block.count = Math.min(50, Math.max(block.mode === 'scaffold' || block.mode === 'mastery' ? 2 : 1, parsed));
+        const input = document.getElementById(`count-block-${blockId}`);
+        if (input && parsed !== block.count) input.value = String(block.count);
+        updateBlockTotals();
+    }
+
+    function updateBlockMode(blockId, newMode) {
+        const block = assessmentBlocks.find(item => item.id === blockId);
+        if (!block || !['no_hints', 'all_hints', 'scaffold', 'mastery'].includes(newMode)) return;
+        block.mode = newMode;
+        if ((newMode === 'scaffold' || newMode === 'mastery') && block.count < 2) block.count = 2;
+        if (newMode === 'mastery' && !block.max_attempts) block.max_attempts = 4;
+        if (newMode === 'mastery' && !block.required_clean_passes) block.required_clean_passes = 1;
+        const countInput = document.getElementById(`count-block-${blockId}`);
+        if (countInput) countInput.value = String(block.count);
+        const masteryLimit = document.getElementById(`mastery-limit-wrap-${blockId}`);
+        if (masteryLimit) masteryLimit.style.display = newMode === 'mastery' ? 'flex' : 'none';
+        const thresholdWrap = document.getElementById(`mastery-threshold-wrap-${blockId}`);
+        if (thresholdWrap) thresholdWrap.style.display = newMode === 'mastery' ? 'flex' : 'none';
+        renderBlocksList();
+    }
+
+    function updateBlockTotals() {
+        document.getElementById('total-block-questions').textContent = String(getTotalQuestionCount());
+        document.getElementById('total-block-count').textContent = String(assessmentBlocks.length);
+    }
+
+    function moveBlock(index, direction) {
+        const destination = index + direction;
+        if (destination < 0 || destination >= assessmentBlocks.length) return;
+        const [block] = assessmentBlocks.splice(index, 1);
+        assessmentBlocks.splice(destination, 0, block);
+        renderBlocksList();
+    }
+
+    function removeBlock(blockId) {
+        assessmentBlocks = assessmentBlocks.filter(block => block.id !== blockId);
+        renderBlocksList();
+    }
+
+    async function handleSession(session) {
+        currentSession = session;
+        currentUser = session?.user || null;
+        if (!currentUser) {
+            window.location.replace('/teacher');
+            return;
+        }
+        await loadTeacherClasses();
+    }
+
+    async function loadTeacherClasses() {
+        const select = document.getElementById('class-select');
+        select.replaceChildren(new Option('Loading classes...', ''));
+        const response = await fetch(`/api/teacher/classes/${encodeURIComponent(currentUser.id)}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) throw new Error(`Could not load teacher classes (${response.status}).`);
+        currentClasses = await response.json();
+        select.replaceChildren(new Option('Select a class...', ''));
+        currentClasses.forEach(item => select.add(new Option(item.name, item.id)));
+        const requestedClass = new URLSearchParams(window.location.search).get('class_id');
+        if (requestedClass && currentClasses.some(item => String(item.id) === requestedClass)) {
+            select.value = requestedClass;
+        } else if (currentClasses.length === 1) {
+            select.value = currentClasses[0].id;
+        }
+        if (!currentClasses.length) showBuilderError('Create a class from the teacher dashboard before publishing an assessment.');
+        else if (select.value) await loadClassAssessments();
+    }
+
+    async function loadClassAssessments() {
+        const classId = document.getElementById('class-select').value;
+        if (!classId) return;
+        const response = await fetch(`/api/teacher/assessments/${encodeURIComponent(classId)}`, {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) throw new Error(`Could not load class assessments (${response.status}).`);
+        currentAssessments = await response.json();
+        const parentSelect = document.getElementById('parent-test-select');
+        parentSelect.replaceChildren(new Option('Select a test...', ''));
+        currentAssessments.filter(item => item.type === 'test').forEach(item => {
+            parentSelect.add(new Option(item.title, item.id));
+        });
+    }
+
+    async function publishAssessment() {
+        clearBuilderError();
+        const classId = document.getElementById('class-select').value;
+        const title = document.getElementById('assessment-title').value.trim();
+        const type = document.getElementById('assessment-type').value;
+        if (!classId) return showBuilderError('Select a class before publishing.');
+        if (!title) return showBuilderError('Enter a title before publishing.');
+        if (assessmentBlocks.length === 0) {
+            return showBuilderError('Add at least one problem block before publishing.');
+        }
+        const parentId = type === 'test_correction'
+            ? document.getElementById('parent-test-select').value
+            : null;
+        if (type === 'test_correction' && !parentId) {
+            return showBuilderError('Select the exam these corrections are for.');
+        }
+        const config = {
+            blocks: assessmentBlocks.map(block => ({
+                id: block.id,
+                topic: block.topic,
+                title: block.title,
+                count: parseInt(block.count, 10) || 1,
+                mode: block.mode,
+                max_attempts: parseInt(block.max_attempts, 10) || 4,
+                required_clean_passes: parseInt(block.required_clean_passes, 10) || 1
+            })),
+            total_count: getTotalQuestionCount()
+        };
+        const publishButton = document.getElementById('publish-assessment-btn');
+        publishButton.disabled = true;
+        try {
+            const response = await fetch('/api/teacher/assessments/create', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({
+                    class_id: classId,
+                    title,
+                    type,
+                    parent_assessment_id: parentId,
+                    config,
+                    allow_hints: type !== 'test_correction' && assessmentBlocks.some(block => block.mode !== 'no_hints'),
+                    due_date: document.getElementById('assessment-due-date').value || null
+                })
+            });
+            if (!response.ok) {
+                const result = await response.json().catch(() => ({}));
+                throw new Error(result.detail || `Assessment could not be published (${response.status}).`);
+            }
+            alert('Assessment published to your class.');
+            window.location.href = '/teacher';
+        } catch (error) {
+            showBuilderError(error.message || 'Assessment could not be published.');
+        } finally {
+            publishButton.disabled = false;
+        }
+    }
+
+    document.getElementById('builder-skill-search').addEventListener('input', filterBuilderCatalog);
+    document.getElementById('class-select').addEventListener('change', () => {
+        clearBuilderError();
+        loadClassAssessments().catch(error => showBuilderError(error.message));
+    });
+    document.getElementById('assessment-type').addEventListener('change', event => {
+        document.getElementById('parent-test-field').style.display =
+            event.target.value === 'test_correction' ? 'block' : 'none';
+    });
+
+    async function initializeBuilder() {
+        renderCatalog();
+        renderBlocksList();
+        if (!window.SUPABASE_URL || !window.SUPABASE_KEY || !window.supabase) {
+            showBuilderError('Sign-in is unavailable because Supabase is not configured.');
+            return;
+        }
+        supabaseClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_KEY);
+        const { data, error } = await supabaseClient.auth.getSession();
+        if (error) throw error;
+        await handleSession(data.session);
+        supabaseClient.auth.onAuthStateChange((_event, session) => {
+            handleSession(session).catch(error => {
+                console.error('Could not initialize assignment builder session:', error);
+                showBuilderError(error.message || 'Could not load teacher session.');
+            });
+        });
+
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('type') === 'test_correction') {
+            document.getElementById('assessment-type').value = 'test_correction';
+            document.getElementById('parent-test-field').style.display = 'block';
+            document.getElementById('assessment-title').value = params.get('title') || '';
+            if (params.get('parent_assessment_id')) {
+                document.getElementById('parent-test-select').value = params.get('parent_assessment_id');
+            }
+        }
+    }
+
+    window.addEventListener('load', () => {
+        initializeBuilder().catch(error => {
+            console.error('Could not initialize assignment builder:', error);
+            showBuilderError(error.message || 'Could not load the assignment builder.');
+        });
+    });
+</script>
+</body>
+</html>
