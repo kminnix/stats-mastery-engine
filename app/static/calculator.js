@@ -28,10 +28,10 @@ function suppressMathLiveIcons() {
         window.mathVirtualKeyboard.visible = false;
     }
     const mf = getMathField();
-    if (mf && mf.shadowRoot) {
-        const toggles = mf.shadowRoot.querySelectorAll('.ML__virtual-keyboard-toggle, .ML__menu-toggle');
-        toggles.forEach(t => t.style.display = 'none');
-    }
+    const toggles = mf?.shadowRoot?.querySelectorAll(
+        '.ML__virtual-keyboard-toggle, .ML__menu-toggle, button[part="virtual-keyboard-toggle"], button[part="menu-toggle"]'
+    );
+    toggles?.forEach(el => el.style.setProperty('display', 'none', 'important'));
 }
 
 function updateBodyDockGutters(mode) {
@@ -478,9 +478,7 @@ window.addEventListener('DOMContentLoaded', () => {
                 calcNav('down');
             }
         });
-        mf.addEventListener('focus', () => {
-            suppressMathLiveIcons();
-        });
+        mf.addEventListener('focus', suppressMathLiveIcons);
     }
 });
 window.bringToFront = bringToFront;

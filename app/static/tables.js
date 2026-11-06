@@ -30,6 +30,7 @@ function toggleFloatingWindow() {
             renderMathInElement(activePane, {
                 delimiters: [
                     { left: '$$', right: '$$', display: true },
+                    { left: '$', right: '$', display: false },
                     { left: '\\(', right: '\\)', display: false }
                 ],
                 throwOnError: false
@@ -193,6 +194,7 @@ function switchTab(tabId) {
         renderMathInElement(activePane, {
             delimiters: [
                 { left: '$$', right: '$$', display: true },
+                { left: '$', right: '$', display: false },
                 { left: '\\(', right: '\\)', display: false }
             ],
             throwOnError: false
@@ -248,6 +250,18 @@ function renderTableA() {
     }
     html += '</tbody>';
     tableEl.innerHTML = html;
+
+    const tablePane = tableEl.closest('.tab-pane');
+    if (window.renderMathInElement && tablePane) {
+        renderMathInElement(tablePane, {
+            delimiters: [
+                { left: '$$', right: '$$', display: true },
+                { left: '$', right: '$', display: false },
+                { left: '\\(', right: '\\)', display: false }
+            ],
+            throwOnError: false
+        });
+    }
 }
 window.renderTableA = renderTableA;
 

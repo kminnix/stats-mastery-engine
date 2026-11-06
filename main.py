@@ -20,6 +20,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
+STATIC_VERSION = "40"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 
@@ -72,12 +73,17 @@ def generate_join_code(length=6) -> str:
 # --- PAGE ROUTING ---
 
 @app.get("/", response_class=HTMLResponse)
+@app.get("/", response_class=HTMLResponse)
 async def serve_landing(request: Request):
     """Initial landing gateway: logs in and branches to student or teacher."""
     return templates.TemplateResponse(
         request=request,
         name="landing.html",
-        context={"supabase_url": SUPABASE_URL, "supabase_key": SUPABASE_KEY}
+        context={
+            "supabase_url": SUPABASE_URL, 
+            "supabase_key": SUPABASE_KEY,
+            "v": STATIC_VERSION
+        }
     )
 
 @app.get("/practice", response_class=HTMLResponse)
@@ -86,7 +92,11 @@ async def serve_student_practice(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="index.html",
-        context={"supabase_url": SUPABASE_URL, "supabase_key": SUPABASE_KEY}
+        context={
+            "supabase_url": SUPABASE_URL, 
+            "supabase_key": SUPABASE_KEY,
+            "v": STATIC_VERSION
+        }
     )
 
 @app.get("/teacher", response_class=HTMLResponse)
@@ -95,7 +105,11 @@ async def serve_teacher_dashboard(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="teacher.html",
-        context={"supabase_url": SUPABASE_URL, "supabase_key": SUPABASE_KEY}
+        context={
+            "supabase_url": SUPABASE_URL, 
+            "supabase_key": SUPABASE_KEY,
+            "v": STATIC_VERSION
+        }
     )
 
 # --- PROBLEM & VERIFICATION APIS ---

@@ -1,12 +1,16 @@
 ﻿const STORAGE_KEY = 'qederam_state_v1';
 const TARGET_MASTERY = 5;
+const urlParams = new URLSearchParams(window.location.search);
+const taskId = urlParams.get('task_id');
 
 let currentProblem = null;
 let isMultiStage = false;
 let hadStageMistake = false;
+let currentQuestionAnswers = [];
 let currentUser = null;
 let currentSession = null;
 let supabaseClient = null;
+let taskRunnerState = null;
 
 if (window.SUPABASE_URL && window.SUPABASE_KEY && window.supabase) {
     try {
@@ -31,6 +35,181 @@ let state = {
     }
 };
 
+function getTaskTopics(task) {
+    const supportedTopics = ['random', 'between', 'left_tail', 'right_tail', 'inverse', 'ci_mean_t', 'ci_prop_z'];
+    const configuredTopics = Array.isArray(task.config?.topics) ? task.config.topics : [];
+    return configuredTopics.filter(topic => supportedTopics.includes(topic));
+}
+
+function updateTaskRunnerUI() {
+    const topicSelector = document.querySelector('.topic-selector-wrapper');
+    const banner = document.getElementById('task-runner-banner');
+    if (!taskRunnerState) {
+        if (topicSelector) topicSelector.style.display = '';
+        if (banner) banner.style.display = 'none';
+        return;
+    }
+
+    if (topicSelector) topicSelector.style.display = 'none';
+    if (banner) banner.style.display = 'flex';
+    document.getElementById('task-title-display').textContent = `Task: ${taskRunnerState.title}`;
+    const questionNumber = Math.min(taskRunnerState.currentQuestionIndex + 1, taskRunnerState.totalQuestions);
+    document.getElementById('task-progress-display').textContent =
+        `Question ${questionNumber} of ${taskRunnerState.totalQuestions}`;
+    const progressTrack = banner.querySelector('[role="progressbar"]');
+    const progressFill = document.getElementById('task-progress-fill');
+    const progress = taskRunnerState.currentQuestionIndex / taskRunnerState.totalQuestions;
+    if (progressTrack) progressTrack.setAttribute('aria-valuenow', String(taskRunnerState.currentQuestionIndex));
+    if (progressTrack) progressTrack.setAttribute('aria-valuemax', String(taskRunnerState.totalQuestions));
+    if (progressFill) progressFill.style.width = `${progress * 100}%`;
+}
+
+function selectTaskTopic() {
+    if (!taskRunnerState || taskRunnerState.topics.length === 0) return;
+    const topic = taskRunnerState.topics[taskRunnerState.currentQuestionIndex % taskRunnerState.topics.length];
+    state.selectedTopic = topic;
+    const topicSelect = document.getElementById('topic-select');
+    if (topicSelect) topicSelect.value = topic;
+}
+
+function removeTaskIdFromUrl() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('task_id');
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+}
+
+async function startAssignedTask(assignedTaskId) {
+    if (!currentUser) throw new Error('Sign in with your student account to start this task.');
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (currentSession?.access_token) headers.Authorization = `Bearer ${currentSession.access_token}`;
+    const response = await fetch(`/api/student/tasks/${encodeURIComponent(currentUser.id)}`, { headers });
+    if (!response.ok) throw new Error(`Could not load assigned tasks (${response.status}).`);
+
+    const tasks = await response.json();
+    const task = tasks.find(item => String(item.assessment_id) === String(assignedTaskId));
+    if (!task) throw new Error('This task is not assigned to your account or is no longer active.');
+
+    const topics = getTaskTopics(task);
+    const configuredCount = Number(task.config?.count);
+    const totalQuestions = Number.isInteger(configuredCount) && configuredCount > 0 ? configuredCount : 5;
+    taskRunnerState = {
+        taskId: task.assessment_id,
+        totalQuestions,
+        currentQuestionIndex: 0,
+        score: 0,
+        answers: [],
+        isTest: (task.task_type || task.type) === 'test',
+        title: task.title,
+        topics: topics.length ? topics : ['random'],
+        previousTopic: state.selectedTopic,
+        isSubmitting: false,
+        submitted: false
+    };
+
+    document.getElementById('task-completion-card').style.display = 'none';
+    document.getElementById('task-submission-status').textContent = '';
+    document.getElementById('task-retry-submit').style.display = 'none';
+    document.getElementById('student-practice-view').style.display = 'block';
+    const tasksView = document.getElementById('student-tasks-view');
+    if (tasksView) tasksView.style.display = 'none';
+    const practiceTab = document.getElementById('tab-practice-btn');
+    const tasksTab = document.getElementById('tab-tasks-btn');
+    if (practiceTab) practiceTab.classList.add('active');
+    if (tasksTab) tasksTab.classList.remove('active');
+
+    selectTaskTopic();
+    updateTaskRunnerUI();
+    await loadProblem();
+}
+
+function launchTask(assignedTaskId) {
+    window.location.search = `?task_id=${encodeURIComponent(assignedTaskId)}`;
+}
+window.launchTask = launchTask;
+
+function exitTask() {
+    if (!taskRunnerState) return;
+    const previousTopic = taskRunnerState.previousTopic;
+    taskRunnerState = null;
+    state.selectedTopic = previousTopic || 'random';
+    const topicSelect = document.getElementById('topic-select');
+    if (topicSelect) topicSelect.value = state.selectedTopic;
+    saveState();
+    const nextBtn = document.getElementById('next-btn');
+    nextBtn.innerText = 'Next Problem →';
+    nextBtn.onclick = loadProblem;
+    updateTaskRunnerUI();
+    document.getElementById('task-completion-card').style.display = 'none';
+    removeTaskIdFromUrl();
+    loadProblem();
+}
+window.exitTask = exitTask;
+
+function loadNextTaskQuestion() {
+    if (!taskRunnerState || taskRunnerState.currentQuestionIndex >= taskRunnerState.totalQuestions) return;
+    selectTaskTopic();
+    loadProblem();
+}
+
+async function submitTaskResults() {
+    if (!taskRunnerState || taskRunnerState.isSubmitting) return;
+    if (!supabaseClient || !currentUser) {
+        throw new Error('You must be signed in to submit this task.');
+    }
+
+    taskRunnerState.isSubmitting = true;
+    const retryButton = document.getElementById('task-retry-submit');
+    if (retryButton) retryButton.style.display = 'none';
+    try {
+        const { error } = await supabaseClient.from('assessment_submissions').upsert({
+            assessment_id: taskRunnerState.taskId,
+            student_id: currentUser.id,
+            status: 'submitted',
+            score: Math.round((taskRunnerState.score / taskRunnerState.totalQuestions) * 100)
+        }, { onConflict: 'assessment_id,student_id' });
+        if (error) throw error;
+
+        taskRunnerState.submitted = true;
+        document.getElementById('task-submission-status').textContent = 'Your results were submitted.';
+        if (retryButton) retryButton.style.display = 'none';
+    } finally {
+        taskRunnerState.isSubmitting = false;
+    }
+}
+
+async function retryTaskSubmission() {
+    try {
+        await submitTaskResults();
+    } catch (error) {
+        console.error('Task submission failed:', error);
+        document.getElementById('task-submission-status').textContent =
+            'We could not submit your results. Check your connection and try again.';
+        document.getElementById('task-retry-submit').style.display = 'inline-block';
+    }
+}
+window.retryTaskSubmission = retryTaskSubmission;
+
+function returnToTaskDashboard() {
+    if (taskRunnerState && !taskRunnerState.submitted) {
+        document.getElementById('task-submission-status').textContent =
+            'Submit your results before returning to the dashboard.';
+        return;
+    }
+    if (taskRunnerState) {
+        state.selectedTopic = taskRunnerState.previousTopic || 'random';
+        const topicSelect = document.getElementById('topic-select');
+        if (topicSelect) topicSelect.value = state.selectedTopic;
+        saveState();
+        taskRunnerState = null;
+    }
+    updateTaskRunnerUI();
+    removeTaskIdFromUrl();
+    document.getElementById('task-completion-card').style.display = 'none';
+    if (typeof switchStudentTab === 'function') switchStudentTab('tasks');
+}
+window.returnToTaskDashboard = returnToTaskDashboard;
+
 function getActiveSkillState() {
     const topic = state.selectedTopic || 'random';
     if (!state.skills[topic]) state.skills[topic] = { streak: 0, mastered: false };
@@ -42,7 +221,7 @@ async function initAuth() {
     if (!supabaseClient) return;
 
     const { data: { session } } = await supabaseClient.auth.getSession();
-    handleSession(session);
+    await handleSession(session);
 
     supabaseClient.auth.onAuthStateChange((_event, session) => {
         handleSession(session);
@@ -281,8 +460,10 @@ async function loadProblem() {
     const nextBtn = document.getElementById('next-btn');
     if (feedbackBanner) feedbackBanner.style.display = 'none';
     if (solutionCard) solutionCard.style.display = 'none';
+    document.getElementById('task-completion-card').style.display = 'none';
     if (nextBtn) nextBtn.style.display = 'none';
     hadStageMistake = false;
+    currentQuestionAnswers = [];
 
     const topic = state.selectedTopic || 'random';
     isMultiStage = topic.startsWith('ci_');
@@ -357,6 +538,7 @@ async function submitStage(idx) {
     const input = document.getElementById(`stage-input-${idx}`);
     const rawVal = input.value.trim();
     if (!rawVal) return;
+    currentQuestionAnswers[idx] = rawVal;
 
     const userVal = parseFloat(rawVal);
     const step = currentProblem.steps[idx];
@@ -415,7 +597,7 @@ function unlockNextStage(idx) {
             if (e.key === 'Enter') submitStage(idx + 1);
         });
     } else {
-        finalizeProblem(!hadStageMistake);
+        finalizeProblem(!hadStageMistake, currentQuestionAnswers.slice());
     }
 }
 
@@ -435,13 +617,13 @@ async function submitSingleAnswer() {
         })
     });
     const data = await res.json();
-    finalizeProblem(data.correct);
+    await finalizeProblem(data.correct, rawVal);
 
     document.getElementById('submit-btn').style.display = 'none';
     input.disabled = true;
 }
 
-function finalizeProblem(isSuccess) {
+async function finalizeProblem(isSuccess, answer = null) {
     const feedback = document.getElementById('feedback-banner');
     feedback.style.display = 'block';
     state.totalAttempted += 1;
@@ -455,8 +637,15 @@ function finalizeProblem(isSuccess) {
     } else {
         skillState.streak = 0;
         feedback.className = 'banner incorrect';
-        feedback.innerHTML = '&#10008; Problem finished with step errors. Streak reset. Full derivation:';
+        feedback.innerHTML = '&#10008; Problem finished with step errors. Streak reset.';
+    }
 
+    saveState();
+    const nextBtn = document.getElementById('next-btn');
+    const showSolution = !taskRunnerState || !taskRunnerState.isTest ||
+        taskRunnerState.currentQuestionIndex + 1 >= taskRunnerState.totalQuestions;
+    if (!isSuccess && showSolution) {
+        feedback.innerHTML += ' Full derivation:';
         const solCard = document.getElementById('solution-card');
         const solContent = document.getElementById('solution-content');
         if (currentProblem.plot_data) drawNormalDistribution(currentProblem.plot_data);
@@ -465,15 +654,63 @@ function finalizeProblem(isSuccess) {
         solCard.style.display = 'block';
     }
 
-    saveState();
-    const nextBtn = document.getElementById('next-btn');
+    if (!taskRunnerState) {
+        nextBtn.style.display = 'inline-block';
+        nextBtn.focus();
+        return;
+    }
+
+    taskRunnerState.answers.push({
+        question: taskRunnerState.currentQuestionIndex + 1,
+        topic: state.selectedTopic,
+        answer,
+        correct: Boolean(isSuccess)
+    });
+    if (isSuccess) taskRunnerState.score += 1;
+    taskRunnerState.currentQuestionIndex += 1;
+    updateTaskRunnerUI();
+
+    if (taskRunnerState.currentQuestionIndex >= taskRunnerState.totalQuestions) {
+        nextBtn.style.display = 'none';
+        const completionCard = document.getElementById('task-completion-card');
+        const summary = document.getElementById('task-completion-summary');
+        const percentage = Math.round((taskRunnerState.score / taskRunnerState.totalQuestions) * 100);
+        summary.textContent =
+            `${taskRunnerState.title}: ${taskRunnerState.score} of ${taskRunnerState.totalQuestions} correct (${percentage}%).`;
+        completionCard.style.display = 'block';
+        try {
+            await submitTaskResults();
+        } catch (error) {
+            console.error('Task submission failed:', error);
+            document.getElementById('task-submission-status').textContent =
+                'We could not submit your results. Check your connection and try again.';
+            document.getElementById('task-retry-submit').style.display = 'inline-block';
+        }
+        return;
+    }
+
+    nextBtn.innerText = 'Next Task Question →';
+    nextBtn.onclick = loadNextTaskQuestion;
     nextBtn.style.display = 'inline-block';
     nextBtn.focus();
 }
 
-window.addEventListener('load', () => {
-    initAuth();
-    loadProblem();
+window.addEventListener('load', async () => {
+    await initAuth();
+    if (taskId) {
+        try {
+            await startAssignedTask(taskId);
+        } catch (error) {
+            console.error('Could not start assigned task:', error);
+            await loadProblem();
+            const feedback = document.getElementById('feedback-banner');
+            feedback.innerText = error.message;
+            feedback.className = 'banner incorrect';
+            feedback.style.display = 'block';
+        }
+    } else {
+        loadProblem();
+    }
     const ansInput = document.getElementById('answer-input');
     if (ansInput) {
         ansInput.addEventListener('keydown', (e) => {
@@ -481,4 +718,3 @@ window.addEventListener('load', () => {
         });
     }
 });
-

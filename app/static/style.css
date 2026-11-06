@@ -568,6 +568,14 @@ body.snap-mode-left #calc-dock.dock-bottom {
     min-height: 38px;
     flex-shrink: 0;
 }
+math-field::part(virtual-keyboard-toggle),
+math-field::part(menu-toggle) {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
 
 .calc-tray {
     padding: 8px 14px 10px 14px;
@@ -617,4 +625,3 @@ body.snap-mode-left #calc-dock.dock-bottom {
     font-size: 0.95rem;
     font-weight: 700;
 }
-
