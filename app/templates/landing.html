@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QEDeram - Procedural Statistics Mastery</title>
-    <link rel="stylesheet" href="/static/style.css?v=50">
+    <link rel="icon" type="image/png" href="/static/img/ram-icon.png">
+    <link rel="stylesheet" href="/static/style.css?v={{ static_version }}">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
         window.SUPABASE_URL = "{{ supabase_url }}";
@@ -12,31 +13,25 @@
     </script>
     <style>
         .portal-wrapper {
-            min-height: 85vh;
+            min-height: calc(100vh - 80px);
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            padding: 24px;
         }
         .portal-card {
             background: #ffffff;
-            border-radius: 16px;
-            box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.1), 0 8px 10px -6px rgba(15, 23, 42, 0.05);
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.05);
             max-width: 520px;
             width: 100%;
             padding: 44px 36px;
             text-align: center;
         }
-        .brand-title {
-            font-size: 2.3rem;
-            font-weight: 800;
-            color: #0f172a;
-            margin: 0 0 6px 0;
-            letter-spacing: -0.5px;
-        }
         .brand-sub {
-            color: #64748b;
-            font-size: 1.05rem;
+            color: #475569;
+            font-size: 0.95rem;
             margin: 0 0 32px 0;
         }
         .google-btn {
@@ -85,8 +80,8 @@
             align-items: center;
         }
         .role-option:hover {
-            border-color: #2563eb;
-            background: #eff6ff;
+            border-color: #94a3b8;
+            background: #f8fafc;
             transform: translateY(-2px);
         }
         .role-icon {
@@ -101,16 +96,40 @@
         }
         .role-desc {
             font-size: 0.8rem;
-            color: #64748b;
+            color: #475569;
+        }
+        .portal-header {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 16px 24px;
+        }
+        .portal-nav {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        @media (max-width: 520px) {
+            .portal-header { padding: 14px 16px; }
+            .portal-nav { width: 100%; }
         }
     </style>
 </head>
-<body style="background: #f1f5f9;">
+<body style="background: #f8fafc;">
 
+    <header class="portal-header">
+        <div class="brand">
+            <a href="/" style="text-decoration: none; color: inherit; display: inline-block;">
+                <h1>qederam.org</h1>
+            </a>
+            <span class="tagline">Procedural Statistics Mastery Engine</span>
+        </div>
+        <nav class="portal-nav" aria-label="Main navigation">
+            <a href="/practice" class="btn-secondary" style="text-decoration: none;">🎓 Student Practice</a>
+        </nav>
+    </header>
     <div class="portal-wrapper">
         <div class="portal-card">
-            <h1 class="brand-title">QEDeram<span style="color: #2563eb;">.org</span></h1>
-            <p class="brand-sub">Procedural Statistics Mastery Engine</p>
+            <p class="brand-sub">Sign in or choose an account type to continue.</p>
 
             <!-- State 1: Logged Out -->
             <div id="view-logged-out">

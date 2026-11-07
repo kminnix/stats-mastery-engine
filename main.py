@@ -21,7 +21,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "70"
+STATIC_VERSION = "71"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -85,7 +85,8 @@ async def serve_landing(request: Request):
         context={
             "supabase_url": SUPABASE_URL, 
             "supabase_key": SUPABASE_KEY,
-            "v": STATIC_VERSION
+            "v": STATIC_VERSION,
+            "static_version": STATIC_VERSION
         }
     )
 
@@ -98,7 +99,8 @@ async def serve_student_practice(request: Request):
         context={
             "supabase_url": SUPABASE_URL, 
             "supabase_key": SUPABASE_KEY,
-            "v": STATIC_VERSION
+            "v": STATIC_VERSION,
+            "static_version": STATIC_VERSION
         }
     )
 
@@ -111,7 +113,8 @@ async def serve_teacher_dashboard(request: Request):
         context={
             "supabase_url": SUPABASE_URL, 
             "supabase_key": SUPABASE_KEY,
-            "v": STATIC_VERSION
+            "v": STATIC_VERSION,
+            "static_version": STATIC_VERSION
         }
     )
 

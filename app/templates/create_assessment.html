@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Create Assessment - Qederam</title>
+    <link rel="icon" type="image/png" href="/static/img/ram-icon.png">
     <link rel="stylesheet" href="/static/style.css?v={{ static_version }}">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -11,7 +12,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
     <style>
         * { box-sizing: border-box; }
-        body { margin: 0; background: #f1f5f9; color: #1e293b; }
+        body { margin: 0; background: #f8fafc; color: #1e293b; }
         .builder-page { min-height: 100vh; display: flex; flex-direction: column; }
         .builder-header {
             display: flex;
@@ -22,10 +23,9 @@
             background: #fff;
             border-bottom: 1px solid #e2e8f0;
         }
-        .builder-header h2 { margin: 0; text-align: center; font-size: 1.25rem; }
-        .builder-header > * { flex: 1; }
-        .builder-header > :first-child { text-align: left; }
-        .builder-header > :last-child { text-align: right; }
+        .builder-header .brand { flex: 1; }
+        .builder-header h2 { flex: 1; margin: 0; text-align: center; font-size: 1.15rem; }
+        .builder-header-actions { flex: 1; display: flex; justify-content: flex-end; gap: 8px; }
         .builder-header a { text-decoration: none; white-space: nowrap; }
         .meta-bar {
             display: grid;
@@ -34,6 +34,7 @@
             padding: 14px 24px;
             background: #fff;
             border-bottom: 1px solid #e2e8f0;
+            box-shadow: 0 2px 4px rgba(15, 23, 42, 0.03);
         }
         .meta-field label { display: block; margin-bottom: 5px; font-size: 0.85rem; font-weight: 600; }
         .meta-field input,
@@ -42,9 +43,15 @@
             width: 100%;
             padding: 9px 10px;
             border: 1px solid #cbd5e1;
-            border-radius: 6px;
+            border-radius: 8px;
             background: #fff;
             font: inherit;
+        }
+        .meta-field input:focus,
+        .meta-field select:focus,
+        .builder-search:focus {
+            outline: 2px solid rgba(148, 163, 184, 0.25);
+            border-color: #64748b;
         }
         #builder-split-workspace {
             display: grid;
@@ -55,7 +62,15 @@
             padding: 16px 24px;
             box-sizing: border-box;
         }
-        .builder-column { min-width: 0; overflow: hidden; }
+        .builder-column {
+            min-width: 0;
+            overflow: hidden;
+            padding: 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            background: #fff;
+            box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.05);
+        }
         .builder-column h3 { margin: 0 0 10px; font-size: 1.05rem; }
         #builder-catalog-scroll,
         #builder-blocks-list {
@@ -76,17 +91,33 @@
         .builder-skill-info { min-width: 0; font-weight: 600; }
         .math-pill { display: inline-block; margin-top: 4px; padding: 4px 8px; border-radius: 9999px; background: #f1f5f9; color: #475569; font-size: 0.8rem; }
         .btn-subtle { padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #334155; cursor: pointer; font: inherit; }
+        .btn-subtle:hover:not(:disabled) { background: #f8fafc; border-color: #94a3b8; }
         .blocks-empty { padding: 30px 16px; border: 1px dashed #cbd5e1; border-radius: 8px; color: #64748b; text-align: center; }
         .problem-block { margin-bottom: 10px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; }
         .problem-block-header, .problem-block-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
         .problem-block-title { flex: 1; min-width: 100px; font-weight: 700; }
+        .mode-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 9px;
+            border: 1px solid #e2e8f0;
+            border-radius: 9999px;
+            background: #f8fafc;
+            color: #475569;
+            font-size: 0.75rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .mode-badge-scaffold { background: #f1f5f9; border-color: #cbd5e1; color: #334155; }
+        .mode-badge-mastery { background: #e2e8f0; border-color: #cbd5e1; color: #1e293b; }
+        .mode-badge-test { background: #f1f5f9; color: #334155; }
         .block-actions { display: flex; gap: 4px; }
         .block-actions button { padding: 4px 8px; }
         .problem-block-controls { margin-top: 10px; }
         .problem-block-controls label { color: #475569; font-size: 0.85rem; }
         .problem-block-controls input, .problem-block-controls select { padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; font: inherit; }
         .problem-block-controls input[type="number"] { width: 58px; text-align: center; }
-        .loop-indicator { display: inline-block; margin-top: 9px; padding: 4px 8px; border-radius: 9999px; background: #eff6ff; color: #1e40af; font-size: 0.78rem; }
+        .loop-indicator { display: inline-block; margin-top: 9px; padding: 4px 8px; border-radius: 9999px; background: #f1f5f9; color: #475569; font-size: 0.78rem; }
         .builder-error { display: none; margin: 0 24px 12px; padding: 10px 12px; border-radius: 6px; background: #fee2e2; color: #991b1b; }
         @media (max-width: 800px) {
             .builder-header { flex-wrap: wrap; padding: 12px 16px; }
@@ -103,9 +134,17 @@
 <body>
 <main class="builder-page">
     <header class="builder-header">
-        <a href="/teacher" class="btn-secondary">← Back to Dashboard</a>
+        <div class="brand">
+            <a href="/" style="text-decoration: none; color: inherit; display: inline-block;">
+                <h1>qederam.org</h1>
+            </a>
+            <span class="tagline">Procedural Statistics Mastery Engine</span>
+        </div>
         <h2>Create Assignment or Assessment</h2>
-        <button id="publish-assessment-btn" class="btn-primary" type="button" onclick="publishAssessment()">🚀 Publish to Class</button>
+        <div class="builder-header-actions">
+            <a href="/teacher" class="btn-secondary">← Dashboard</a>
+            <button id="publish-assessment-btn" class="btn-primary" type="button" onclick="publishAssessment()">🚀 Publish</button>
+        </div>
     </header>
 
     <section class="meta-bar" aria-label="Assessment details">
@@ -307,6 +346,16 @@
             const notation = document.createElement('span');
             notation.className = 'math-pill';
             notation.textContent = skill ? `\\(${skill.notation}\\)` : '';
+            const modeBadge = document.createElement('span');
+            const modeLabels = {
+                scaffold: ['mode-badge-scaffold', 'Scaffolded'],
+                mastery: ['mode-badge-mastery', 'Mastery'],
+                no_hints: ['mode-badge-test', 'Test'],
+                all_hints: ['', 'Guided']
+            };
+            const [modeClass, modeText] = modeLabels[block.mode] || modeLabels.no_hints;
+            modeBadge.className = `mode-badge ${modeClass}`;
+            modeBadge.textContent = modeText;
             const actions = document.createElement('div');
             actions.className = 'block-actions';
             [
@@ -329,7 +378,7 @@
             remove.title = 'Remove block';
             remove.addEventListener('click', () => removeBlock(block.id));
             actions.appendChild(remove);
-            header.append(title, notation, actions);
+            header.append(title, notation, modeBadge, actions);
 
             const controls = document.createElement('div');
             controls.className = 'problem-block-controls';

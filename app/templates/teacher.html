@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QEDeram Teacher Dashboard</title>
-    <link rel="stylesheet" href="/static/style.css?v={{ v }}">
+    <link rel="icon" type="image/png" href="/static/img/ram-icon.png">
+    <link rel="stylesheet" href="/static/style.css?v={{ static_version }}">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
@@ -23,7 +24,24 @@
             padding: 16px 24px;
             border-radius: 12px;
             box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
             margin-bottom: 24px;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .teacher-header-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .teacher-profile-pill {
+            padding: 6px 11px;
+            border: 1px solid #e2e8f0;
+            border-radius: 9999px;
+            background: #f8fafc;
+            color: #475569;
+            font-size: 0.85rem;
         }
         .class-bar {
             display: flex;
@@ -66,8 +84,11 @@
             font-size: 0.95rem;
             margin-top: 12px;
         }
+        table.roster-table {
+            color: #1e293b;
+        }
         table.data-table th, table.data-table td {
-            border: 1px solid #e5e7eb;
+            border: 1px solid #e2e8f0;
             padding: 10px 14px;
             text-align: center;
         }
@@ -79,6 +100,17 @@
         table.data-table th.col-left, table.data-table td.col-left {
             text-align: left;
         }
+        table.roster-table tbody tr:nth-child(even) { background: #f8fafc; }
+        #dashboard-content input,
+        #dashboard-content select {
+            color: #1e293b;
+            font: inherit;
+        }
+        #dashboard-content input:focus,
+        #dashboard-content select:focus {
+            outline: 2px solid rgba(148, 163, 184, 0.25);
+            border-color: #64748b !important;
+        }
         .badge-type {
             font-size: 0.75rem;
             font-weight: 700;
@@ -87,12 +119,13 @@
             border-radius: 4px;
             display: inline-block;
         }
-        .badge-assignment { background: #e0f2fe; color: #0369a1; }
-        .badge-test { background: #fef3c7; color: #b45309; }
-        .badge-correction { background: #fce7f3; color: #be185d; }
+        .badge-assignment { background: #eff6ff; color: #1e3a8a; }
+        .badge-test { background: #e2e8f0; color: #1e293b; }
+        .badge-correction { background: #f1f5f9; color: #475569; }
         .badge-mastered {
-            background: #d1fae5;
-            color: #065f46;
+            background: #eff6ff;
+            color: #1e3a8a;
+            border: 1px solid #bfdbfe;
             padding: 4px 8px;
             border-radius: 9999px;
             font-weight: 600;
@@ -100,8 +133,9 @@
             display: inline-block;
         }
         .badge-streak {
-            background: #f1f5f9;
+            background: #f8fafc;
             color: #475569;
+            border: 1px solid #e2e8f0;
             padding: 4px 8px;
             border-radius: 9999px;
             font-size: 0.85rem;
@@ -109,14 +143,14 @@
         }
         .code-display {
             font-family: monospace;
-            background: #eff6ff;
-            color: #1e40af;
+            background: #f1f5f9;
+            color: #1e293b;
             padding: 6px 12px;
             border-radius: 6px;
             font-size: 1.1rem;
             font-weight: 700;
             letter-spacing: 2px;
-            border: 1px dashed #3b82f6;
+            border: 1px dashed #94a3b8;
         }
         /* Modal */
         .modal-overlay {
@@ -363,21 +397,22 @@
         }
     </style>
 </head>
-<body style="background: #f1f5f9;">
+<body style="background: #f8fafc;">
 
 <div class="dashboard-container">
-    <div class="dashboard-header">
-        <div>
+    <header class="dashboard-header">
+        <div class="brand">
             <a href="/" style="text-decoration: none; color: inherit; display: inline-block;">
-                <h1 style="margin: 0; font-size: 1.5rem; color: #1e293b;">QEDeram Teacher Dashboard</h1>
+                <h1>qederam.org</h1>
             </a>
-            <p style="margin: 4px 0 0; color: #64748b; font-size: 0.9rem;" id="teacher-profile-status">Checking credentials...</p>
+            <span class="tagline">Teacher Dashboard · <span id="teacher-profile-status">Checking credentials...</span></span>
         </div>
-        <div style="display: flex; gap: 12px; align-items: center;">
-            <a href="/practice" class="btn-secondary" style="text-decoration: none; padding: 8px 14px; font-size: 0.9rem;">🎓 Student Practice</a>
-            <button id="auth-btn" class="btn-primary" onclick="handleAuthClick()" style="padding: 8px 14px; font-size: 0.9rem;">Sign In</button>
+        <div class="teacher-header-controls">
+            <a href="/practice" class="btn-secondary" style="text-decoration: none;">🎓 Student Practice</a>
+            <span id="teacher-profile-pill" class="teacher-profile-pill" style="display: none;">Profile</span>
+            <button id="auth-btn" class="btn-secondary" onclick="handleAuthClick()">Sign In</button>
         </div>
-    </div>
+    </header>
 
     <div id="dashboard-content" style="display: none;">
         <div class="class-bar">
@@ -408,7 +443,7 @@
                 <button class="btn-secondary" onclick="refreshRoster()" style="font-size: 0.85rem; padding: 6px 12px;">↻ Refresh Matrix</button>
             </div>
             
-            <table class="data-table" id="roster-table">
+            <table class="data-table roster-table" id="roster-table">
                 <thead>
                     <tr>
                         <th class="col-left" style="min-width: 180px;">Student Name</th>
@@ -804,6 +839,7 @@
         currentSession = session;
         currentUser = session ? session.user : null;
         const authBtn = document.getElementById('auth-btn');
+        const profilePill = document.getElementById('teacher-profile-pill');
         const statusEl = document.getElementById('teacher-profile-status');
         const content = document.getElementById('dashboard-content');
         const unauth = document.getElementById('unauth-view');
@@ -811,12 +847,14 @@
         if (currentUser) {
             const name = currentUser.user_metadata?.full_name || currentUser.email;
             authBtn.innerText = "Sign Out";
+            profilePill.style.display = "inline-flex";
             statusEl.innerText = `Signed in as ${name}`;
             content.style.display = "block";
             unauth.style.display = "none";
             loadTeacherClasses();
         } else {
             authBtn.innerText = "Sign In with Google";
+            profilePill.style.display = "none";
             statusEl.innerText = "Authentication required";
             content.style.display = "none";
             unauth.style.display = "block";
