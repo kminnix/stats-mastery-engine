@@ -3,6 +3,29 @@ const TARGET_MASTERY = 5;
 const urlParams = new URLSearchParams(window.location.search);
 const taskId = urlParams.get('task_id');
 
+function evaluateMathInput(rawStringOrLatex) {
+    if (!rawStringOrLatex || !rawStringOrLatex.trim()) return NaN;
+    const str = rawStringOrLatex.trim();
+    try {
+        if (!isNaN(Number(str))) return Number(str);
+        if (/^-?\d+\s*\/\s*\d+$/.test(str)) {
+            const [numerator, denominator] = str.split('/');
+            return Number(numerator) / Number(denominator);
+        }
+        if (typeof latexToMathJs !== 'function' || typeof math === 'undefined') return NaN;
+        const result = math.evaluate(latexToMathJs(str));
+        return typeof result === 'number' && Number.isFinite(result) ? result : NaN;
+    } catch (error) {
+        return NaN;
+    }
+}
+
+window.addEventListener('wheel', () => {
+    if (document.activeElement?.type === 'number') {
+        document.activeElement.blur();
+    }
+}, { passive: true });
+
 let currentProblem = null;
 let isMultiStage = false;
 let hadStageMistake = false;
@@ -63,7 +86,10 @@ const TOPIC_REGISTRY = [
     { id: 'ci_mean_t_2samp', title: '2-Sample t-Interval for Means', topic: 'Confidence Intervals', notation: 'μ₁ - μ₂' },
     { id: 'ci_matched_pairs_t', title: 'Matched Pairs t-Interval', topic: 'Confidence Intervals', notation: '\\mu_{\\text{diff}}' },
     { id: 'ht_prop_z', title: '1-Sample z-Test for Proportion', topic: 'Hypothesis Testing', notation: 'H_0: p = p_0' },
-    { id: 'ht_mean_t', title: '1-Sample t-Test for Mean', topic: 'Hypothesis Testing', notation: 'H_0: \\mu = \\mu_0' }
+    { id: 'ht_mean_t', title: '1-Sample t-Test for Mean', topic: 'Hypothesis Testing', notation: 'H_0: \\mu = \\mu_0' },
+    { id: 'ht_mean_t_2samp', title: '2-Sample t-Test for Means', topic: 'Hypothesis Testing', notation: 'H_0: \\mu_1 = \\mu_2' },
+    { id: 'ht_prop_z_2samp', title: '2-Sample z-Test for Proportions', topic: 'Hypothesis Testing', notation: 'H_0: p_1 = p_2' },
+    { id: 'ht_matched_pairs_t', title: 'Matched Pairs t-Test', topic: 'Hypothesis Testing', notation: 'H_0: \\mu_{\\text{diff}} = 0' }
 ];
 
 let state = {
@@ -82,7 +108,10 @@ let state = {
         ci_prop_z_2samp: { streak: 0, mastered: false },
         ci_matched_pairs_t: { streak: 0, mastered: false },
         ht_prop_z: { streak: 0, mastered: false },
-        ht_mean_t: { streak: 0, mastered: false }
+        ht_mean_t: { streak: 0, mastered: false },
+        ht_mean_t_2samp: { streak: 0, mastered: false },
+        ht_prop_z_2samp: { streak: 0, mastered: false },
+        ht_matched_pairs_t: { streak: 0, mastered: false }
     }
 };
 
@@ -343,15 +372,29 @@ function captureTaskQuestionState() {
     const existing = activeTaskState.questionsState[index] || {};
     const singleInput = document.getElementById('answer-input');
     const stageStates = currentProblem.steps
-        ? currentProblem.steps.map((_step, stageIndex) => ({
-            value: document.getElementById(`stage-input-${stageIndex}`)?.value ?? '',
-            disabled: document.getElementById(`stage-input-${stageIndex}`)?.disabled ?? true,
-            className: document.getElementById(`stage-box-${stageIndex}`)?.className || 'stage-box',
-            status: document.getElementById(`stage-status-${stageIndex}`)?.innerHTML || '',
-            revealDisplay: document.getElementById(`stage-reveal-${stageIndex}`)?.style.display || 'none',
-            revealText: document.getElementById(`stage-reveal-${stageIndex}`)?.textContent || '',
-            buttonDisabled: document.getElementById(`stage-btn-${stageIndex}`)?.disabled ?? true
-        }))
+        ? currentProblem.steps.map((_step, stageIndex) => {
+            const controls = Array.from(
+                document.querySelectorAll(`#stage-box-${stageIndex} input, #stage-box-${stageIndex} select, #stage-box-${stageIndex} math-field`)
+            );
+            const values = controls.map(control => control.matches('math-field')
+                ? control.getValue()
+                : control.value);
+            const disabledStates = controls.map(control => control.matches('math-field')
+                ? control.readOnly
+                : control.disabled);
+            return {
+                values,
+                disabledStates,
+                value: values[0] ?? '',
+                disabled: disabledStates[0] ?? true,
+                display: document.getElementById(`stage-box-${stageIndex}`)?.style.display || '',
+                className: document.getElementById(`stage-box-${stageIndex}`)?.className || 'stage-box',
+                status: document.getElementById(`stage-status-${stageIndex}`)?.innerHTML || '',
+                revealDisplay: document.getElementById(`stage-reveal-${stageIndex}`)?.style.display || 'none',
+                revealText: document.getElementById(`stage-reveal-${stageIndex}`)?.textContent || '',
+                buttonDisabled: document.getElementById(`stage-btn-${stageIndex}`)?.disabled ?? true
+            };
+        })
         : [];
     activeTaskState.questionsState[index] = {
         ...existing,
@@ -382,14 +425,32 @@ function restoreTaskQuestionState(questionState) {
     hadStageMistake = Boolean(questionState.hadStageMistake);
     if (currentProblem.steps) {
         questionState.stageStates?.forEach((stage, index) => {
-            const input = document.getElementById(`stage-input-${index}`);
+            const controls = Array.from(
+                document.querySelectorAll(`#stage-box-${index} input, #stage-box-${index} select, #stage-box-${index} math-field`)
+            );
             const box = document.getElementById(`stage-box-${index}`);
             const status = document.getElementById(`stage-status-${index}`);
             const reveal = document.getElementById(`stage-reveal-${index}`);
             const verifyButton = document.getElementById(`stage-btn-${index}`);
-            if (input) {
-                input.value = stage.value;
-                input.disabled = stage.disabled;
+            if (box && stage.display !== undefined) box.style.display = stage.display;
+            if (stage.values) {
+                controls.forEach((control, controlIndex) => {
+                    if (control.matches('math-field')) {
+                        control.setValue(stage.values[controlIndex] ?? '');
+                        control.readOnly = stage.disabledStates?.[controlIndex] ?? true;
+                    } else {
+                        control.value = stage.values[controlIndex] ?? '';
+                        control.disabled = stage.disabledStates?.[controlIndex] ?? true;
+                    }
+                });
+            } else if (controls[0]) {
+                if (controls[0].matches('math-field')) {
+                    controls[0].setValue(stage.value || '');
+                    controls[0].readOnly = stage.disabled;
+                } else {
+                    controls[0].value = stage.value;
+                    controls[0].disabled = stage.disabled;
+                }
             }
             if (box) box.className = stage.className;
             if (status) status.innerHTML = stage.status;
@@ -1079,6 +1140,14 @@ function resetCurrentSkill() {
     }
 }
 
+function resetSessionProgress() {
+    if (!confirm('Reset session attempts and progress for the current skill?')) return;
+    state.totalAttempted = 0;
+    state.totalCorrect = 0;
+    state.skills[state.selectedTopic || 'random'] = { streak: 0, mastered: false };
+    saveState();
+}
+
 function onTopicChange() {
     const topicSelect = document.getElementById('topic-select');
     state.selectedTopic = topicSelect?.value || state.selectedTopic || 'random';
@@ -1105,6 +1174,11 @@ function updateStatsUI() {
         ? Math.round((state.totalCorrect / state.totalAttempted) * 100) 
         : 0;
     statsEl.innerText = `Attempts: ${state.totalAttempted} | Accuracy: ${acc}%`;
+    if (statsEl) {
+        statsEl.title = 'Click to reset session attempts and current skill progress';
+        statsEl.setAttribute('role', 'button');
+        statsEl.tabIndex = 0;
+    }
     const catalogView = document.getElementById('catalog-view');
     if (catalogView && catalogView.style.display !== 'none') renderTopicCatalog();
 }
@@ -1235,6 +1309,47 @@ async function loadProblem(problemToRender = null) {
     }
 }
 
+function getStageInputDefinitions(step) {
+    if (step.components) {
+        return step.components.map(definition => definition.id === 'stage-pval'
+            ? {
+                ...definition,
+                expected: [currentProblem.metadata.expected_pval]
+            }
+            : definition);
+    }
+    if (step.input_type === 'compound') return step.inputs || [];
+    return [{
+        id: null,
+        type: step.input_type === 'select' ? 'select' : 'number',
+        options: step.options,
+        placeholder: step.placeholder,
+        expected: step.expected,
+        tolerance: step.tolerance
+    }];
+}
+
+function getStageControlId(idx, definition) {
+    return definition.id === 'stage-pval'
+        ? 'step-stage-pval'
+        : `stage-input-${idx}${definition.id ? `-${definition.id}` : ''}`;
+}
+
+function isMathComputationField(step, definition) {
+    if (definition.type === 'select') return false;
+    return ['sample-statistic-value', 'standard-error', 'stage-pval'].includes(definition.id) ||
+        currentProblem.type?.startsWith('ht_') && step.step_num === 4;
+}
+
+function getStageControlValue(control) {
+    return control.matches('math-field') ? control.getValue() : control.value;
+}
+
+function setStageControlDisabled(control, disabled) {
+    if (control.matches('math-field')) control.readOnly = disabled;
+    else control.disabled = disabled;
+}
+
 function renderMultiStageUI() {
     const container = document.getElementById('multi-stage-panel');
     container.innerHTML = '';
@@ -1247,7 +1362,7 @@ function renderMultiStageUI() {
         const box = document.createElement('div');
         box.id = `stage-box-${idx}`;
         box.className = idx === 0 ? 'stage-box active' : 'stage-box';
-        if (idx > 0) box.style.opacity = '0.45';
+        box.style.display = idx === 0 ? 'block' : 'none';
 
         const header = document.createElement('div');
         header.className = 'stage-header';
@@ -1257,20 +1372,147 @@ function renderMultiStageUI() {
         header.appendChild(status);
 
         const inputRow = document.createElement('div');
-        inputRow.className = 'input-row stage-input-row';
-        const input = document.createElement(step.input_type === 'select' ? 'select' : 'input');
-        input.id = `stage-input-${idx}`;
-        input.disabled = idx > 0;
-        input.autocomplete = 'off';
-        if (step.input_type === 'select') {
-            input.add(new Option('Choose an answer...', ''));
-            (step.options || []).forEach(option => {
-                input.add(new Option(option.label, option.value));
+        inputRow.className = `input-row stage-input-row${step.full_width || step.input_type === 'cloze' ? ' full-width' : ''}`;
+        const controlId = definition => getStageControlId(idx, definition);
+        const createControl = definition => {
+            const isMathField = isMathComputationField(step, definition);
+            const control = document.createElement(
+                isMathField ? 'math-field' : definition.type === 'select' ? 'select' : 'input'
+            );
+            control.id = controlId(definition);
+            control.autocomplete = 'off';
+            control.setAttribute('aria-label', definition.label || definition.id || step.label);
+            if (isMathField) {
+                control.className = 'question-mathfield';
+                control.setAttribute('virtual-keyboard-mode', 'manual');
+                control.readOnly = idx > 0;
+            } else {
+                control.disabled = idx > 0;
+            }
+            if (definition.type === 'select') {
+                control.add(new Option('Choose an answer...', ''));
+                (definition.options || []).forEach(option => {
+                    const symbolLabels = {
+                        'p': 'p',
+                        'p̂': 'p̂',
+                        'μ': 'μ',
+                        'x̄': 'x̄',
+                        'μ_diff': 'μ_diff',
+                        'x̄_diff': 'x̄_diff'
+                    };
+                    const label = ['parameter-symbol', 'h0-symbol', 'ha-symbol'].includes(definition.id)
+                        ? symbolLabels[option.value] || option.value
+                        : option.label;
+                    control.add(new Option(label, option.value));
+                });
+                if (definition.id === 'param-context') control.style.maxWidth = 'min(440px, 100%)';
+            } else if (!isMathField) {
+                control.type = 'number';
+                control.step = 'any';
+                control.placeholder = definition.placeholder || step.placeholder || '';
+                if (definition.id === 'stage-pval') {
+                    control.style.width = '110px';
+                    control.style.textAlign = 'center';
+                }
+            }
+            return control;
+        };
+        const appendControl = (parent, definition) => {
+            const control = createControl(definition);
+            if (!control.matches('math-field')) {
+                parent.appendChild(control);
+                return;
+            }
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'math-input-wrapper';
+            wrapper.appendChild(control);
+            const toolbar = document.createElement('div');
+            toolbar.className = 'math-micro-toolbar';
+            [
+                { label: '√', title: 'Insert a square root', latex: '\\sqrt{#0}' },
+                { label: 'a/b', title: 'Insert a fraction', latex: '\\frac{#?}{#?}' },
+                { label: '( )', title: 'Insert parentheses', latex: '\\left(#0\\right)' }
+            ].forEach(symbol => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'btn-micro-symbol';
+                button.textContent = symbol.label;
+                button.title = symbol.title;
+                button.setAttribute('aria-label', symbol.title);
+                button.addEventListener('click', () => {
+                    control.focus();
+                    control.executeCommand(['insert', symbol.latex]);
+                    control.focus();
+                });
+                toolbar.appendChild(button);
+            });
+            wrapper.appendChild(toolbar);
+            parent.appendChild(wrapper);
+            control.addEventListener('focus', () => {
+                if (typeof suppressMathLiveIcons === 'function') suppressMathLiveIcons();
+            });
+            if (typeof suppressMathLiveIcons === 'function') suppressMathLiveIcons();
+        };
+        const appendComponent = (parent, componentId) => {
+            const definition = step.components.find(component => component.id === componentId);
+            appendControl(parent, definition);
+        };
+        if (step.input_type === 'parameter_definition') {
+            inputRow.classList.add('stage-parameter-definition');
+            inputRow.append('Let ');
+            appendComponent(inputRow, 'parameter-symbol');
+            inputRow.append(' represent ');
+            appendComponent(inputRow, 'parameter-context');
+            inputRow.append('.');
+        } else if (step.input_type === 'hypotheses') {
+            inputRow.classList.add('stage-hypothesis-lines');
+            step.rows.forEach(row => {
+                const line = document.createElement('div');
+                line.className = 'stage-hypothesis-line';
+                const label = document.createElement('strong');
+                label.textContent = row.label;
+                line.append(label, ' ');
+                appendComponent(line, row.symbol);
+                line.append(` ${row.operator || ''}`);
+                if (row.operator_component) {
+                    appendComponent(line, row.operator_component);
+                }
+                line.append(' ');
+                appendComponent(line, row.value);
+                inputRow.appendChild(line);
+            });
+        } else if (step.input_type === 'statistic_se') {
+            inputRow.classList.add('stage-hypothesis-lines');
+            const statisticLine = document.createElement('div');
+            statisticLine.className = 'stage-hypothesis-line';
+            statisticLine.append('Sample statistic: ');
+            appendComponent(statisticLine, 'sample-statistic-symbol');
+            appendComponent(statisticLine, 'sample-statistic-value');
+            const standardErrorLine = document.createElement('div');
+            standardErrorLine.className = 'stage-hypothesis-line';
+            standardErrorLine.append('Standard error: ');
+            appendComponent(standardErrorLine, 'standard-error');
+            inputRow.append(statisticLine, standardErrorLine);
+        } else if (step.input_type === 'cloze') {
+            inputRow.classList.add('stage-cloze');
+            const paragraph = document.createElement('p');
+            step.parts.forEach(part => {
+                if (typeof part === 'string') paragraph.append(part);
+                else appendComponent(paragraph, part.component);
+            });
+            inputRow.appendChild(paragraph);
+        } else if (step.input_type === 'compound') {
+            inputRow.classList.add('compound');
+            (step.inputs || []).forEach(definition => {
+                const field = document.createElement('label');
+                field.className = 'stage-compound-field';
+                field.textContent = definition.label || '';
+                appendControl(field, definition);
+                inputRow.appendChild(field);
             });
         } else {
-            input.type = 'number';
-            input.step = 'any';
-            input.placeholder = step.placeholder || '';
+            appendControl(inputRow, getStageInputDefinitions(step)[0]);
         }
 
         const verifyButton = document.createElement('button');
@@ -1278,7 +1520,7 @@ function renderMultiStageUI() {
         verifyButton.textContent = 'Verify Step';
         verifyButton.disabled = idx > 0;
         verifyButton.addEventListener('click', () => submitStage(idx));
-        inputRow.append(input, verifyButton);
+        inputRow.appendChild(verifyButton);
 
         const hint = document.createElement('div');
         hint.className = 'stage-hint';
@@ -1291,46 +1533,72 @@ function renderMultiStageUI() {
 
         box.append(header, inputRow, hint, reveal);
         container.appendChild(box);
-        if (showHints) triggerKaTeX(hint);
+        if (showHints && idx === 0) triggerKaTeX(box);
     });
 
-    const firstInput = document.getElementById('stage-input-0');
-    if (firstInput) {
-        firstInput.focus();
-        firstInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') submitStage(0);
+    const firstInput = container.querySelector('#stage-box-0 input, #stage-box-0 select, #stage-box-0 math-field');
+    container.querySelectorAll('#stage-box-0 input, #stage-box-0 select, #stage-box-0 math-field').forEach(control => {
+        control.addEventListener('keydown', event => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                submitStage(0);
+            }
         });
-    }
+    });
+    if (firstInput) firstInput.focus();
 }
 
 async function submitStage(idx) {
-    const input = document.getElementById(`stage-input-${idx}`);
-    const rawVal = input.value.trim();
-    if (!rawVal) return;
-    currentQuestionAnswers[idx] = rawVal;
+    const step = currentProblem.steps[idx];
+    const controls = getStageInputDefinitions(step).map(definition => ({
+        definition,
+        control: document.getElementById(getStageControlId(idx, definition))
+    }));
+    const answers = controls.map(({ control }) => getStageControlValue(control).trim());
+    if (answers.some(answer => !answer)) return;
+    controls.forEach(({ control }) => {
+        control.style.borderColor = '';
+        control.style.backgroundColor = '';
+    });
+    currentQuestionAnswers[idx] = controls.length > 1 ? answers : answers[0];
     if (activeTaskState.active) {
         activeTaskState.isVerifying = true;
         const questionState = activeTaskState.questionsState[activeTaskState.currentIndex - 1];
         if (questionState) questionState.attempted = true;
     }
 
-    const step = currentProblem.steps[idx];
     let isCorrect;
+    const componentResults = [];
     try {
-        if (step.input_type === 'select') {
-            isCorrect = step.expected.some(expected => String(expected) === rawVal);
-        } else {
-            const res = await fetch('/api/verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    user_answer: parseFloat(rawVal),
-                    expected_answers: step.expected,
-                    tolerance: step.tolerance
-                })
-            });
-            const data = await res.json();
-            isCorrect = data.correct;
+        isCorrect = true;
+        for (let inputIndex = 0; inputIndex < controls.length; inputIndex += 1) {
+            const { definition } = controls[inputIndex];
+            const answer = answers[inputIndex];
+            let componentCorrect;
+            if (definition.type === 'select') {
+                componentCorrect = definition.expected.some(expected => String(expected) === answer);
+            } else if (controls[inputIndex].control.matches('math-field')) {
+                const value = evaluateMathInput(answer);
+                const tolerance = definition.tolerance ?? step.tolerance ?? 0;
+                componentCorrect = Number.isFinite(value) && definition.expected.some(
+                    expected => Math.abs(value - Number(expected)) <= tolerance
+                );
+            } else {
+                const res = await fetch('/api/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_answer: parseFloat(answer),
+                        expected_answers: definition.expected,
+                        tolerance: definition.tolerance ?? step.tolerance
+                    })
+                });
+                if (!res.ok) throw new Error(`Could not verify step (${res.status}).`);
+                const data = await res.json();
+                componentCorrect = data.correct;
+            }
+            componentResults.push(componentCorrect);
+            isCorrect = componentCorrect && isCorrect;
         }
     } finally {
         activeTaskState.isVerifying = false;
@@ -1338,14 +1606,21 @@ async function submitStage(idx) {
     const statusEl = document.getElementById(`stage-status-${idx}`);
     const box = document.getElementById(`stage-box-${idx}`);
     const revealEl = document.getElementById(`stage-reveal-${idx}`);
+    const stageInputs = Array.from(box.querySelectorAll('input, select, math-field'));
     const isTest = activeTaskState.active && activeTaskState.taskType === 'test';
+    controls.forEach(({ control }, index) => {
+        if (!componentResults[index]) {
+            control.style.borderColor = '#dc2626';
+            control.style.backgroundColor = '#fef3c7';
+        }
+    });
 
     if (isCorrect) {
         statusEl.innerHTML = isTest
             ? '<span>Step recorded.</span>'
             : '<span style="color: #10b981;">&#10004; Correct</span>';
         box.className = 'stage-box completed';
-        input.disabled = true;
+        stageInputs.forEach(control => setStageControlDisabled(control, true));
         document.getElementById(`stage-btn-${idx}`).disabled = true;
 
         unlockNextStage(idx);
@@ -1357,19 +1632,18 @@ async function submitStage(idx) {
             saveState();
         }
 
-        statusEl.innerHTML = isTest
-            ? '<span>Step recorded.</span>'
-            : '<span style="color: #d97706;">&#10008; Incorrect (Revealed)</span>';
-        box.className = isTest ? 'stage-box completed' : 'stage-box revealed';
-        if (!isTest) input.value = step.expected[0];
-        input.disabled = true;
-        document.getElementById(`stage-btn-${idx}`).disabled = true;
+        statusEl.innerHTML = '<span style="color: #d97706;">&#10008; Incorrect — try again to reveal the next step.</span>';
+        box.className = 'stage-box revealed';
         if (!isTest) {
             revealEl.style.display = 'block';
-            revealEl.innerText = `Expected value: ${step.expected[0]} (use this to proceed to the next step).`;
+            const feedback = controls
+                .map(({ definition }, index) => definition.feedback_by_value?.[answers[index]])
+                .find(Boolean);
+            const expected = controls.map(({ definition }) => definition.expected[0]).join(', ');
+            revealEl.innerText = `${feedback ? `${feedback} ` : ''}Expected answer: ${expected}. Correct this step to continue.`;
         }
-
-        unlockNextStage(idx);
+        stageInputs.forEach(control => setStageControlDisabled(control, false));
+        document.getElementById(`stage-btn-${idx}`).disabled = false;
     }
 }
 
@@ -1377,15 +1651,21 @@ function unlockNextStage(idx) {
     if (idx + 1 < currentProblem.steps.length) {
         const nextBox = document.getElementById(`stage-box-${idx + 1}`);
         nextBox.className = 'stage-box active';
-        nextBox.style.opacity = '1';
-        const nextInput = document.getElementById(`stage-input-${idx + 1}`);
+        nextBox.style.display = 'block';
+        triggerKaTeX(nextBox);
+        const nextInput = nextBox.querySelector('input, select, math-field');
         const nextBtn = document.getElementById(`stage-btn-${idx + 1}`);
-        nextInput.disabled = false;
+        nextBox.querySelectorAll('input, select, math-field').forEach(input => setStageControlDisabled(input, false));
         nextBtn.disabled = false;
         nextInput.focus();
 
-        nextInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') submitStage(idx + 1);
+        nextBox.querySelectorAll('input, select, math-field').forEach(control => {
+            control.addEventListener('keydown', event => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    submitStage(idx + 1);
+                }
+            });
         });
         captureTaskQuestionState();
         renderTaskNavigationChips();
@@ -1602,6 +1882,16 @@ async function finalizeProblem(isSuccess, answer = null) {
 
 window.addEventListener('load', async () => {
     await initAuth();
+    const sessionStats = document.getElementById('session-stats');
+    if (sessionStats) {
+        sessionStats.addEventListener('click', resetSessionProgress);
+        sessionStats.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                resetSessionProgress();
+            }
+        });
+    }
     const exitTaskButton = document.getElementById('btn-exit-task');
     if (exitTaskButton) exitTaskButton.addEventListener('click', exitTask);
     const finishTaskButton = document.getElementById('btn-finish-task');

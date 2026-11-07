@@ -1,6 +1,7 @@
-﻿import os
+import os
 import random
 import string
+import traceback
 from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, Request, HTTPException, Header
 from fastapi.responses import HTMLResponse
@@ -21,7 +22,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "72"
+STATIC_VERSION = "85"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -103,6 +104,9 @@ class VerifyPayload(BaseModel):
 
 class CreateClassPayload(BaseModel):
     teacher_id: str
+    name: str
+
+class RenameClassPayload(BaseModel):
     name: str
 
 class JoinClassPayload(BaseModel):
@@ -208,10 +212,15 @@ async def get_ci_problem(topic: str = "mean_t", problem_type: str = "mean_t"):
         return generate_ci_problem()
 
 @app.get("/api/problem/ht")
-async def get_hypothesis_testing_problem(topic: str = "ht_prop_z"):
-    if not topic.startswith("ht_"):
-        raise HTTPException(status_code=400, detail="Invalid hypothesis-testing topic")
-    return generate_ht_problem(topic)
+async def get_ht_problem(topic: str = "ht_prop_z"):
+    try:
+        return generate_ht_problem(topic or "ht_prop_z")
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to generate hypothesis-testing problem: {e}",
+        ) from e
 
 @app.post("/api/verify")
 async def check_answer(payload: VerifyPayload):
@@ -269,6 +278,61 @@ async def list_teacher_classes(teacher_id: str, authorization: Optional[str] = H
     db = get_scoped_supabase(authorization)
     classes_res = db.table("classes").select("*").eq("teacher_id", teacher_id).order("created_at").execute()
     return classes_res.data or []
+
+@app.patch("/api/teacher/classes/{class_id}")
+async def rename_teacher_class(
+    class_id: str,
+    payload: RenameClassPayload,
+    authorization: Optional[str] = Header(None)
+):
+    access = verify_teacher_access(authorization)
+    db = get_scoped_supabase(authorization)
+    verify_teacher_class_access(db, class_id, access["user"].id)
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Section name cannot be empty")
+
+    result = (
+        db.table("classes")
+        .update({"name": name})
+        .eq("id", class_id)
+        .eq("teacher_id", access["user"].id)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=400, detail="Could not update section name")
+    return result.data[0]
+
+@app.post("/api/teacher/classes/{class_id}/join-code")
+async def regenerate_teacher_class_join_code(
+    class_id: str,
+    authorization: Optional[str] = Header(None)
+):
+    access = verify_teacher_access(authorization)
+    db = get_scoped_supabase(authorization)
+    verify_teacher_class_access(db, class_id, access["user"].id)
+    join_code = generate_join_code()
+    result = (
+        db.table("classes")
+        .update({"join_code": join_code})
+        .eq("id", class_id)
+        .eq("teacher_id", access["user"].id)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=400, detail="Could not regenerate student join code")
+    return {"join_code": result.data[0]["join_code"]}
+
+@app.delete("/api/teacher/classes/{class_id}")
+async def delete_teacher_class(
+    class_id: str,
+    authorization: Optional[str] = Header(None)
+):
+    access = verify_teacher_access(authorization)
+    db = get_scoped_supabase(authorization)
+    verify_teacher_class_access(db, class_id, access["user"].id)
+    db.table("classes").delete().eq("id", class_id).eq("teacher_id", access["user"].id).execute()
+    return {"status": "deleted"}
 
 @app.get("/api/teacher/classes/{teacher_id}/tasks")
 async def get_teacher_class_tasks(

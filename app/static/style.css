@@ -10,7 +10,7 @@
     --text-muted: #475569;
     --tables-dock-w: 460px;
     --calc-dock-w: 460px;
-    --calc-dock-h: 310px;
+    --calc-dock-h: 320px;
 }
 
 body {
@@ -280,6 +280,58 @@ header {
 }
 .stage-input-row input:disabled,
 .stage-input-row select:disabled { background: #f1f5f9; }
+.stage-input-row.compound { align-items: flex-end; flex-wrap: wrap; }
+.stage-compound-field {
+    display: flex;
+    flex: 1 1 180px;
+    flex-direction: column;
+    gap: 5px;
+    color: #475569;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+.stage-compound-field input,
+.stage-compound-field select { width: 100%; }
+.stage-input-row.full-width { flex-wrap: wrap; }
+.stage-input-row.full-width > select { flex: 1 1 100%; width: 100%; max-width: none; }
+.stage-input-row.full-width > button { margin-left: auto; }
+.stage-parameter-definition {
+    flex-wrap: wrap;
+    line-height: 2.8;
+}
+.stage-hypothesis-lines {
+    align-items: stretch;
+    flex-direction: column;
+}
+.stage-hypothesis-line {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.stage-hypothesis-line input[type=number] { width: 140px; }
+.stage-cloze {
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+.stage-cloze p {
+    flex: 1 1 100%;
+    margin: 0;
+    line-height: 2.8;
+}
+.stage-cloze input[type=number] {
+    display: inline-block;
+    width: 110px;
+    padding: 7px 8px;
+    vertical-align: middle;
+}
+.stage-cloze select {
+    display: inline-block;
+    width: auto;
+    max-width: 220px;
+    padding: 7px 8px;
+    vertical-align: middle;
+}
 .stage-hint {
     margin-top: 8px;
     color: #64748b;
@@ -692,7 +744,8 @@ header {
     right: 0 !important;
     top: auto !important;
     width: auto !important;
-    height: var(--calc-dock-h, 310px) !important;
+    height: var(--calc-dock-h, 320px) !important;
+    min-height: 300px;
     border-top: 2px solid #475569;
     border-radius: 0;
 }
@@ -772,9 +825,10 @@ body.snap-mode-left #calc-dock.dock-bottom {
     padding: 6px 14px;
     display: flex;
     flex-direction: column;
+    width: 100%;
+    box-sizing: border-box;
     gap: 4px;
-    flex: 1 1 0px;
-    min-height: 0;
+    flex: 0 0 auto !important;
 }
 .calc-header-topbar {
     display: flex;
@@ -813,7 +867,8 @@ body.snap-mode-left #calc-dock.dock-bottom {
     flex-direction: column;
     gap: 4px;
     flex: 1 1 0px;
-    min-height: 0;
+    min-height: 85px;
+    flex-shrink: 0;
 }
 .calc-history-list {
     flex: 1 1 auto;
@@ -844,15 +899,29 @@ body.snap-mode-left #calc-dock.dock-bottom {
 
 #calc-mathfield {
     width: 100%;
-    border: 1px solid #94a3b8;
-    border-radius: 5px;
     padding: 2px 8px;
     font-size: 1.35rem;
-    background: #ffffff;
     outline: none;
-    min-height: 38px;
+    min-height: 48px !important;
+    height: 48px !important;
+    display: block !important;
+    visibility: visible !important;
+    background: #ffffff !important;
+    border: 1px solid #94a3b8 !important;
+    border-radius: 6px;
     flex-shrink: 0;
 }
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type=number] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
 math-field::part(virtual-keyboard-toggle),
 math-field::part(menu-toggle) {
     display: none !important;
@@ -868,8 +937,66 @@ math-field::part(menu-toggle) {
     justify-content: center;
     gap: 12px;
     background: #73808c;
-    flex: 0 0 auto;
+    flex: 0 0 auto !important;
+    margin-top: auto;
     flex-wrap: wrap;
+}
+
+.math-input-wrapper {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    vertical-align: middle;
+    margin: 4px 0;
+}
+
+.question-mathfield {
+    min-width: 130px;
+    max-width: 260px;
+    min-height: 38px;
+    background: #ffffff;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 1.1rem;
+    outline: none;
+    display: inline-block;
+}
+
+.question-mathfield:focus-within {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.math-micro-toolbar {
+    display: inline-flex;
+    gap: 3px;
+}
+
+.btn-micro-symbol {
+    padding: 3px 7px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #334155;
+    transition: background 0.1s ease;
+}
+
+.btn-micro-symbol:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+.session-stats {
+    cursor: pointer;
+}
+
+.session-stats:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
 }
 .calc-keypad-block {
     display: grid;

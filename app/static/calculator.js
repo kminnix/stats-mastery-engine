@@ -27,11 +27,12 @@ function suppressMathLiveIcons() {
         window.mathVirtualKeyboard.policy = "manual";
         window.mathVirtualKeyboard.visible = false;
     }
-    const mf = getMathField();
-    const toggles = mf?.shadowRoot?.querySelectorAll(
-        '.ML__virtual-keyboard-toggle, .ML__menu-toggle, button[part="virtual-keyboard-toggle"], button[part="menu-toggle"]'
-    );
-    toggles?.forEach(el => el.style.setProperty('display', 'none', 'important'));
+    document.querySelectorAll('math-field').forEach(mf => {
+        const toggles = mf.shadowRoot?.querySelectorAll(
+            '.ML__virtual-keyboard-toggle, .ML__menu-toggle, button[part="virtual-keyboard-toggle"], button[part="menu-toggle"]'
+        );
+        toggles?.forEach(el => el.style.setProperty('display', 'none', 'important'));
+    });
 }
 
 function updateBodyDockGutters(mode) {
@@ -103,6 +104,10 @@ function toggleCalculatorWindow() {
         bringToFront(dock);
         setCalcDockMode(currentDockMode || 'bottom');
         suppressMathLiveIcons();
+        if ((currentDockMode || 'bottom') === 'bottom') {
+            const dockHeight = getComputedStyle(document.documentElement).getPropertyValue('--calc-dock-h').trim() || '320px';
+            dock.style.height = dockHeight;
+        }
         const mf = getMathField();
         if (mf) setTimeout(() => mf.focus(), 60);
     }
@@ -223,29 +228,101 @@ function calcNav(dir) {
 }
 
 function convertLatexFractions(expr) {
-    let prev;
-    let res = expr;
-    do {
-        prev = res;
-        res = res.replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '(($1)/($2))');
-    } while (res !== prev);
-    return res;
+    const readGroup = (source, openIndex) => {
+        if (source[openIndex] !== '{') return null;
+        let depth = 0;
+        for (let index = openIndex; index < source.length; index += 1) {
+            if (source[index] === '{') depth += 1;
+            if (source[index] === '}') {
+                depth -= 1;
+                if (depth === 0) {
+                    return { value: source.slice(openIndex + 1, index), end: index + 1 };
+                }
+            }
+        }
+        return null;
+    };
+
+    let result = '';
+    for (let index = 0; index < expr.length;) {
+        if (expr.startsWith('\\frac', index)) {
+            let numeratorStart = index + '\\frac'.length;
+            while (/\s/.test(expr[numeratorStart] || '')) numeratorStart += 1;
+            const numerator = readGroup(expr, numeratorStart);
+            if (numerator) {
+                let denominatorStart = numerator.end;
+                while (/\s/.test(expr[denominatorStart] || '')) denominatorStart += 1;
+                const denominator = readGroup(expr, denominatorStart);
+                if (denominator) {
+                    result += `((${convertLatexFractions(numerator.value)})/(${convertLatexFractions(denominator.value)}))`;
+                    index = denominator.end;
+                    continue;
+                }
+            }
+        }
+        result += expr[index];
+        index += 1;
+    }
+    return result;
 }
 
 function latexToMathJs(latex) {
-    let clean = latex;
+    let clean = latex
+        .replace(/\\left\s*\\?\./g, '')
+        .replace(/\\right\s*\\?\./g, '')
+        .replace(/\\left\s*/g, '')
+        .replace(/\\right\s*/g, '');
+    clean = clean
+        .replace(/\\(mathrm|mathit|mathbf|text|operatorname)\{([^{}]+)\}/g, '$2')
+        .replace(/\\[,;!]/g, ' ')
+        .replace(/\\(?:quad|qquad|enspace)\b/g, ' ')
+        .replace(/\\placeholder\{([^{}]*)\}/g, '$1')
+        .replace(/\\placeholder/g, '');
+    clean = convertLatexFractions(clean);
+    clean = clean
+        .replace(/\\cdot|\\times/g, '*')
+        .replace(/\\ast/g, '*')
+        .replace(/\\div/g, '/')
+        .replace(/\\pi\b/g, 'pi')
+        .replace(/\\exponentialE\b|\\mathrm\{e\}/g, 'e')
+        .replace(/\\ln\b/g, 'log')
+        .replace(/\\log_\{?10\}?/g, 'log10')
+        .replace(/\\log\b/g, 'log10')
+        .replace(/\\binom\{([^{}]+)\}\{([^{}]+)\}/g, 'combinations($1, $2)')
+        .replace(/nCr\b/g, 'combinations')
+        .replace(/nPr\b/g, 'permutations')
+        .replace(/\\arcsin\b/g, 'asin')
+        .replace(/\\arccos\b/g, 'acos')
+        .replace(/\\arctan\b/g, 'atan')
+        .replace(/\\sin\b/g, 'sin')
+        .replace(/\\cos\b/g, 'cos')
+        .replace(/\\tan\b/g, 'tan');
 
-    clean = clean.replace(/\\(mathrm|mathit|mathbf|text|operatorname)\{([^{}]+)\}/g, '$2')
-                 .replace(/\\[,;!]\vert{}\\quad\vert{}\\qquad\vert{}\\enspace/g, ' ') .replace(/\\left\vert{}\\right/g, '') .replace(/\\placeholder\{([^{}]*)\}/g, '$1') .replace(/\\placeholder/g, '');      clean = convertLatexFractions(clean);      clean = clean.replace(/\\times/g, '*') .replace(/\\cdot/g, '*') .replace(/\\ast/g, '*') .replace(/\\div/g, '/') .replace(/\\pi\b/g, 'pi') .replace(/\\exponentialE\b\vert{}\\mathrm\{e\}\b/g, 'e') .replace(/\\ln\b/g, 'log') .replace(/\\log_\{?10\}?/g, 'log10') .replace(/\\log\b/g, 'log10');      while (/\\sqrt\[([^\]]+)\]\{([^{}]+)\}/.test(clean)) {
+    while (/\\sqrt\[([^\]]+)\]\{([^{}]+)\}/.test(clean)) {
         clean = clean.replace(/\\sqrt\[([^\]]+)\]\{([^{}]+)\}/g, 'nthRoot($2, $1)');
     }
     clean = clean.replace(/\\sqrt\[([^\]]+)\]\s*([0-9.]+|[a-zA-Z]+)/g, 'nthRoot($2, $1)');
-
     while (/\\sqrt\s*\{([^{}]+)\}/.test(clean)) {
         clean = clean.replace(/\\sqrt\s*\{([^{}]+)\}/g, 'sqrt($1)');
     }
+    clean = clean
+        .replace(/\\sqrt\s*\(/g, 'sqrt(')
+        .replace(/\\sqrt\s*([0-9.]+|[a-zA-Z]+)/g, 'sqrt($1)')
+        .replace(/\\sqrt\{\s*\}/g, 'sqrt(0)')
+        .replace(/\\sqrt\b/g, 'sqrt')
+        .replace(/\{/g, '(')
+        .replace(/\}/g, ')')
+        .replace(/(^|[^0-9])\.(\d+)/g, (_match, prefix, digits) => `${prefix}0.${digits}`)
+        .replace(/(\d+(\.\d+)?|\.\d+)\s*\(/g, '$1*(')
+        .replace(/\)\s*(\d+(\.\d+)?|\.\d+)/g, ')*$1')
+        .replace(/\)\s*\(/g, ')*(')
+        .replace(/(\d)\s*(sqrt|sin|cos|tan|asin|acos|atan|log|log10|pi|e)\b/g, '$1*$2')
+        .replace(/\)\s*(sqrt|sin|cos|tan|asin|acos|atan|log|log10|pi|e)\b/g, ')*$1')
+        .replace(/\\/g, '');
 
-    clean = clean.replace(/\\sqrt\s*\(/g, 'sqrt('); clean = clean.replace(/\\sqrt\s*([0-9.]+\vert{}[a-zA-Z]+)/g, 'sqrt($1)'); clean = clean.replace(/\\sqrt\{\s*\}/g, 'sqrt(0)') .replace(/\\sqrt\b/g, 'sqrt');      clean = clean.replace(/\\sin\b/g, 'sin') .replace(/\\cos\b/g, 'cos') .replace(/\\tan\b/g, 'tan') .replace(/\\arcsin\b/g, 'asin') .replace(/\\arccos\b/g, 'acos') .replace(/\\arctan\b/g, 'atan') .replace(/\\binom\{([^{}]+)\}\{([^{}]+)\}/g, 'combinations($1, $2)') .replace(/nCr\b/g, 'combinations') .replace(/nPr\b/g, 'permutations');      clean = clean.replace(/\b(sin\vert{}cos\vert{}tan\vert{}asin\vert{}acos\vert{}atan\vert{}log\vert{}log10)\s+([0-9.]+\vert{}[a-zA-Z]+)/g, '$1($2)'); clean = clean.replace(/\{/g, '(').replace(/\}/g, ')');      clean = clean.replace(/(\d)\s*\(/g, '$1*(') .replace(/\)\s*(\d)/g, ')*$1') .replace(/\)\s*\(/g, ')*(') .replace(/(\d)\s*(sqrt\vert{}sin\vert{}cos\vert{}tan\vert{}asin\vert{}acos\vert{}atan\vert{}log\vert{}pi\vert{}e)\b/g, '$1*$2') .replace(/\)\s*(sqrt|sin|cos|tan|asin|acos|atan|log|pi|e)\b/g, ')*$1');
+    const openCount = (clean.match(/\(/g) || []).length;
+    const closeCount = (clean.match(/\)/g) || []).length;
+    if (openCount > closeCount) clean += ')'.repeat(openCount - closeCount);
 
     if (isDegreeMode) {
         clean = clean
@@ -257,7 +334,6 @@ function latexToMathJs(latex) {
             .replace(/\btan\(([^)]+)\)/g, 'tan(($1) * (pi / 180))');
     }
 
-    clean = clean.replace(/\\/g, '');
     return clean;
 }
 
