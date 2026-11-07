@@ -829,13 +829,21 @@
     }
 
     async function initTeacherAuth() {
-        if (!supabaseClient) return;
+        if (!supabaseClient) {
+            window.location.replace('/');
+            return;
+        }
         const { data: { session } } = await supabaseClient.auth.getSession();
-        handleSession(session);
-        supabaseClient.auth.onAuthStateChange((_event, session) => handleSession(session));
+        await handleSession(session);
+        supabaseClient.auth.onAuthStateChange((_event, session) => {
+            handleSession(session).catch(error => {
+                console.error("Could not verify teacher session:", error);
+                window.location.replace('/practice');
+            });
+        });
     }
 
-    function handleSession(session) {
+    async function handleSession(session) {
         currentSession = session;
         currentUser = session ? session.user : null;
         const authBtn = document.getElementById('auth-btn');
@@ -845,6 +853,17 @@
         const unauth = document.getElementById('unauth-view');
 
         if (currentUser) {
+            const { data, error } = await supabaseClient
+                .from('profiles')
+                .select('role')
+                .eq('id', currentUser.id)
+                .single();
+            if (error || !data || data.role !== 'teacher') {
+                alert("🔒 Access Restricted: Teacher approval is required to view this area.");
+                window.location.replace('/practice');
+                return;
+            }
+
             const name = currentUser.user_metadata?.full_name || currentUser.email;
             authBtn.innerText = "Sign Out";
             profilePill.style.display = "inline-flex";
@@ -853,11 +872,8 @@
             unauth.style.display = "none";
             loadTeacherClasses();
         } else {
-            authBtn.innerText = "Sign In with Google";
-            profilePill.style.display = "none";
-            statusEl.innerText = "Authentication required";
             content.style.display = "none";
-            unauth.style.display = "block";
+            window.location.replace('/');
         }
     }
 

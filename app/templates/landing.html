@@ -166,8 +166,8 @@
                     </div>
                     <div class="role-option" onclick="chooseRole('teacher')">
                         <div class="role-icon">📊</div>
-                        <div class="role-title">Teacher</div>
-                        <div class="role-desc">Create course sections and view class rosters.</div>
+                        <div class="role-title">Request Teacher Access</div>
+                        <div class="role-desc">Teacher access requires approval by an administrator.</div>
                     </div>
                 </div>
             </div>
@@ -247,25 +247,16 @@
         async function chooseRole(selectedRole) {
             if (!supabaseClient || !currentUser) return;
 
+            if (selectedRole === 'teacher') {
+                alert('Teacher access requires approval. Please contact an administrator.');
+                window.location.href = '/practice';
+                return;
+            }
+
             document.getElementById('view-select-role').style.display = 'none';
             document.getElementById('view-loading').style.display = 'block';
-            document.getElementById('loading-msg').innerText = `Saving account as ${selectedRole}...`;
-
-            try {
-                await supabaseClient
-                    .from('profiles')
-                    .update({ role: selectedRole })
-                    .eq('id', currentUser.id);
-
-                if (selectedRole === 'teacher') {
-                    window.location.href = '/teacher';
-                } else {
-                    window.location.href = '/practice';
-                }
-            } catch (e) {
-                console.error("Failed to set role:", e);
-                window.location.href = (selectedRole === 'teacher') ? '/teacher' : '/practice';
-            }
+            document.getElementById('loading-msg').innerText = 'Opening Student Practice...';
+            window.location.href = '/practice';
         }
 
         async function signInWithGoogle() {

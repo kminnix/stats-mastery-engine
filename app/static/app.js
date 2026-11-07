@@ -10,7 +10,7 @@ let currentQuestionAnswers = [];
 let currentUser = null;
 let currentSession = null;
 let supabaseClient = null;
-window.currentUserRole = null;
+window.currentUserRole = 'student';
 let activeTaskState = {
     active: false,
     taskId: null,
@@ -930,7 +930,7 @@ async function handleSession(session) {
     window.currentUser = session ? session.user : null;
     currentSession = session;
     currentUser = session ? session.user : null;
-    window.currentUserRole = null;
+    window.currentUserRole = 'student';
     const teacherFilterBar = document.getElementById('teacher-class-filter-bar');
     if (teacherFilterBar) teacherFilterBar.style.display = 'none';
     const authBtnLabel = document.getElementById('auth-user-label');
@@ -948,15 +948,17 @@ async function handleSession(session) {
                 .eq('id', currentUser.id)
                 .single();
 
-            window.currentUserRole = data?.role || null;
+            window.currentUserRole = data?.role || 'student';
             if (data && data.role === 'teacher') {
                 if (teacherBtn) teacherBtn.style.display = 'inline-block';
+                if (teacherFilterBar) teacherFilterBar.style.display = 'flex';
             } else {
                 if (teacherBtn) teacherBtn.style.display = 'none';
+                if (teacherFilterBar) teacherFilterBar.style.display = 'none';
             }
         } catch (e) {
             console.warn("Role lookup failed:", e);
-            window.currentUserRole = null;
+            window.currentUserRole = 'student';
             if (teacherBtn) teacherBtn.style.display = 'none';
             if (teacherFilterBar) teacherFilterBar.style.display = 'none';
         }
@@ -965,7 +967,8 @@ async function handleSession(session) {
     } else {
         if (authBtnLabel) authBtnLabel.innerText = 'Sign In';
         if (teacherBtn) teacherBtn.style.display = 'none';
-        window.currentUserRole = null;
+        window.currentUserRole = 'student';
+        if (teacherFilterBar) teacherFilterBar.style.display = 'none';
         loadSavedState();
     }
 }

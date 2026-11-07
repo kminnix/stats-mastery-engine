@@ -1,13 +1,13 @@
 ﻿:root {
-    --primary: #1e4d3b;
-    --primary-hover: #163a2c;
-    --accent-gold: #e5b842;
-    --accent-horn: #936037;
-    --bg-main: #edf2ec;
-    --card-bg: #faf8f3;
-    --border-color: #d6ded7;
-    --text-main: #1a2421;
-    --text-muted: #5e6f66;
+    --primary: #0f172a;
+    --primary-hover: #1e293b;
+    --accent-gold: #cbd5e1;
+    --accent-horn: #475569;
+    --bg-main: #f8fafc;
+    --card-bg: #ffffff;
+    --border-color: #e2e8f0;
+    --text-main: #1e293b;
+    --text-muted: #475569;
     --tables-dock-w: 460px;
     --calc-dock-w: 460px;
     --calc-dock-h: 310px;
@@ -86,7 +86,7 @@ header {
     height: 44px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid var(--accent-gold);
+    border: 2px solid #cbd5e1;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
 }
 .header-controls {
@@ -133,10 +133,10 @@ header {
     overflow: hidden;
 }
 .task-chip.active {
-    background: #1e3a8a;
+    background: #0f172a;
     color: #fff;
-    border-color: #2563eb;
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+    border-color: #0f172a;
+    box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.12);
 }
 .task-chip.half-completed {
     background: linear-gradient(to right, #10b981 50%, #e2e8f0 50%);
@@ -170,9 +170,9 @@ header {
     color: #334155;
 }
 .mastery-badge.mastered {
-    background: #fef9e7;
-    color: #936037;
-    border: 1px solid #e5b842;
+    background: #eff6ff;
+    color: #1e3a8a;
+    border: 1px solid #bfdbfe;
 }
 
 /* Practice Card */
@@ -219,14 +219,14 @@ header {
 }
 .input-row button {
     padding: 10px 18px;
-    background: #2563eb;
+    background: var(--primary);
     color: #ffffff;
     border: none;
     border-radius: 6px;
     font-weight: 600;
     cursor: pointer;
 }
-.input-row button:hover { background: #1d4ed8; }
+.input-row button:hover { background: var(--primary-hover); }
 
 .banner {
     padding: 12px 16px;

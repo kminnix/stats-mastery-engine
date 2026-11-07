@@ -21,7 +21,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "71"
+STATIC_VERSION = "72"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -40,11 +40,61 @@ def get_scoped_supabase(auth_header: Optional[str] = None) -> Client:
         raise HTTPException(status_code=500, detail="Database not configured")
     
     if auth_header and auth_header.startswith("Bearer "):
-        token = auth_header.split(" ")[1]
+        token = auth_header[len("Bearer "):].strip()
+        if not token:
+            raise HTTPException(status_code=401, detail="Authentication required")
         scoped = create_client(SUPABASE_URL, SUPABASE_KEY)
         scoped.postgrest.auth(token)
         return scoped
     return supabase_client
+
+def verify_teacher_access(authorization: Optional[str] = None) -> Dict[str, Any]:
+    """Require a valid Supabase user session with an approved teacher profile."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    token = authorization[len("Bearer "):].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    db = get_scoped_supabase(authorization)
+    try:
+        user_res = db.auth.get_user(token)
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="Invalid user session") from exc
+
+    user = user_res.user
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid user session")
+
+    try:
+        profile_res = (
+            db.table("profiles")
+            .select("role")
+            .eq("id", user.id)
+            .single()
+            .execute()
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=403, detail="Forbidden: Teacher approval required") from exc
+
+    profile = profile_res.data
+    if not profile or profile.get("role") != "teacher":
+        raise HTTPException(status_code=403, detail="Forbidden: Teacher approval required")
+
+    return {"user": user, "profile": profile}
+
+def verify_teacher_class_access(db: Client, class_id: str, teacher_id: str) -> None:
+    """Ensure a class belongs to the authenticated teacher."""
+    result = (
+        db.table("classes")
+        .select("id")
+        .eq("id", class_id)
+        .eq("teacher_id", teacher_id)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=403, detail="Forbidden: Class access denied")
 
 class VerifyPayload(BaseModel):
     user_answer: float
@@ -176,6 +226,9 @@ async def check_answer(payload: VerifyPayload):
 
 @app.post("/api/classes/create")
 async def create_class(payload: CreateClassPayload, authorization: Optional[str] = Header(None)):
+    access = verify_teacher_access(authorization)
+    if payload.teacher_id != access["user"].id:
+        raise HTTPException(status_code=403, detail="Forbidden: Teacher ID mismatch")
     db = get_scoped_supabase(authorization)
     code = generate_join_code()
 
@@ -210,6 +263,9 @@ async def join_class(payload: JoinClassPayload, authorization: Optional[str] = H
 
 @app.get("/api/teacher/classes/{teacher_id}")
 async def list_teacher_classes(teacher_id: str, authorization: Optional[str] = Header(None)):
+    access = verify_teacher_access(authorization)
+    if teacher_id != access["user"].id:
+        raise HTTPException(status_code=403, detail="Forbidden: Teacher ID mismatch")
     db = get_scoped_supabase(authorization)
     classes_res = db.table("classes").select("*").eq("teacher_id", teacher_id).order("created_at").execute()
     return classes_res.data or []
@@ -221,6 +277,9 @@ async def get_teacher_class_tasks(
     authorization: Optional[str] = Header(None)
 ):
     """Fetches active assessments for one or all classes owned by a teacher."""
+    access = verify_teacher_access(authorization)
+    if teacher_id != access["user"].id:
+        raise HTTPException(status_code=403, detail="Forbidden: Teacher ID mismatch")
     db = get_scoped_supabase(authorization)
     classes_res = (
         db.table("classes")
@@ -229,12 +288,14 @@ async def get_teacher_class_tasks(
         .execute()
     )
     teacher_classes = classes_res.data or []
+    class_ids = [item["id"] for item in teacher_classes]
+    if class_id and class_id not in class_ids:
+        raise HTTPException(status_code=403, detail="Forbidden: Class access denied")
     if not teacher_classes:
         return {"classes": [], "tasks": []}
 
-    class_ids = [item["id"] for item in teacher_classes]
     class_map = {item["id"]: item["name"] for item in teacher_classes}
-    target_ids = [class_id] if class_id in class_ids else class_ids
+    target_ids = [class_id] if class_id else class_ids
     assessments_res = (
         db.table("assessments")
         .select("*")
@@ -263,7 +324,9 @@ async def get_teacher_class_tasks(
 
 @app.get("/api/teacher/roster/{class_id}")
 async def get_class_roster(class_id: str, authorization: Optional[str] = Header(None)):
+    access = verify_teacher_access(authorization)
     db = get_scoped_supabase(authorization)
+    verify_teacher_class_access(db, class_id, access["user"].id)
 
     enrollments_res = db.table("enrollments").select("student_id").eq("class_id", class_id).execute()
     student_ids = [e["student_id"] for e in (enrollments_res.data or [])]
@@ -303,7 +366,9 @@ async def get_class_roster(class_id: str, authorization: Optional[str] = Header(
 @app.post("/api/teacher/assessments/create")
 async def create_assessment(req: AssessmentCreateRequest, authorization: Optional[str] = Header(None)):
     """Creates a new assignment, test, or correction block for a section."""
+    access = verify_teacher_access(authorization)
     db = get_scoped_supabase(authorization)
+    verify_teacher_class_access(db, req.class_id, access["user"].id)
     assessment_config = {**req.config, "allow_hints": req.allow_hints}
     
     payload = {
@@ -329,7 +394,9 @@ async def create_assessment(req: AssessmentCreateRequest, authorization: Optiona
 @app.get("/api/teacher/assessments/{class_id}")
 async def get_class_assessments(class_id: str, authorization: Optional[str] = Header(None)):
     """Retrieves all assessments and student submission counts for a section."""
+    access = verify_teacher_access(authorization)
     db = get_scoped_supabase(authorization)
+    verify_teacher_class_access(db, class_id, access["user"].id)
     
     try:
         res = db.table("assessments").select("*, assessment_submissions(count)").eq("class_id", class_id).order("created_at", desc=True).execute()
@@ -341,7 +408,17 @@ async def get_class_assessments(class_id: str, authorization: Optional[str] = He
 @app.get("/api/teacher/assessment/{assessment_id}/submissions")
 async def get_assessment_submissions(assessment_id: str, authorization: Optional[str] = Header(None)):
     """Fetches all student submissions, scores, and names for a specific assessment."""
+    access = verify_teacher_access(authorization)
     db = get_scoped_supabase(authorization)
+    assessment_res = (
+        db.table("assessments")
+        .select("class_id")
+        .eq("id", assessment_id)
+        .execute()
+    )
+    if not assessment_res.data:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+    verify_teacher_class_access(db, assessment_res.data[0]["class_id"], access["user"].id)
 
     subs_res = (
         db.table("assessment_submissions")
@@ -381,7 +458,9 @@ async def get_assessment_submissions(assessment_id: str, authorization: Optional
 @app.get("/api/teacher/gradebook/{class_id}")
 async def get_class_gradebook(class_id: str, authorization: Optional[str] = Header(None)):
     """Fetches all enrolled students, section assessments, and student scores."""
+    access = verify_teacher_access(authorization)
     db = get_scoped_supabase(authorization)
+    verify_teacher_class_access(db, class_id, access["user"].id)
 
     enroll_res = db.table("enrollments").select("student_id").eq("class_id", class_id).execute()
     student_ids = [enrollment["student_id"] for enrollment in (enroll_res.data or [])]

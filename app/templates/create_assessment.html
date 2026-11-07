@@ -530,9 +530,21 @@
         currentSession = session;
         currentUser = session?.user || null;
         if (!currentUser) {
-            window.location.replace('/teacher');
+            window.location.replace('/');
             return;
         }
+
+        const { data, error } = await supabaseClient
+            .from('profiles')
+            .select('role')
+            .eq('id', currentUser.id)
+            .single();
+        if (error || !data || data.role !== 'teacher') {
+            alert("🔒 Access Restricted: Teacher approval is required to view this area.");
+            window.location.replace('/practice');
+            return;
+        }
+
         await loadTeacherClasses();
     }
 
@@ -642,7 +654,7 @@
         renderCatalog();
         renderBlocksList();
         if (!window.SUPABASE_URL || !window.SUPABASE_KEY || !window.supabase) {
-            showBuilderError('Sign-in is unavailable because Supabase is not configured.');
+            window.location.replace('/');
             return;
         }
         supabaseClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_KEY);
