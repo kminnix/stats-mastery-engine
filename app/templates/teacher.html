@@ -401,11 +401,13 @@
 
 <div class="dashboard-container">
     <header class="dashboard-header">
-        <div class="brand">
-            <a href="/" style="text-decoration: none; color: inherit; display: inline-block;">
-                <h1>qederam.org</h1>
+        <div class="logo-area" style="display: flex; align-items: center; gap: 10px;">
+            <a href="/" style="text-decoration: none; color: inherit; display: inline-flex; align-items: center; gap: 10px;">
+                <img src="/static/img/ram-icon.png" alt="QEDeram Ram" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">
+                <span style="font-size: 1.5rem; font-weight: 700; color: #1e293b;">qederam<span style="color: #64748b; font-weight: 400;">.org</span></span>
             </a>
-            <span class="tagline">Teacher Dashboard · <span id="teacher-profile-status">Checking credentials...</span></span>
+            <span style="font-size: 0.9rem; color: #64748b; margin-left: 6px;">Teacher Dashboard</span>
+            <span id="teacher-profile-status" style="font-size: 0.8rem; color: #64748b;"></span>
         </div>
         <div class="teacher-header-controls">
             <a href="/practice" class="btn-secondary" style="text-decoration: none;">🎓 Student Practice</a>
@@ -431,13 +433,14 @@
 
         <!-- Section Navigation -->
         <div class="view-nav">
-            <button id="nav-roster-btn" class="view-nav-btn active" onclick="switchView('roster')">📊 Roster &amp; Mastery Matrix</button>
+            <button id="nav-gradebook-btn" class="view-nav-btn active" onclick="switchView('gradebook')">📈 Gradebook</button>
             <button id="nav-assess-btn" class="view-nav-btn" onclick="switchView('assessments')">📝 Assignments &amp; Tests</button>
-            <button id="nav-gradebook-btn" class="view-nav-btn" onclick="switchView('gradebook')">📈 Gradebook</button>
+            <button id="nav-roster-btn" class="view-nav-btn" onclick="switchView('roster')">👥 Roster &amp; Mastery</button>
+            <button id="nav-settings-btn" class="view-nav-btn" onclick="switchView('settings')">⚙️ Settings</button>
         </div>
 
         <!-- 1. Roster View -->
-        <div id="roster-view" class="card-panel">
+        <div id="roster-view" class="card-panel" style="display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <h2 style="margin: 0; font-size: 1.2rem; color: #1e293b;">Live Class Mastery Matrix</h2>
                 <button class="btn-secondary" onclick="refreshRoster()" style="font-size: 0.85rem; padding: 6px 12px;">↻ Refresh Matrix</button>
@@ -485,7 +488,7 @@
             </table>
         </div>
 
-        <div id="gradebook-view" class="card-panel" style="display: none;">
+        <div id="gradebook-view" class="card-panel" style="display: block;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <h2 style="margin: 0; font-size: 1.2rem; color: #1e293b;">Assignment Gradebook</h2>
                 <button class="btn-secondary" onclick="loadGradebook()" style="font-size: 0.85rem; padding: 6px 12px;">↻ Refresh Gradebook</button>
@@ -499,6 +502,31 @@
                 </tbody>
                 <tfoot id="gradebook-tfoot"></tfoot>
             </table>
+        </div>
+
+        <div id="settings-view" class="card-panel" style="display: none;">
+            <h2 style="margin: 0 0 16px; font-size: 1.2rem; color: #1e293b;">Section Settings</h2>
+            <div style="max-width: 640px; display: grid; gap: 20px;">
+                <section style="padding: 16px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <h3 style="margin: 0 0 12px; color: #334155;">Rename Section</h3>
+                    <label for="settings-class-name" style="display: block; margin-bottom: 6px; color: #475569; font-weight: 600;">Section name</label>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <input id="settings-class-name" type="text" maxlength="120" style="flex: 1; min-width: 220px; padding: 9px 10px; border: 1px solid #cbd5e1; border-radius: 6px;">
+                        <button class="btn-primary" type="button" onclick="renameActiveClass()">Update Name</button>
+                    </div>
+                </section>
+                <section style="padding: 16px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <h3 style="margin: 0 0 8px; color: #334155;">Student Join Code</h3>
+                    <p style="margin: 0 0 12px; color: #64748b;">Generate a new code. Students with the old code will no longer be able to join.</p>
+                    <button class="btn-secondary" type="button" onclick="regenerateActiveJoinCode()">Regenerate Join Code</button>
+                </section>
+                <section style="padding: 16px; border: 1px solid #fecaca; border-radius: 8px; background: #fffafa;">
+                    <h3 style="margin: 0 0 8px; color: #991b1b;">Delete Section</h3>
+                    <p style="margin: 0 0 12px; color: #7f1d1d;">Permanently delete this class section. This action cannot be undone.</p>
+                    <button class="btn-secondary" type="button" onclick="deleteActiveClass()" style="border-color: #ef4444; color: #b91c1c;">Delete Class Section</button>
+                </section>
+                <p id="settings-feedback" role="status" style="display: none; margin: 0; color: #475569;"></p>
+            </div>
         </div>
     </div>
 
@@ -518,7 +546,7 @@
     let currentSession = null;
     let currentClasses = [];
     let currentAssessments = [];
-    let activeView = 'roster';
+    let activeView = 'gradebook';
     let assessmentBlocks = [];
 
     const ASSESSABLE_SKILLS = [
@@ -912,17 +940,24 @@
     }
 
     function switchView(viewName) {
-        activeView = viewName;
-        document.getElementById('nav-roster-btn').className = viewName === 'roster' ? 'view-nav-btn active' : 'view-nav-btn';
-        document.getElementById('nav-assess-btn').className = viewName === 'assessments' ? 'view-nav-btn active' : 'view-nav-btn';
-        document.getElementById('nav-gradebook-btn').className = viewName === 'gradebook' ? 'view-nav-btn active' : 'view-nav-btn';
-        document.getElementById('roster-view').style.display = viewName === 'roster' ? 'block' : 'none';
-        document.getElementById('assess-view').style.display = viewName === 'assessments' ? 'block' : 'none';
-        document.getElementById('gradebook-view').style.display = viewName === 'gradebook' ? 'block' : 'none';
+        const viewElements = {
+            gradebook: ['gradebook-view', 'nav-gradebook-btn'],
+            assessments: ['assess-view', 'nav-assess-btn'],
+            roster: ['roster-view', 'nav-roster-btn'],
+            settings: ['settings-view', 'nav-settings-btn']
+        };
+        if (!viewElements[viewName]) return;
 
-        if (viewName === 'assessments') loadAssessments();
-        else if (viewName === 'gradebook') loadGradebook();
-        else refreshRoster();
+        activeView = viewName;
+        Object.entries(viewElements).forEach(([name, [panelId, buttonId]]) => {
+            document.getElementById(panelId).style.display = name === viewName ? 'block' : 'none';
+            document.getElementById(buttonId).className = name === viewName ? 'view-nav-btn active' : 'view-nav-btn';
+        });
+
+        if (viewName === 'gradebook') loadGradebook();
+        else if (viewName === 'assessments') loadAssessments();
+        else if (viewName === 'roster') refreshRoster();
+        else loadClassSettings();
     }
 
     async function loadTeacherClasses() {
@@ -943,6 +978,9 @@
             if (currentClasses.length > 0) {
                 select.value = currentClasses[0].id;
                 onClassSelected();
+            } else {
+                select.value = '';
+                onClassSelected();
             }
         } catch (e) {
             console.error("Could not load classes:", e);
@@ -958,6 +996,7 @@
         if (!classId) {
             codeContainer.style.display = 'none';
             if (activeView === 'gradebook') loadGradebook();
+            else if (activeView === 'settings') loadClassSettings();
             return;
         }
 
@@ -968,6 +1007,96 @@
             if (activeView === 'roster') refreshRoster();
             else if (activeView === 'assessments') loadAssessments();
             else if (activeView === 'gradebook') loadGradebook();
+            else if (activeView === 'settings') loadClassSettings();
+        }
+    }
+
+    function getActiveClass() {
+        const classId = document.getElementById('class-select').value;
+        return currentClasses.find(item => String(item.id) === String(classId));
+    }
+
+    function showSettingsFeedback(message, isError = false) {
+        const feedback = document.getElementById('settings-feedback');
+        feedback.textContent = message;
+        feedback.style.color = isError ? '#b91c1c' : '#475569';
+        feedback.style.display = 'block';
+    }
+
+    function loadClassSettings() {
+        const activeClass = getActiveClass();
+        const nameInput = document.getElementById('settings-class-name');
+        const feedback = document.getElementById('settings-feedback');
+        nameInput.value = activeClass?.name || '';
+        nameInput.disabled = !activeClass;
+        document.querySelectorAll('#settings-view button').forEach(button => {
+            button.disabled = !activeClass;
+        });
+        if (feedback) feedback.style.display = 'none';
+        if (!activeClass) showSettingsFeedback('Select a class to manage its settings.', true);
+    }
+
+    async function renameActiveClass() {
+        const activeClass = getActiveClass();
+        const name = document.getElementById('settings-class-name').value.trim();
+        if (!activeClass) return showSettingsFeedback('Select a class first.', true);
+        if (!name) return showSettingsFeedback('Enter a section name.', true);
+
+        try {
+            const response = await fetch(`/api/teacher/classes/${encodeURIComponent(activeClass.id)}`, {
+                method: 'PATCH',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ name })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.detail || 'Could not rename this section.');
+            activeClass.name = result.name;
+            const option = Array.from(document.getElementById('class-select').options)
+                .find(item => item.value === String(activeClass.id));
+            if (option) option.textContent = result.name;
+            showSettingsFeedback('Section name updated.');
+        } catch (error) {
+            showSettingsFeedback(error.message || 'Could not rename this section.', true);
+        }
+    }
+
+    async function regenerateActiveJoinCode() {
+        const activeClass = getActiveClass();
+        if (!activeClass) return showSettingsFeedback('Select a class first.', true);
+        if (!confirm('Regenerate this section’s student join code? The old code will stop working.')) return;
+
+        try {
+            const response = await fetch(`/api/teacher/classes/${encodeURIComponent(activeClass.id)}/join-code`, {
+                method: 'POST',
+                headers: getAuthHeaders()
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.detail || 'Could not regenerate the join code.');
+            activeClass.join_code = result.join_code;
+            document.getElementById('active-code-badge').textContent = result.join_code;
+            showSettingsFeedback('Student join code regenerated.');
+        } catch (error) {
+            showSettingsFeedback(error.message || 'Could not regenerate the join code.', true);
+        }
+    }
+
+    async function deleteActiveClass() {
+        const activeClass = getActiveClass();
+        if (!activeClass) return showSettingsFeedback('Select a class first.', true);
+        const confirmation = prompt(`This permanently deletes "${activeClass.name}". Type DELETE to confirm.`);
+        if (confirmation !== 'DELETE') return;
+
+        try {
+            const response = await fetch(`/api/teacher/classes/${encodeURIComponent(activeClass.id)}`, {
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(result.detail || 'Could not delete this section.');
+            await loadTeacherClasses();
+            switchView('gradebook');
+        } catch (error) {
+            showSettingsFeedback(error.message || 'Could not delete this section.', true);
         }
     }
 
