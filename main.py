@@ -14,6 +14,18 @@ from dotenv import load_dotenv
 from app.engine.normal_dist import generate_normal_problem, verify_normal_answer
 from app.engine.confidence_intervals import generate_ci_problem
 from app.engine.hypothesis_testing import generate_ht_problem
+from app.engine.inference_drills import (
+    generate_condition_check_mean,
+    generate_condition_check_proportion,
+    generate_conclusion_drill_mean,
+    generate_conclusion_drill_proportion,
+    generate_hypothesis_drill_mean,
+    generate_hypothesis_drill_proportion,
+    generate_standard_error_drill_mean,
+    generate_standard_error_drill_proportion,
+    generate_test_stat_drill_mean,
+    generate_test_stat_drill_proportion,
+)
 
 load_dotenv()
 
@@ -22,7 +34,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "100"
+STATIC_VERSION = "102"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -221,6 +233,25 @@ async def get_ht_problem(topic: str = "ht_prop_z"):
             status_code=500,
             detail=f"Unable to generate hypothesis-testing problem: {e}",
         ) from e
+
+@app.get("/api/problem/drill")
+async def get_inference_drill(topic: str):
+    generators = {
+        "cond_check_prop": generate_condition_check_proportion,
+        "drill_se_prop": generate_standard_error_drill_proportion,
+        "drill_hypo_prop": generate_hypothesis_drill_proportion,
+        "drill_stat_prop": generate_test_stat_drill_proportion,
+        "drill_conclusion_prop": generate_conclusion_drill_proportion,
+        "cond_check_mean": generate_condition_check_mean,
+        "drill_se_mean": generate_standard_error_drill_mean,
+        "drill_hypo_mean": generate_hypothesis_drill_mean,
+        "drill_stat_mean": generate_test_stat_drill_mean,
+        "drill_conclusion_mean": generate_conclusion_drill_mean,
+    }
+    generator = generators.get(topic)
+    if generator is None:
+        raise HTTPException(status_code=404, detail=f"Unknown inference drill topic: {topic}")
+    return generator()
 
 @app.post("/api/verify")
 async def check_answer(payload: VerifyPayload):

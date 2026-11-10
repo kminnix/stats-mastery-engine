@@ -7,12 +7,18 @@ function evaluateMathInput(rawStringOrLatex) {
     const str = rawStringOrLatex.trim();
     try {
         if (!isNaN(Number(str))) return Number(str);
-        if (/^-?\d+\s*\/\s*\d+$/.test(str)) {
-            const [numerator, denominator] = str.split('/');
-            return Number(numerator) / Number(denominator);
+        if (typeof math === 'undefined') return NaN;
+        const isLatex = /\\|[{}]/.test(str);
+        let expression = str;
+        if (isLatex) {
+            if (typeof latexToMathJs !== 'function') return NaN;
+            expression = latexToMathJs(str);
+        } else {
+            if (!/^[\d\s.+\-*/^()a-zA-Z]*$/.test(str)) return NaN;
+            const words = str.match(/[a-zA-Z]+/g) || [];
+            if (words.some(word => word.toLowerCase() !== 'sqrt')) return NaN;
         }
-        if (typeof latexToMathJs !== 'function' || typeof math === 'undefined') return NaN;
-        const result = math.evaluate(latexToMathJs(str));
+        const result = math.evaluate(expression);
         return typeof result === 'number' && Number.isFinite(result) ? result : NaN;
     } catch (error) {
         return NaN;
@@ -79,16 +85,26 @@ const TOPIC_REGISTRY = [
     { id: 'left_tail', title: 'Left Tail Cumulative Area', topic: 'Normal Distributions', notation: 'P(X < b)' },
     { id: 'right_tail', title: 'Right Tail Cumulative Area', topic: 'Normal Distributions', notation: 'P(X > a)' },
     { id: 'inverse', title: 'Inverse Cutoffs & Percentiles', topic: 'Normal Distributions', notation: 'x = μ + zσ' },
-    { id: 'ci_prop_z', title: '1-Sample z-Interval for Proportion', topic: 'Confidence Intervals', notation: 'p' },
-    { id: 'ci_prop_z_2samp', title: '2-Sample z-Interval for Proportions', topic: 'Confidence Intervals', notation: 'p₁ - p₂' },
-    { id: 'ci_mean_t', title: '1-Sample t-Interval for Mean', topic: 'Confidence Intervals', notation: 'μ' },
-    { id: 'ci_mean_t_2samp', title: '2-Sample t-Interval for Means', topic: 'Confidence Intervals', notation: 'μ₁ - μ₂' },
-    { id: 'ci_matched_pairs_t', title: 'Matched Pairs t-Interval', topic: 'Confidence Intervals', notation: '\\mu_{\\text{diff}}' },
-    { id: 'ht_prop_z', title: '1-Sample z-Test for Proportion', topic: 'Hypothesis Testing', notation: 'H_0: p = p_0' },
-    { id: 'ht_mean_t', title: '1-Sample t-Test for Mean', topic: 'Hypothesis Testing', notation: 'H_0: \\mu = \\mu_0' },
-    { id: 'ht_mean_t_2samp', title: '2-Sample t-Test for Means', topic: 'Hypothesis Testing', notation: 'H_0: \\mu_1 = \\mu_2' },
-    { id: 'ht_prop_z_2samp', title: '2-Sample z-Test for Proportions', topic: 'Hypothesis Testing', notation: 'H_0: p_1 = p_2' },
-    { id: 'ht_matched_pairs_t', title: 'Matched Pairs t-Test', topic: 'Hypothesis Testing', notation: 'H_0: \\mu_{\\text{diff}} = 0' }
+    { id: 'cond_check_prop', title: 'Sub-Skill: Checking Conditions for Proportions', topic: 'Confidence Intervals for Proportions (p)', notation: 'Random, 10%, Large Counts' },
+    { id: 'drill_se_prop', title: 'Sub-Skill: Standard Error for Proportions', topic: 'Confidence Intervals for Proportions (p)', notation: 'SE = √(p̂(1 − p̂)/n)' },
+    { id: 'ci_prop_z', title: '1-Sample z-Interval for Proportion', topic: 'Confidence Intervals for Proportions (p)', notation: 'p' },
+    { id: 'ci_prop_z_2samp', title: '2-Sample z-Interval for Proportions', topic: 'Confidence Intervals for Proportions (p)', notation: 'p₁ - p₂' },
+    { id: 'drill_hypo_prop', title: 'Sub-Skill: Stating Hypotheses for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'H₀, Hₐ' },
+    { id: 'drill_stat_prop', title: 'Sub-Skill: Test Statistic & SE for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'SE₀, z' },
+    { id: 'drill_conclusion_prop', title: 'Sub-Skill: P-Value & Conclusion for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'p-value vs. α' },
+    { id: 'ht_prop_z', title: '1-Sample z-Test for Proportion', topic: 'Significance Tests for Proportions (p)', notation: 'H₀: p = p₀' },
+    { id: 'ht_prop_z_2samp', title: '2-Sample z-Test for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'H₀: p₁ = p₂' },
+    { id: 'cond_check_mean', title: 'Sub-Skill: Checking Conditions for Means', topic: 'Confidence Intervals for Means (μ)', notation: 'Random, 10%, Normality' },
+    { id: 'drill_se_mean', title: 'Sub-Skill: Standard Error & t* for Means', topic: 'Confidence Intervals for Means (μ)', notation: 'SE = s/√n, t*' },
+    { id: 'ci_mean_t', title: '1-Sample t-Interval for Mean', topic: 'Confidence Intervals for Means (μ)', notation: 'μ' },
+    { id: 'ci_mean_t_2samp', title: '2-Sample t-Interval for Means', topic: 'Confidence Intervals for Means (μ)', notation: 'μ₁ - μ₂' },
+    { id: 'ci_matched_pairs_t', title: 'Matched Pairs t-Interval for Mean Difference', topic: 'Confidence Intervals for Means (μ)', notation: 'μ_diff' },
+    { id: 'drill_hypo_mean', title: 'Sub-Skill: Stating Hypotheses for Means', topic: 'Significance Tests for Means (μ)', notation: 'H₀, Hₐ' },
+    { id: 'drill_stat_mean', title: 'Sub-Skill: Test Statistic & SE for Means', topic: 'Significance Tests for Means (μ)', notation: 'SE₀, t' },
+    { id: 'drill_conclusion_mean', title: 'Sub-Skill: P-Value & Conclusion for Means', topic: 'Significance Tests for Means (μ)', notation: 'p-value vs. α' },
+    { id: 'ht_mean_t', title: '1-Sample t-Test for Mean', topic: 'Significance Tests for Means (μ)', notation: 'H₀: μ = μ₀' },
+    { id: 'ht_mean_t_2samp', title: '2-Sample t-Test for Means', topic: 'Significance Tests for Means (μ)', notation: 'H₀: μ₁ = μ₂' },
+    { id: 'ht_matched_pairs_t', title: 'Matched Pairs t-Test', topic: 'Significance Tests for Means (μ)', notation: 'H₀: μ_diff = 0' }
 ];
 
 let state = {
@@ -1179,7 +1195,8 @@ async function loadProblem(problemToRender = null) {
     currentQuestionAnswers = [];
 
     const topic = state.selectedTopic || 'random';
-    isMultiStage = topic.startsWith('ci_') || topic.startsWith('ht_');
+    isMultiStage = topic.startsWith('ci_') || topic.startsWith('ht_') ||
+        topic.startsWith('cond_') || topic.startsWith('drill_');
     currentProblem = problemToRender;
 
     if (isMultiStage) {
@@ -1189,8 +1206,11 @@ async function loadProblem(problemToRender = null) {
         
         if (!currentProblem) {
             const isHypothesisTest = topic.startsWith('ht_');
+            const isInferenceDrill = topic.startsWith('cond_') || topic.startsWith('drill_');
             const problemTopic = isHypothesisTest ? topic : topic.replace('ci_', '');
-            const endpoint = isHypothesisTest ? '/api/problem/ht' : '/api/problem/ci';
+            const endpoint = isInferenceDrill
+                ? '/api/problem/drill'
+                : isHypothesisTest ? '/api/problem/ht' : '/api/problem/ci';
             const res = await fetch(`${endpoint}?topic=${encodeURIComponent(problemTopic)}`);
             currentProblem = await res.json();
         }
@@ -1336,8 +1356,8 @@ function renderMultiStageUI() {
                 });
                 if (definition.id === 'param-context') control.style.maxWidth = 'min(440px, 100%)';
             } else if (!isMathField) {
-                control.type = 'number';
-                control.step = 'any';
+                control.type = 'text';
+                control.inputMode = 'text';
                 control.placeholder = definition.placeholder || step.placeholder || '';
                 if (definition.id === 'stage-pval') {
                     control.style.width = '110px';
@@ -1462,8 +1482,13 @@ function renderMultiStageUI() {
         reveal.id = `stage-reveal-${idx}`;
         reveal.className = 'revealed-msg';
         reveal.style.display = 'none';
+        const inputWarning = document.createElement('div');
+        inputWarning.id = `stage-input-warning-${idx}`;
+        inputWarning.className = 'stage-hint';
+        inputWarning.style.display = 'none';
+        inputWarning.style.color = '#b45309';
 
-        box.append(header, inputRow, hint, reveal);
+        box.append(header, inputRow, hint, inputWarning, reveal);
         container.appendChild(box);
         if (showHints && idx === 0) triggerKaTeX(box);
     });
@@ -1507,6 +1532,19 @@ async function submitTestQuestion() {
     });
     if (submittedAnswers.some(step => Object.values(step.answers).some(answer => !answer))) return;
 
+    for (const [stepIndex, step] of currentProblem.steps.entries()) {
+        showStageInputWarning(stepIndex, '');
+        for (const definition of getStageInputDefinitions(step)) {
+            if (definition.type === 'select') continue;
+            const control = document.getElementById(getStageControlId(stepIndex, definition));
+            const value = evaluateMathInput(getStageControlValue(control));
+            if (!Number.isFinite(value)) {
+                showStageInputWarning(stepIndex, 'Enter a valid number or arithmetic expression, such as 12/sqrt(16).');
+                return;
+            }
+        }
+    }
+
     activeTaskState.isVerifying = true;
     const questionState = activeTaskState.questionsState[activeTaskState.currentIndex - 1];
     if (questionState) questionState.attempted = true;
@@ -1542,6 +1580,16 @@ async function submitStage(idx) {
     }));
     const answers = controls.map(({ control }) => getStageControlValue(control).trim());
     if (answers.some(answer => !answer)) return;
+    const numericValues = controls.map(({ definition }, index) =>
+        definition.type === 'select' ? null : evaluateMathInput(answers[index])
+    );
+    if (numericValues.some((value, index) =>
+        controls[index].definition.type !== 'select' && !Number.isFinite(value)
+    )) {
+        showStageInputWarning(idx, 'Enter a valid number or arithmetic expression, such as 12/sqrt(16).');
+        return;
+    }
+    showStageInputWarning(idx, '');
     controls.forEach(({ control }) => {
         control.style.borderColor = '';
         control.style.backgroundColor = '';
@@ -1564,7 +1612,7 @@ async function submitStage(idx) {
             if (definition.type === 'select') {
                 componentCorrect = definition.expected.some(expected => String(expected) === answer);
             } else if (controls[inputIndex].control.matches('math-field')) {
-                const value = evaluateMathInput(answer);
+                const value = numericValues[inputIndex];
                 const tolerance = definition.tolerance ?? step.tolerance ?? 0;
                 componentCorrect = Number.isFinite(value) && definition.expected.some(
                     expected => Math.abs(value - Number(expected)) <= tolerance
@@ -1574,7 +1622,7 @@ async function submitStage(idx) {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        user_answer: parseFloat(answer),
+                        user_answer: numericValues[inputIndex],
                         expected_answers: definition.expected,
                         tolerance: definition.tolerance ?? step.tolerance
                     })
@@ -1630,6 +1678,13 @@ async function submitStage(idx) {
         stageInputs.forEach(control => setStageControlDisabled(control, false));
         document.getElementById(`stage-btn-${idx}`).disabled = false;
     }
+}
+
+function showStageInputWarning(idx, message) {
+    const warning = document.getElementById(`stage-input-warning-${idx}`);
+    if (!warning) return;
+    warning.textContent = message;
+    warning.style.display = message ? 'block' : 'none';
 }
 
 function unlockNextStage(idx) {

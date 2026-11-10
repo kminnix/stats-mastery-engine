@@ -34,7 +34,7 @@ def _cdf_tail_probability(statistic: float, alternative: str, df: Optional[int] 
 
 
 def _alternative_symbol(alternative: str) -> str:
-    return r"\ne" if alternative == "!=" else alternative
+    return r"\neq" if alternative == "!=" else alternative
 
 
 def _parameter_definition_options(
