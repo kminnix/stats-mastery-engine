@@ -23,6 +23,16 @@ def _tail_probability(statistic: float, alternative: str, df: Optional[int] = No
     return float(distribution.sf(statistic if alternative == ">" else abs(statistic)) * (2 if alternative == "!=" else 1))
 
 
+def _cdf_tail_probability(statistic: float, alternative: str, df: Optional[int] = None) -> float:
+    distribution = t if df is not None else norm
+    cdf = float(distribution.cdf(statistic, df) if df is not None else distribution.cdf(statistic))
+    if alternative == "<":
+        return cdf
+    if alternative == ">":
+        return 1 - cdf
+    return 2 * min(cdf, 1 - cdf)
+
+
 def _alternative_symbol(alternative: str) -> str:
     return r"\ne" if alternative == "!=" else alternative
 
@@ -113,12 +123,16 @@ def _build_inference_pipeline(
     formatted_p_value = f"{p_value:.5f}"
     convincing = decision == "Reject H0"
     formatted_alpha = f"{alpha:.3f}".rstrip("0").rstrip(".")
-    comparison_operator = "<" if p_value < alpha else ">"
+    comparison_operator = "≤" if p_value <= alpha else ">"
     symbol_options = [
         {"value": symbol, "label": symbol}
         for symbol in (
             ["μ_diff", "x̄_diff", "μ", "x̄"]
             if parameter_symbol == "μ_diff"
+            else ["μ₁ - μ₂", "x̄₁ - x̄₂", "μ", "x̄"]
+            if parameter_symbol == "μ₁ - μ₂"
+            else ["p₁ - p₂", "p̂₁ - p̂₂", "p", "p̂"]
+            if parameter_symbol == "p₁ - p₂"
             else ["p", "p̂", "μ", "x̄"]
             if parameter_symbol == "p"
             else ["μ", "x̄", "p", "p̂"]
@@ -173,7 +187,9 @@ def _build_inference_pipeline(
             f"{parameter_symbol} instead."
         ),
         "p̂": "p̂ is a sample proportion, not the population proportion p.",
-        "x̄": "x̄ is a sample mean, not the population mean μ."
+        "p̂₁ - p̂₂": "p̂₁ - p̂₂ is a sample statistic. Choose the population difference p₁ - p₂.",
+        "x̄": "x̄ is a sample mean, not the population mean μ.",
+        "x̄₁ - x̄₂": "x̄₁ - x̄₂ is a sample statistic. Choose the population difference μ₁ - μ₂."
     }
     steps = [
         {
@@ -335,7 +351,7 @@ def _build_inference_pipeline(
                 {
                     "id": "p-val-op",
                     "type": "select",
-                    "options": [{"value": "<", "label": "<"}, {"value": ">", "label": ">"}],
+                    "options": [{"value": "≤", "label": "≤"}, {"value": ">", "label": ">"}],
                     "expected": [comparison_operator],
                 },
                 {
@@ -449,12 +465,12 @@ def _test_result(
     parameter_symbols = {
         "ht_prop_z": ("p", "p̂"),
         "ht_mean_t": ("μ", "x̄"),
-        "ht_mean_t_2samp": ("μ", "x̄"),
-        "ht_prop_z_2samp": ("p", "p̂"),
+        "ht_mean_t_2samp": ("μ₁ - μ₂", "x̄₁ - x̄₂"),
+        "ht_prop_z_2samp": ("p₁ - p₂", "p̂₁ - p̂₂"),
         "ht_matched_pairs_t": ("μ_diff", "x̄_diff"),
     }
     parameter_symbol, sample_statistic_symbol = parameter_symbols[test_type]
-    expected_pval_op = "<" if p_value < alpha else ">"
+    expected_pval_op = "≤" if p_value <= alpha else ">"
     _, parameter_definition_options = _parameter_definition_options(
         test_type,
         parameter_description,
@@ -651,7 +667,7 @@ def generate_two_sample_mean_t_test() -> Dict[str, Any]:
     scenarios = [
         ("battery life", "Brand A batteries", "Brand B batteries", "hours", (8.0, 24.0), (1.5, 5.0)),
         ("test scores", "students taught with Method A", "students taught with Method B", "points", (60.0, 85.0), (5.0, 15.0)),
-        ("plant growth", "plants treated with Fertilizer A", "plants treated with Fertilizer B", "centimeters", (10.0, 35.0), (2.0, 8.0))
+        ("crop yield", "crops treated with Fertilizer A", "crops treated with Fertilizer B", "kilograms per acre", (10.0, 35.0), (2.0, 8.0))
     ]
     context_noun, group1, group2, units, mean_range, deviation_range = random.choice(scenarios)
     n1 = random.choice([16, 20, 25, 30, 36])
@@ -666,7 +682,7 @@ def generate_two_sample_mean_t_test() -> Dict[str, Any]:
     t_stat = difference / se
     alternative = random.choice(ALTERNATIVES)
     alpha = random.choice(ALPHA_LEVELS)
-    p_value = _tail_probability(t_stat, alternative, df)
+    p_value = _cdf_tail_probability(t_stat, alternative, df)
     decision = _decision(p_value, alpha)
     direction = {"<": "less than", ">": "greater than", "!=": "different from"}[alternative]
     symbol = _alternative_symbol(alternative)
@@ -725,7 +741,7 @@ def generate_two_sample_prop_z_test() -> Dict[str, Any]:
     z_stat = (p1_hat - p2_hat) / se
     alternative = random.choice(ALTERNATIVES)
     alpha = random.choice(ALPHA_LEVELS)
-    p_value = _tail_probability(z_stat, alternative)
+    p_value = _cdf_tail_probability(z_stat, alternative)
     decision = _decision(p_value, alpha)
     direction = {"<": "less than", ">": "greater than", "!=": "different from"}[alternative]
     symbol = _alternative_symbol(alternative)
@@ -772,7 +788,7 @@ def generate_two_sample_prop_z_test() -> Dict[str, Any]:
 
 def generate_matched_pairs_t_test() -> Dict[str, Any]:
     scenarios = [
-        ("exam scores", "before instruction", "after instruction", "points"),
+        ("test scores", "pre-test", "post-test", "points"),
         ("tire tread depth", "before rotation", "after rotation", "millimeters"),
         ("reaction time", "before caffeine", "after caffeine", "milliseconds")
     ]
@@ -785,7 +801,7 @@ def generate_matched_pairs_t_test() -> Dict[str, Any]:
     t_stat = d_bar / se
     alternative = random.choice(ALTERNATIVES)
     alpha = random.choice(ALPHA_LEVELS)
-    p_value = _tail_probability(t_stat, alternative, df)
+    p_value = _cdf_tail_probability(t_stat, alternative, df)
     decision = _decision(p_value, alpha)
     direction = {"<": "less than", ">": "greater than", "!=": "different from"}[alternative]
     symbol = _alternative_symbol(alternative)

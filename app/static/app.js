@@ -1,5 +1,4 @@
 ﻿const STORAGE_KEY = 'qederam_state_v1';
-const TARGET_MASTERY = 5;
 const urlParams = new URLSearchParams(window.location.search);
 const taskId = urlParams.get('task_id');
 
@@ -95,24 +94,7 @@ const TOPIC_REGISTRY = [
 let state = {
     selectedTopic: 'random',
     totalAttempted: 0,
-    totalCorrect: 0,
-    skills: {
-        random:     { streak: 0, mastered: false },
-        between:    { streak: 0, mastered: false },
-        left_tail:  { streak: 0, mastered: false },
-        right_tail: { streak: 0, mastered: false },
-        inverse:    { streak: 0, mastered: false },
-        ci_mean_t:  { streak: 0, mastered: false },
-        ci_prop_z:  { streak: 0, mastered: false },
-        ci_mean_t_2samp: { streak: 0, mastered: false },
-        ci_prop_z_2samp: { streak: 0, mastered: false },
-        ci_matched_pairs_t: { streak: 0, mastered: false },
-        ht_prop_z: { streak: 0, mastered: false },
-        ht_mean_t: { streak: 0, mastered: false },
-        ht_mean_t_2samp: { streak: 0, mastered: false },
-        ht_prop_z_2samp: { streak: 0, mastered: false },
-        ht_matched_pairs_t: { streak: 0, mastered: false }
-    }
+    totalCorrect: 0
 };
 
 function getTaskTopics(task) {
@@ -166,27 +148,13 @@ function renderTopicCatalog() {
         const skillsInner = document.createElement('div');
         skillsInner.className = 'catalog-category-skills-inner';
         topics.forEach(topic => {
-            const skill = state.skills[topic.id] || { streak: 0, mastered: false };
-            const isMastered = skill.mastered || skill.streak >= TARGET_MASTERY;
             const row = document.createElement('div');
             row.className = 'catalog-item-row';
-            row.dataset.searchText = `${topic.topic} ${topic.title} ${topic.notation}`.toLowerCase();
+            row.dataset.searchText = `${topic.topic} ${topic.title}`.toLowerCase();
 
-            const details = document.createElement('div');
-            details.className = 'catalog-item-details';
             const title = document.createElement('div');
             title.className = 'catalog-item-title';
             title.textContent = topic.title;
-            const notation = document.createElement('span');
-            notation.className = 'catalog-math-pill';
-            notation.textContent = `\\(${topic.notation}\\)`;
-            details.append(title, notation);
-
-            const status = document.createElement('span');
-            status.className = isMastered ? 'catalog-mastery-status mastered' : 'catalog-mastery-status';
-            status.textContent = isMastered
-                ? `✔ Mastered (${skill.streak}/${TARGET_MASTERY})`
-                : `Streak ${skill.streak || 0}/${TARGET_MASTERY}`;
 
             const practiceButton = document.createElement('button');
             practiceButton.type = 'button';
@@ -194,7 +162,7 @@ function renderTopicCatalog() {
             practiceButton.textContent = 'Practice →';
             practiceButton.addEventListener('click', () => startPracticingTopic(topic.id, topic.title));
 
-            row.append(details, status, practiceButton);
+            row.append(title, practiceButton);
             skillsInner.appendChild(row);
         });
         skills.appendChild(skillsInner);
@@ -287,7 +255,7 @@ function updateTaskRunnerUI() {
     if (modeBadges) {
         const badges = [];
         if (activeTaskState.taskType === 'test') {
-            badges.push('<span class="badge" style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a;">📝 Test (Exam Conditions)</span>');
+            badges.push('<span class="badge" style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a;">📝 Exam Mode (Formula Hints &amp; Step Solutions Suppressed)</span>');
         }
         if (activeTaskState.blockMode === 'scaffold') {
             badges.push(`<span class="badge" style="background: #e0f2fe; color: #0369a1;">🎓 Scaffolded (${activeTaskState.allowHints ? 'Guided: Hints ON' : 'Independent: Hints OFF'})</span>`);
@@ -498,7 +466,7 @@ function showTaskAdvanceButton() {
         const nextBlock = activeTaskState.blockStates.some((item, index) =>
             index !== activeTaskState.currentBlockIndex && !item.completed
         );
-        let label = 'Review & Submit Assessment 🏁';
+        let label = activeTaskState.taskType === 'test' ? 'Submit Test' : 'Review & Submit Assessment 🏁';
         if (currentQuestion?.maxAttemptsReached) label = 'Next Block →';
         else if (blockState?.mode === 'mastery' && blockState.phase === 'guided' && blockState.attemptsCount > 1) {
             label = 'Try Guided Practice Again →';
@@ -510,12 +478,13 @@ function showTaskAdvanceButton() {
             label = 'Try Guided Practice Again →';
         } else if (nextInBlock >= 0) label = 'Continue in This Block →';
         else if (nextBlock) label = 'Continue to Next Block →';
+        else if (activeTaskState.taskType !== 'test') label = 'Review & Submit Assessment 🏁';
         button.textContent = label;
     } else {
         button.textContent = currentQuestion?.maxAttemptsReached
             ? 'Next Problem →'
             : activeTaskState.currentIndex === activeTaskState.totalQuestions
-                ? 'Review & Submit Assessment 🏁'
+                ? activeTaskState.taskType === 'test' ? 'Submit Test' : 'Review & Submit Assessment 🏁'
                 : 'Continue to Next Question →';
     }
     container.style.display = 'block';
@@ -677,13 +646,20 @@ async function startAssignedTask(assignedTaskId) {
 async function startStudentTask(task) {
     const topics = getTaskTopics(task);
     const configuredCount = parseInt(task.question_count || task.config?.total_count || task.config?.count, 10);
-    const taskType = task.task_type || task.type || 'assignment';
+    const taskType = task.task_type === 'test' || task.type === 'test'
+        ? 'test'
+        : task.task_type || task.type || 'assignment';
+    const isTest = taskType === 'test';
     const assignedTopic = task.skill_topic || task.config?.skill_topic || task.config?.topic;
     const supportedTopics = new Set(TOPIC_REGISTRY.map(topic => topic.id));
     const questionQueue = [];
     const configuredBlocks = Array.isArray(task.config?.blocks) ? task.config.blocks : null;
     const taskBlocks = configuredBlocks
-        ? configuredBlocks.map((block, index) => ({ ...block, id: block?.id || `block-${index}` }))
+        ? configuredBlocks.map((block, index) => ({
+            ...block,
+            id: block?.id || `block-${index}`,
+            mode: isTest ? 'no_hints' : block.mode
+        }))
         : [];
     if (configuredBlocks) {
         if (!taskBlocks.length) {
@@ -700,16 +676,16 @@ async function startStudentTask(task) {
             if (!Number.isInteger(parsedCount) || parsedCount < 1 || parsedCount > 50) {
                 throw new Error('This task contains an invalid question count.');
             }
-            const count = block.mode === 'mastery' || block.mode === 'scaffold'
+            const count = !isTest && (block.mode === 'mastery' || block.mode === 'scaffold')
                 ? Math.max(2, parsedCount)
                 : parsedCount;
             for (let index = 0; index < count; index += 1) {
                 let phase = 'standard';
                 let allowHints = block.mode === 'all_hints';
-                if (block.mode === 'scaffold') {
+                if (!isTest && block.mode === 'scaffold') {
                     phase = index === 0 ? 'guided' : 'independent';
                     allowHints = index === 0;
-                } else if (block.mode === 'mastery') {
+                } else if (!isTest && block.mode === 'mastery') {
                     phase = index === 0 ? 'guided' : 'independent';
                     allowHints = index === 0;
                 }
@@ -892,7 +868,24 @@ async function loadNextTaskQuestion() {
 }
 
 async function completeStudentTask() {
-    const responseCount = activeTaskState.responses.length;
+    if (activeTaskState.isSubmitting || activeTaskState.submitted) return;
+    if (activeTaskState.taskType === 'test') {
+        const answeredQuestions = new Set(activeTaskState.responses.map(response => response.questionIndex));
+        for (let questionIndex = 1; questionIndex <= activeTaskState.totalQuestions; questionIndex += 1) {
+            if (!answeredQuestions.has(questionIndex)) {
+                activeTaskState.responses.push({
+                    questionIndex,
+                    correct: false,
+                    answer: null,
+                    skipped: true
+                });
+            }
+        }
+        activeTaskState.responses.sort((left, right) => left.questionIndex - right.questionIndex);
+    }
+    const responseCount = activeTaskState.taskType === 'test'
+        ? activeTaskState.totalQuestions
+        : activeTaskState.responses.length;
     const score = responseCount ? Math.round((activeTaskState.correctCount / responseCount) * 100) : 0;
     if (supabaseClient && currentUser && !activeTaskState.isPreview) {
         activeTaskState.isSubmitting = true;
@@ -966,12 +959,6 @@ function finishStudentTask() {
     document.getElementById('task-completion-modal').style.display = 'none';
     if (typeof switchStudentTab === 'function') switchStudentTab('tasks', false);
     if (typeof loadStudentTasks === 'function') loadStudentTasks();
-}
-
-function getActiveSkillState() {
-    const topic = state.selectedTopic || 'random';
-    if (!state.skills[topic]) state.skills[topic] = { streak: 0, mastered: false };
-    return state.skills[topic];
 }
 
 // Authentication
@@ -1069,17 +1056,12 @@ async function loadCloudState() {
             let totalAtt = 0;
             let totalCorr = 0;
             data.forEach(row => {
-                if (state.skills[row.skill_id]) {
-                    state.skills[row.skill_id].streak = row.consecutive_streak || 0;
-                    state.skills[row.skill_id].mastered = Boolean(row.is_mastered);
-                }
                 totalAtt += (row.total_attempted || 0);
                 totalCorr += (row.total_correct || 0);
             });
             state.totalAttempted = totalAtt;
             state.totalCorrect = totalCorr;
             updateCurrentSkillName();
-            updateStatsUI();
         }
     } catch (e) {
         console.warn("Could not load cloud progress:", e);
@@ -1094,34 +1076,23 @@ function loadSavedState() {
             state.selectedTopic = parsed.selectedTopic || 'random';
             state.totalAttempted = parsed.totalAttempted || 0;
             state.totalCorrect = parsed.totalCorrect || 0;
-            if (parsed.skills) {
-                for (let k in parsed.skills) {
-                    if (state.skills[k]) state.skills[k] = parsed.skills[k];
-                }
-            }
         }
     } catch (e) {
         console.warn('localStorage not accessible');
     }
     updateCurrentSkillName();
-    updateStatsUI();
 }
 
 async function saveState() {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (e) {}
-    updateStatsUI();
-
     if (supabaseClient && currentUser) {
         const topic = state.selectedTopic || 'random';
-        const skill = getActiveSkillState();
         try {
             await supabaseClient.from('skill_progress').upsert({
                 student_id: currentUser.id,
                 skill_id: topic,
-                consecutive_streak: skill.streak,
-                is_mastered: skill.mastered,
                 total_attempted: state.totalAttempted,
                 total_correct: state.totalCorrect,
                 last_practiced_at: new Date().toISOString()
@@ -1132,55 +1103,12 @@ async function saveState() {
     }
 }
 
-function resetCurrentSkill() {
-    const topic = state.selectedTopic || 'random';
-    if (confirm("Reset streak for this skill?")) {
-        state.skills[topic] = { streak: 0, mastered: false };
-        saveState();
-    }
-}
-
-function resetSessionProgress() {
-    if (!confirm('Reset session attempts and progress for the current skill?')) return;
-    state.totalAttempted = 0;
-    state.totalCorrect = 0;
-    state.skills[state.selectedTopic || 'random'] = { streak: 0, mastered: false };
-    saveState();
-}
-
 function onTopicChange() {
     const topicSelect = document.getElementById('topic-select');
     state.selectedTopic = topicSelect?.value || state.selectedTopic || 'random';
     updateCurrentSkillName();
     saveState();
     loadProblem();
-}
-
-function updateStatsUI() {
-    const pillEl = document.getElementById('mastery-pill');
-    const statsEl = document.getElementById('session-stats');
-    const skillState = getActiveSkillState();
-
-    if (skillState.mastered || skillState.streak >= TARGET_MASTERY) {
-        skillState.mastered = true;
-        pillEl.className = 'mastery-badge mastered';
-        pillEl.innerHTML = `&#10004; Mastered (${skillState.streak}/${TARGET_MASTERY})`;
-    } else {
-        pillEl.className = 'mastery-badge';
-        pillEl.innerHTML = `Streak: <span>${skillState.streak}</span> / ${TARGET_MASTERY}`;
-    }
-
-    const acc = state.totalAttempted > 0 
-        ? Math.round((state.totalCorrect / state.totalAttempted) * 100) 
-        : 0;
-    statsEl.innerText = `Attempts: ${state.totalAttempted} | Accuracy: ${acc}%`;
-    if (statsEl) {
-        statsEl.title = 'Click to reset session attempts and current skill progress';
-        statsEl.setAttribute('role', 'button');
-        statsEl.tabIndex = 0;
-    }
-    const catalogView = document.getElementById('catalog-view');
-    if (catalogView && catalogView.style.display !== 'none') renderTopicCatalog();
 }
 
 function triggerKaTeX(element) {
@@ -1353,16 +1281,17 @@ function setStageControlDisabled(control, disabled) {
 function renderMultiStageUI() {
     const container = document.getElementById('multi-stage-panel');
     container.innerHTML = '';
+    const isTest = activeTaskState.active && activeTaskState.taskType === 'test';
     const showHints = !activeTaskState.active || (
-        activeTaskState.allowHints !== false &&
-        (activeTaskState.taskType !== 'test' || activeTaskState.blocks.length > 0)
+        !isTest &&
+        activeTaskState.allowHints !== false
     );
 
     currentProblem.steps.forEach((step, idx) => {
         const box = document.createElement('div');
         box.id = `stage-box-${idx}`;
         box.className = idx === 0 ? 'stage-box active' : 'stage-box';
-        box.style.display = idx === 0 ? 'block' : 'none';
+        box.style.display = isTest || idx === 0 ? 'block' : 'none';
 
         const header = document.createElement('div');
         header.className = 'stage-header';
@@ -1385,9 +1314,9 @@ function renderMultiStageUI() {
             if (isMathField) {
                 control.className = 'question-mathfield';
                 control.setAttribute('virtual-keyboard-mode', 'manual');
-                control.readOnly = idx > 0;
+                control.readOnly = idx > 0 && !isTest;
             } else {
-                control.disabled = idx > 0;
+                control.disabled = idx > 0 && !isTest;
             }
             if (definition.type === 'select') {
                 control.add(new Option('Choose an answer...', ''));
@@ -1515,17 +1444,20 @@ function renderMultiStageUI() {
             appendControl(inputRow, getStageInputDefinitions(step)[0]);
         }
 
-        const verifyButton = document.createElement('button');
-        verifyButton.id = `stage-btn-${idx}`;
-        verifyButton.textContent = 'Verify Step';
-        verifyButton.disabled = idx > 0;
-        verifyButton.addEventListener('click', () => submitStage(idx));
-        inputRow.appendChild(verifyButton);
+        if (!isTest) {
+            const verifyButton = document.createElement('button');
+            verifyButton.id = `stage-btn-${idx}`;
+            verifyButton.textContent = 'Verify Step';
+            verifyButton.disabled = idx > 0;
+            verifyButton.addEventListener('click', () => submitStage(idx));
+            inputRow.appendChild(verifyButton);
+        }
 
         const hint = document.createElement('div');
         hint.className = 'stage-hint';
         hint.textContent = step.hint || '';
         hint.hidden = !showHints;
+        if (isTest) hint.style.display = 'none';
         const reveal = document.createElement('div');
         reveal.id = `stage-reveal-${idx}`;
         reveal.className = 'revealed-msg';
@@ -1536,16 +1468,70 @@ function renderMultiStageUI() {
         if (showHints && idx === 0) triggerKaTeX(box);
     });
 
+    if (isTest) {
+        const submitButton = document.createElement('button');
+        submitButton.type = 'button';
+        submitButton.className = 'btn-primary';
+        submitButton.textContent = 'Submit Test Answer';
+        submitButton.addEventListener('click', submitTestQuestion);
+        container.appendChild(submitButton);
+    }
     const firstInput = container.querySelector('#stage-box-0 input, #stage-box-0 select, #stage-box-0 math-field');
-    container.querySelectorAll('#stage-box-0 input, #stage-box-0 select, #stage-box-0 math-field').forEach(control => {
+    const activeStepInputs = isTest
+        ? container.querySelectorAll('input, select, math-field')
+        : container.querySelectorAll('#stage-box-0 input, #stage-box-0 select, #stage-box-0 math-field');
+    activeStepInputs.forEach(control => {
         control.addEventListener('keydown', event => {
             if (event.key === 'Enter') {
                 event.preventDefault();
-                submitStage(0);
+                if (isTest) submitTestQuestion();
+                else submitStage(0);
             }
         });
     });
     if (firstInput) firstInput.focus();
+}
+
+async function submitTestQuestion() {
+    if (!activeTaskState.active || activeTaskState.taskType !== 'test' || activeTaskState.isVerifying) return;
+
+    const submittedAnswers = [];
+    let isCorrect = true;
+    currentProblem.steps.forEach((step, stepIndex) => {
+        const answers = {};
+        getStageInputDefinitions(step).forEach(definition => {
+            const control = document.getElementById(getStageControlId(stepIndex, definition));
+            answers[definition.id || `answer-${stepIndex}`] = getStageControlValue(control).trim();
+        });
+        submittedAnswers.push({ step_num: step.step_num, answers });
+    });
+    if (submittedAnswers.some(step => Object.values(step.answers).some(answer => !answer))) return;
+
+    activeTaskState.isVerifying = true;
+    const questionState = activeTaskState.questionsState[activeTaskState.currentIndex - 1];
+    if (questionState) questionState.attempted = true;
+    try {
+        for (const [stepIndex, step] of currentProblem.steps.entries()) {
+            for (const definition of getStageInputDefinitions(step)) {
+                const control = document.getElementById(getStageControlId(stepIndex, definition));
+                const answer = getStageControlValue(control).trim();
+                if (definition.type === 'select') {
+                    if (!definition.expected.includes(answer)) isCorrect = false;
+                } else {
+                    const value = evaluateMathInput(answer);
+                    const tolerance = definition.tolerance ?? step.tolerance ?? 0;
+                    if (!Number.isFinite(value) || !definition.expected.some(
+                        expected => Math.abs(value - Number(expected)) <= tolerance
+                    )) {
+                        isCorrect = false;
+                    }
+                }
+            }
+        }
+    } finally {
+        activeTaskState.isVerifying = false;
+    }
+    await finalizeProblem(isCorrect, submittedAnswers);
 }
 
 async function submitStage(idx) {
@@ -1625,12 +1611,11 @@ async function submitStage(idx) {
 
         unlockNextStage(idx);
     } else {
-        hadStageMistake = true;
-        if (!isTest) {
-            const skillState = getActiveSkillState();
-            skillState.streak = 0;
-            saveState();
+        if (isTest) {
+            await finalizeProblem(false, currentQuestionAnswers.slice());
+            return;
         }
+        hadStageMistake = true;
 
         statusEl.innerHTML = '<span style="color: #d97706;">&#10008; Incorrect — try again to reveal the next step.</span>';
         box.className = 'stage-box revealed';
@@ -1719,27 +1704,24 @@ async function finalizeProblem(isSuccess, answer = null) {
     if (questionState?.completed) return;
     if (isTest) {
         feedback.className = 'banner';
-        feedback.textContent = "Answer recorded. Click 'Next Problem' to continue.";
+        feedback.textContent = 'Test response recorded. Continue to the next question.';
     } else {
         state.totalAttempted += 1;
-        const skillState = getActiveSkillState();
 
         if (isSuccess) {
-            skillState.streak += 1;
             state.totalCorrect += 1;
             feedback.className = 'banner correct';
             feedback.innerHTML = '&#10004; Problem complete! All steps solved cleanly.';
         } else {
-            skillState.streak = 0;
             feedback.className = 'banner incorrect';
-            feedback.innerHTML = '&#10008; Problem finished with step errors. Streak reset.';
+            feedback.innerHTML = '&#10008; Problem finished with step errors.';
         }
 
         saveState();
     }
 
     const nextBtn = document.getElementById('next-btn');
-    const showSolution = !isTest || (completedQuestion?.mode === 'mastery' && !isSuccess);
+    const showSolution = !isTest;
     if (!isSuccess && showSolution) {
         feedback.innerHTML += ' Full derivation:';
         const solCard = document.getElementById('solution-card');
@@ -1760,6 +1742,7 @@ async function finalizeProblem(isSuccess, answer = null) {
         questionIndex: activeTaskState.currentIndex,
         prompt: currentProblem.prompt,
         correct: Boolean(isSuccess),
+        answer,
         blockId: completedQuestion?.blockId || null,
         phase: completedQuestion?.phase || null
     });
@@ -1882,16 +1865,6 @@ async function finalizeProblem(isSuccess, answer = null) {
 
 window.addEventListener('load', async () => {
     await initAuth();
-    const sessionStats = document.getElementById('session-stats');
-    if (sessionStats) {
-        sessionStats.addEventListener('click', resetSessionProgress);
-        sessionStats.addEventListener('keydown', event => {
-            if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                resetSessionProgress();
-            }
-        });
-    }
     const exitTaskButton = document.getElementById('btn-exit-task');
     if (exitTaskButton) exitTaskButton.addEventListener('click', exitTask);
     const finishTaskButton = document.getElementById('btn-finish-task');

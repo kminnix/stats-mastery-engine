@@ -1,4 +1,4 @@
-import os
+﻿import os
 import random
 import string
 import traceback
@@ -22,7 +22,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "85"
+STATIC_VERSION = "100"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -528,8 +528,17 @@ async def get_class_gradebook(class_id: str, authorization: Optional[str] = Head
 
     enroll_res = db.table("enrollments").select("student_id").eq("class_id", class_id).execute()
     student_ids = [enrollment["student_id"] for enrollment in (enroll_res.data or [])]
+    assess_res = (
+        db.table("assessments")
+        .select("id, title, type, created_at")
+        .eq("class_id", class_id)
+        .eq("is_active", True)
+        .order("created_at")
+        .execute()
+    )
+    assessments = assess_res.data or []
     if not student_ids:
-        return {"students": [], "assessments": [], "grades": {}}
+        return {"students": [], "assessments": assessments, "grades": {}}
 
     prof_res = (
         db.table("profiles")
@@ -546,14 +555,6 @@ async def get_class_gradebook(class_id: str, authorization: Optional[str] = Head
     ]
     students.sort(key=lambda student: student["name"].lower())
 
-    assess_res = (
-        db.table("assessments")
-        .select("id, title, type, created_at")
-        .eq("class_id", class_id)
-        .order("created_at")
-        .execute()
-    )
-    assessments = assess_res.data or []
     if not assessments:
         return {"students": students, "assessments": [], "grades": {}}
 

@@ -162,8 +162,6 @@
                 <a href="/teacher" id="teacher-portal-btn" class="btn-primary" style="display: none; text-decoration: none; padding: 6px 12px; font-size: 0.85rem; background: #0f172a; color: #ffffff;">📊 Teacher Portal</a>
                 <button class="btn-secondary" id="join-class-btn" onclick="openJoinModal()" style="display: none;">🎓 Join Class</button>
                 <button class="btn-secondary" onclick="toggleFloatingWindow()">📋 Formulas &amp; Tables</button>
-                <div id="mastery-pill" class="mastery-badge">Streak: 0 / 5</div>
-                <button id="reset-progress-btn" class="text-btn" onclick="resetCurrentSkill()">Reset Skill</button>
                 <button class="btn-secondary" onclick="toggleCalculatorWindow()">🖩 Calculator</button>
                 <button id="auth-btn" class="btn-secondary" onclick="toggleAuth()" style="font-size: 0.85rem;">
                     <span id="auth-user-label">Sign In</span>
@@ -226,7 +224,6 @@
                         </div>
                         <button id="btn-exit-task" class="btn-subtle" type="button">← Exit Task</button>
                     </div>
-                    <div id="session-stats" class="session-stats">Attempts: 0 | Accuracy: 0%</div>
                 </div>
 
                 <div id="task-nav-bar" style="display: none; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
@@ -430,7 +427,7 @@
 </div>
 
 <!-- MULTI-EDGE DOCKED & FLOATING CALCULATOR -->
-<div id="calc-dock" class="dock-bottom" style="display: none;">
+<div id="calc-dock" class="dock-bottom" style="display: none !important;">
     <div id="calc-dock-resizer" class="dock-edge-resizer"></div>
     <div class="calc-header" id="calc-titlebar">
         <div class="calc-header-topbar">
@@ -447,7 +444,7 @@
         </div>
         <div class="calc-display-section">
             <div id="calc-history-list" class="calc-history-list"></div>
-            <math-field id="calc-mathfield" virtual-keyboard-mode="manual"></math-field>
+            <math-field id="calc-mathfield"></math-field>
         </div>
     </div>
     <div class="calc-tray">

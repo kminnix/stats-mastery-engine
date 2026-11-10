@@ -27,12 +27,16 @@ function suppressMathLiveIcons() {
         window.mathVirtualKeyboard.policy = "manual";
         window.mathVirtualKeyboard.visible = false;
     }
-    document.querySelectorAll('math-field').forEach(mf => {
-        const toggles = mf.shadowRoot?.querySelectorAll(
-            '.ML__virtual-keyboard-toggle, .ML__menu-toggle, button[part="virtual-keyboard-toggle"], button[part="menu-toggle"]'
+    const mf = getMathField();
+    if (mf && mf.shadowRoot) {
+        mf.mathVirtualKeyboardPolicy = "manual";
+        const badElements = mf.shadowRoot.querySelectorAll(
+            '.ML__virtual-keyboard-toggle, .ML__menu-toggle, button, svg'
         );
-        toggles?.forEach(el => el.style.setProperty('display', 'none', 'important'));
-    });
+        badElements.forEach(el => {
+            el.style.setProperty('display', 'none', 'important');
+        });
+    }
 }
 
 function updateBodyDockGutters(mode) {
@@ -100,7 +104,7 @@ function toggleCalculatorWindow() {
     if (dock.style.display === 'flex') {
         closeCalculatorWindow();
     } else {
-        dock.style.display = 'flex';
+        dock.style.setProperty('display', 'flex', 'important');
         bringToFront(dock);
         setCalcDockMode(currentDockMode || 'bottom');
         suppressMathLiveIcons();
@@ -115,7 +119,7 @@ function toggleCalculatorWindow() {
 
 function closeCalculatorWindow() {
     const dock = document.getElementById('calc-dock');
-    dock.style.display = 'none';
+    dock.style.setProperty('display', 'none', 'important');
     document.body.classList.remove('calc-docked-bottom', 'calc-docked-left', 'calc-docked-right');
 }
 
@@ -517,7 +521,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
         if (dockResizeMode === 'bottom') {
             const dh = startCoord - e.clientY;
-            const newH = Math.max(220, Math.min(window.innerHeight * 0.8, startDim + dh));
+            const newH = Math.max(270, Math.min(window.innerHeight * 0.85, startDim + dh));
             dock.style.height = `${newH}px`;
             document.documentElement.style.setProperty('--calc-dock-h', `${newH}px`);
         } else if (dockResizeMode === 'right') {
@@ -542,6 +546,11 @@ window.addEventListener('DOMContentLoaded', () => {
     });
 
     if (mf) {
+        mf.addEventListener('input', () => {
+            if (typeof mf.executeCommand === 'function') {
+                mf.scrollTop = mf.scrollHeight;
+            }
+        });
         mf.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
