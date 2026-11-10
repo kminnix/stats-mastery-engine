@@ -205,13 +205,16 @@
         { id: 'left_tail', title: 'Left Tail Cumulative Area', topic: 'Normal Distributions', notation: 'P(X < b)' },
         { id: 'right_tail', title: 'Right Tail Cumulative Area', topic: 'Normal Distributions', notation: 'P(X > a)' },
         { id: 'inverse', title: 'Inverse Cutoffs & Percentiles', topic: 'Normal Distributions', notation: 'x = \\mu + z\\sigma' },
-        { id: 'ci_mean_t', title: '1-Sample t-Interval for Mean', topic: 'Confidence Intervals', notation: '\\mu' },
         { id: 'ci_prop_z', title: '1-Sample z-Interval for Proportion', topic: 'Confidence Intervals', notation: 'p' },
-        { id: 'ci_mean_t_2samp', title: '2-Sample t-Interval for Means', topic: 'Confidence Intervals', notation: '\\mu_1 - \\mu_2' },
+        { id: 'ci_mean_t', title: '1-Sample t-Interval for Mean', topic: 'Confidence Intervals', notation: '\\mu' },
         { id: 'ci_prop_z_2samp', title: '2-Sample z-Interval for Proportions', topic: 'Confidence Intervals', notation: 'p_1 - p_2' },
+        { id: 'ci_mean_t_2samp', title: '2-Sample t-Interval for Means', topic: 'Confidence Intervals', notation: '\\mu_1 - \\mu_2' },
         { id: 'ci_matched_pairs_t', title: 'Matched Pairs t-Interval', topic: 'Confidence Intervals', notation: '\\mu_{\\text{diff}}' },
         { id: 'ht_prop_z', title: '1-Sample z-Test for Proportion', topic: 'Hypothesis Testing', notation: 'H_0: p = p_0' },
-        { id: 'ht_mean_t', title: '1-Sample t-Test for Mean', topic: 'Hypothesis Testing', notation: 'H_0: \\mu = \\mu_0' }
+        { id: 'ht_mean_t', title: '1-Sample t-Test for Mean', topic: 'Hypothesis Testing', notation: 'H_0: \\mu = \\mu_0' },
+        { id: 'ht_prop_z_2samp', title: '2-Sample z-Test for Proportions', topic: 'Hypothesis Testing', notation: 'H_0: p_1 = p_2' },
+        { id: 'ht_mean_t_2samp', title: '2-Sample t-Test for Means', topic: 'Hypothesis Testing', notation: 'H_0: \\mu_1 = \\mu_2' },
+        { id: 'ht_matched_pairs_t', title: 'Matched Pairs t-Test', topic: 'Hypothesis Testing', notation: 'H_0: \\mu_{\\text{diff}} = 0' }
     ];
 
     function showBuilderError(message) {
@@ -265,15 +268,12 @@
             skills.forEach(skill => {
                 const row = document.createElement('div');
                 row.className = 'builder-skill-row';
-                row.dataset.searchText = `${topic} ${skill.title} ${skill.notation}`.toLowerCase();
+                row.dataset.searchText = `${topic} ${skill.title}`.toLowerCase();
                 const info = document.createElement('div');
                 info.className = 'builder-skill-info';
                 const title = document.createElement('div');
                 title.textContent = skill.title;
-                const notation = document.createElement('span');
-                notation.className = 'math-pill';
-                notation.textContent = `\\(${skill.notation}\\)`;
-                info.append(title, notation);
+                info.append(title);
                 const add = document.createElement('button');
                 add.type = 'button';
                 add.className = 'btn-subtle';
@@ -286,7 +286,6 @@
             container.appendChild(category);
         });
         filterBuilderCatalog();
-        triggerKaTeX(container);
     }
 
     function filterBuilderCatalog() {
