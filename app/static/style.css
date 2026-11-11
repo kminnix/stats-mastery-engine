@@ -266,6 +266,14 @@ header {
 }
 .stage-input-row input:disabled,
 .stage-input-row select:disabled { background: #f1f5f9; }
+.evaluated-decimal {
+    display: inline-block;
+    margin-left: 8px;
+    color: #475569;
+    font-size: 0.9rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
 .stage-input-row.compound { align-items: flex-end; flex-wrap: wrap; }
 .stage-compound-field {
     display: flex;

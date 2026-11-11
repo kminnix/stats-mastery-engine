@@ -1172,10 +1172,31 @@
                     correctionsButton.addEventListener('click', () => promptCreateCorrections(item.id, title));
                     actions.appendChild(correctionsButton);
                 }
+                const deleteButton = document.createElement('button');
+                deleteButton.className = 'btn-secondary';
+                deleteButton.textContent = 'Delete / Trash';
+                deleteButton.style.cssText = 'font-size: 0.8rem; padding: 4px 8px; margin-left: 6px; color: #b91c1c;';
+                deleteButton.addEventListener('click', () => deleteAssessment(item.id, title));
+                actions.appendChild(deleteButton);
                 tbody.appendChild(tr);
             });
         } catch (e) {
             tbody.innerHTML = `<tr><td colspan="6" style="color: #ef4444; padding: 24px;">Failed to load assessments.</td></tr>`;
+        }
+    }
+
+    async function deleteAssessment(assessmentId, title) {
+        if (!confirm(`Move "${title}" to trash? Students will no longer be able to access it.`)) return;
+        try {
+            const response = await fetch(
+                `/api/teacher/assessments/${encodeURIComponent(assessmentId)}`,
+                { method: 'DELETE', headers: getAuthHeaders() }
+            );
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(result.detail || 'Could not delete this assessment.');
+            await loadAssessments();
+        } catch (error) {
+            alert(error.message || 'Could not delete this assessment.');
         }
     }
 
