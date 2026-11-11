@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from app.engine.normal_dist import generate_normal_problem, verify_normal_answer
 from app.engine.confidence_intervals import generate_ci_problem
 from app.engine.hypothesis_testing import generate_ht_problem
+from app.engine.chi_square import generate_chi_problem
 from app.engine.inference_drills import (
     generate_condition_check_mean,
     generate_condition_check_proportion,
@@ -34,7 +35,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "102"
+STATIC_VERSION = "107"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -233,6 +234,10 @@ async def get_ht_problem(topic: str = "ht_prop_z"):
             status_code=500,
             detail=f"Unable to generate hypothesis-testing problem: {e}",
         ) from e
+
+@app.get("/api/problem/chi")
+async def get_chi_problem(topic: str = "random"):
+    return generate_chi_problem(topic or "random")
 
 @app.get("/api/problem/drill")
 async def get_inference_drill(topic: str):

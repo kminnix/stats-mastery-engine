@@ -104,7 +104,9 @@ const TOPIC_REGISTRY = [
     { id: 'drill_conclusion_mean', title: 'Sub-Skill: P-Value & Conclusion for Means', topic: 'Significance Tests for Means (μ)', notation: 'p-value vs. α' },
     { id: 'ht_mean_t', title: '1-Sample t-Test for Mean', topic: 'Significance Tests for Means (μ)', notation: 'H₀: μ = μ₀' },
     { id: 'ht_mean_t_2samp', title: '2-Sample t-Test for Means', topic: 'Significance Tests for Means (μ)', notation: 'H₀: μ₁ = μ₂' },
-    { id: 'ht_matched_pairs_t', title: 'Matched Pairs t-Test', topic: 'Significance Tests for Means (μ)', notation: 'H₀: μ_diff = 0' }
+    { id: 'ht_matched_pairs_t', title: 'Matched Pairs t-Test', topic: 'Significance Tests for Means (μ)', notation: 'H₀: μ_diff = 0' },
+    { id: 'chi_gof', title: 'Chi-Square Goodness-of-Fit Test', topic: 'Chi-Square Tests (χ²)', notation: 'df = k - 1' },
+    { id: 'chi_two_way', title: 'Chi-Square Test of Independence / Homogeneity', topic: 'Chi-Square Tests (χ²)', notation: 'df = (r-1)(c-1)' }
 ];
 
 let state = {
@@ -1132,6 +1134,7 @@ function triggerKaTeX(element) {
         renderMathInElement(element, {
             delimiters: [
                 { left: '$$', right: '$$', display: true },
+                { left: '\\[', right: '\\]', display: true },
                 { left: '\\(', right: '\\)', display: false }
             ],
             throwOnError: false
@@ -1195,7 +1198,7 @@ async function loadProblem(problemToRender = null) {
     currentQuestionAnswers = [];
 
     const topic = state.selectedTopic || 'random';
-    isMultiStage = topic.startsWith('ci_') || topic.startsWith('ht_') ||
+    isMultiStage = topic.startsWith('ci_') || topic.startsWith('ht_') || topic.startsWith('chi_') ||
         topic.startsWith('cond_') || topic.startsWith('drill_');
     currentProblem = problemToRender;
 
@@ -1206,15 +1209,17 @@ async function loadProblem(problemToRender = null) {
         
         if (!currentProblem) {
             const isHypothesisTest = topic.startsWith('ht_');
+            const isChiSquare = topic.startsWith('chi_');
             const isInferenceDrill = topic.startsWith('cond_') || topic.startsWith('drill_');
-            const problemTopic = isHypothesisTest ? topic : topic.replace('ci_', '');
+            const problemTopic = isHypothesisTest || isChiSquare ? topic : topic.replace('ci_', '');
             const endpoint = isInferenceDrill
                 ? '/api/problem/drill'
-                : isHypothesisTest ? '/api/problem/ht' : '/api/problem/ci';
+                : isHypothesisTest ? '/api/problem/ht'
+                    : isChiSquare ? '/api/problem/chi' : '/api/problem/ci';
             const res = await fetch(`${endpoint}?topic=${encodeURIComponent(problemTopic)}`);
             currentProblem = await res.json();
         }
-        renderMultiStageUI();
+        renderMultiStageUI(topic);
     } else {
         document.getElementById('single-input-panel').style.display = 'flex';
         document.getElementById('multi-stage-panel').style.display = 'none';
@@ -1254,6 +1259,11 @@ async function loadProblem(problemToRender = null) {
             };
         }
         renderTaskNavigationChips();
+    }
+    if (topic.startsWith('chi_')) {
+        const solutionContent = document.getElementById('solution-content');
+        if (solutionContent) solutionContent.innerHTML = currentProblem.solution;
+        triggerKaTeX(solutionCard);
     }
 }
 
@@ -1298,12 +1308,13 @@ function setStageControlDisabled(control, disabled) {
     else control.disabled = disabled;
 }
 
-function renderMultiStageUI() {
+function renderMultiStageUI(topic) {
     const container = document.getElementById('multi-stage-panel');
     container.innerHTML = '';
     const isTest = activeTaskState.active && activeTaskState.taskType === 'test';
-    const showHints = !activeTaskState.active || (
-        !isTest &&
+    const showHints = !isTest && (
+        topic.startsWith('chi_') ||
+        !activeTaskState.active ||
         activeTaskState.allowHints !== false
     );
 
@@ -1340,7 +1351,13 @@ function renderMultiStageUI() {
             }
             if (definition.type === 'select') {
                 control.add(new Option('Choose an answer...', ''));
-                (definition.options || []).forEach(option => {
+                const options = definition.id === 'chi-p-alpha'
+                    ? [
+                        { value: 'less than or equal to', label: 'less than or equal to' },
+                        { value: 'greater than', label: 'greater than' }
+                    ]
+                    : definition.options || [];
+                options.forEach(option => {
                     const symbolLabels = {
                         'p': 'p',
                         'p̂': 'p̂',
@@ -1650,6 +1667,8 @@ async function submitStage(idx) {
     });
 
     if (isCorrect) {
+        revealEl.textContent = '';
+        revealEl.style.display = 'none';
         statusEl.innerHTML = isTest
             ? '<span>Step recorded.</span>'
             : '<span style="color: #10b981;">&#10004; Correct</span>';
@@ -1689,6 +1708,9 @@ function showStageInputWarning(idx, message) {
 
 function unlockNextStage(idx) {
     if (idx + 1 < currentProblem.steps.length) {
+        const nextStep = currentProblem.steps[idx + 1];
+        const isChiSquareFollowUp = currentProblem.type === 'chi_gof' && nextStep.step_num === 5;
+        if (isChiSquareFollowUp && currentProblem.steps[idx].step_num !== 4) return;
         const nextBox = document.getElementById(`stage-box-${idx + 1}`);
         nextBox.className = 'stage-box active';
         nextBox.style.display = 'block';
@@ -1783,7 +1805,7 @@ async function finalizeProblem(isSuccess, answer = null) {
         const solContent = document.getElementById('solution-content');
         if (currentProblem.plot_data) drawNormalDistribution(currentProblem.plot_data);
         solContent.innerHTML = currentProblem.solution;
-        triggerKaTeX(solContent);
+        triggerKaTeX(solCard);
         solCard.style.display = 'block';
     }
 
