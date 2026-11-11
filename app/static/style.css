@@ -118,6 +118,39 @@ header {
     cursor: pointer;
 }
 .btn-secondary:hover { background: #f8fafc; }
+.table-btn-group {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+}
+.btn-sm {
+    padding: 5px 10px !important;
+    font-size: 0.8rem !important;
+    line-height: 1.2 !important;
+    white-space: nowrap;
+}
+.btn-danger-subtle {
+    background: transparent;
+    border: 1px solid #fecaca;
+    color: #dc2626;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+}
+.btn-danger-subtle:hover {
+    background: #fee2e2;
+    border-color: #f87171;
+}
+.sortable-th:hover {
+    background-color: #eef2f6 !important;
+}
+.sort-arrow {
+    font-size: 0.75rem;
+    margin-left: 4px;
+    color: #94a3b8;
+}
 .btn-pill {
     padding: 6px 12px;
     border: 1px solid #cbd5e1;

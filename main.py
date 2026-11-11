@@ -38,7 +38,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "120"
+STATIC_VERSION = "126"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -435,38 +435,34 @@ async def get_class_roster(class_id: str, authorization: Optional[str] = Header(
     db = get_scoped_supabase(authorization)
     verify_teacher_class_access(db, class_id, access["user"].id)
 
-    enrollments_res = db.table("enrollments").select("student_id").eq("class_id", class_id).execute()
-    student_ids = [e["student_id"] for e in (enrollments_res.data or [])]
+    res = (
+        db.table("enrollments")
+        .select("student_id, profiles(id, full_name, email)")
+        .eq("class_id", class_id)
+        .execute()
+    )
+    roster = []
+    for row in (res.data or []):
+        prof = row.get("profiles") or {}
+        roster.append({
+            "id": row.get("student_id"),
+            "name": prof.get("full_name") or "Unknown Student",
+            "email": prof.get("email") or "",
+            "joined_at": "Enrolled"
+        })
+    return roster
 
-    if not student_ids:
-        return []
-
-    profiles_res = db.table("profiles").select("id, email, full_name").in_("id", student_ids).execute()
-    profiles_map = {p["id"]: p for p in (profiles_res.data or [])}
-
-    progress_res = db.table("skill_progress").select("*").in_("student_id", student_ids).execute()
-
-    student_records = {}
-    for sid in student_ids:
-        p = profiles_map.get(sid, {"email": "Unknown", "full_name": "Student"})
-        student_records[sid] = {
-            "student_id": sid,
-            "name": p.get("full_name") or p.get("email"),
-            "email": p.get("email"),
-            "skills": {}
-        }
-
-    for row in (progress_res.data or []):
-        sid = row["student_id"]
-        if sid in student_records:
-            student_records[sid]["skills"][row["skill_id"]] = {
-                "streak": row.get("consecutive_streak", 0),
-                "mastered": row.get("is_mastered", False),
-                "attempted": row.get("total_attempted", 0),
-                "correct": row.get("total_correct", 0)
-            }
-
-    return list(student_records.values())
+@app.delete("/api/teacher/classes/{class_id}/students/{student_id}")
+async def remove_student_from_class(
+    class_id: str,
+    student_id: str,
+    authorization: Optional[str] = Header(None)
+):
+    access = verify_teacher_access(authorization)
+    db = get_scoped_supabase(authorization)
+    verify_teacher_class_access(db, class_id, access["user"].id)
+    db.table("enrollments").delete().eq("class_id", class_id).eq("student_id", student_id).execute()
+    return {"status": "removed"}
 
 # --- ASSIGNMENT & ASSESSMENT ENDPOINTS ---
 
@@ -510,18 +506,44 @@ async def get_class_assessments(
     verify_teacher_class_access(db, class_id, access["user"].id)
     
     try:
-        query = (
-            db.table("assessments")
-            .select("*, assessment_submissions(count)")
-            .eq("class_id", class_id)
-        )
+        query = db.table("assessments").select("*").eq("class_id", class_id)
         if not include_archived:
             query = query.eq("is_active", True)
         res = query.order("created_at", desc=True).execute()
-        return res.data or []
+        assessments = res.data or []
+        assessment_ids = [assessment["id"] for assessment in assessments]
+        if assessment_ids:
+            sub_res = (
+                db.table("assessment_submissions")
+                .select("id, assessment_id, status")
+                .in_("assessment_id", assessment_ids)
+                .execute()
+            )
+            completed_counts: Dict[str, int] = {}
+            for submission in sub_res.data or []:
+                if submission.get("status") in ("completed", "submitted"):
+                    assessment_id = submission["assessment_id"]
+                    completed_counts[assessment_id] = completed_counts.get(assessment_id, 0) + 1
+            for assessment in assessments:
+                assessment["assessment_submissions"] = [{
+                    "count": completed_counts.get(assessment["id"], 0)
+                }]
+        else:
+            assessments = []
+        return assessments
     except Exception as e:
         print(f"Error fetching class assessments: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/teacher/assessments/{assessment_id}/details")
+async def get_assessment_details(assessment_id: str, authorization: Optional[str] = Header(None)):
+    access = verify_teacher_access(authorization)
+    db = get_scoped_supabase(authorization)
+    res = db.table("assessments").select("*").eq("id", assessment_id).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+    verify_teacher_class_access(db, res.data[0]["class_id"], access["user"].id)
+    return res.data[0]
 
 @app.patch("/api/teacher/assessments/{assessment_id}/archive")
 async def archive_assessment(assessment_id: str, authorization: Optional[str] = Header(None)):
@@ -699,11 +721,12 @@ async def export_gradebook_csv(class_id: str, authorization: Optional[str] = Hea
 
     enroll_res = (
         db.table("enrollments")
-        .select("student_id")
+        .select("student_id, profiles(id, full_name, email)")
         .eq("class_id", class_id)
         .execute()
     )
-    student_ids = [enrollment["student_id"] for enrollment in (enroll_res.data or [])]
+    roster = enroll_res.data or []
+    student_ids = [enrollment["student_id"] for enrollment in roster]
     assessments_res = (
         db.table("assessments")
         .select("id, title")
@@ -714,25 +737,15 @@ async def export_gradebook_csv(class_id: str, authorization: Optional[str] = Hea
     )
     assessments = assessments_res.data or []
 
-    profiles = []
-    if student_ids:
-        profiles_res = (
-            db.table("profiles")
-            .select("id, full_name, email")
-            .in_("id", student_ids)
-            .execute()
-        )
-        profiles = profiles_res.data or []
-    profiles_by_id = {profile["id"]: profile for profile in profiles}
-
     grades: Dict[str, Dict[str, Any]] = {}
     assessment_ids = [assessment["id"] for assessment in assessments]
     if student_ids and assessment_ids:
         submissions_res = (
             db.table("assessment_submissions")
-            .select("assessment_id, student_id, score")
+            .select("assessment_id, student_id, status, score")
             .in_("assessment_id", assessment_ids)
             .in_("student_id", student_ids)
+            .in_("status", ["completed", "submitted"])
             .execute()
         )
         for submission in submissions_res.data or []:
@@ -740,51 +753,57 @@ async def export_gradebook_csv(class_id: str, authorization: Optional[str] = Hea
                 submission["assessment_id"]
             ] = submission.get("score")
 
-    output = io.StringIO(newline="")
-    writer = csv.writer(output)
-    writer.writerow(
-        ["Student Name", "Email"]
-        + [assessment.get("title") or "Untitled Assessment" for assessment in assessments]
-        + ["Class Average"]
-    )
-
-    for student_id in student_ids:
-        profile = profiles_by_id.get(student_id, {})
-        scores = grades.get(student_id, {})
-        valid_scores = []
-        row_scores = []
-        for assessment in assessments:
-            score = scores.get(assessment["id"])
-            if score is not None:
-                try:
-                    numeric_score = float(score)
-                except (TypeError, ValueError):
-                    numeric_score = None
-                if numeric_score is not None:
-                    row_scores.append(numeric_score)
-                    valid_scores.append(numeric_score)
-                    continue
-            row_scores.append(None)
-
-        class_average = (
-            sum(valid_scores) / len(valid_scores)
-            if valid_scores
-            else None
-        )
+    def generate_csv_rows():
+        output = io.StringIO(newline="")
+        writer = csv.writer(output)
         writer.writerow(
-            [
-                profile.get("full_name") or profile.get("email") or "Student",
-                profile.get("email") or "",
-                *[
-                    f"{score:g}%" if score is not None else "--"
-                    for score in row_scores
-                ],
-                f"{class_average:.2f}%" if class_average is not None else "--"
-            ]
+            ["Student Name", "Email"]
+            + [assessment.get("title") or "Untitled Assessment" for assessment in assessments]
+            + ["Class Average"]
         )
+        yield output.getvalue()
+
+        for enrollment in roster:
+            student_id = enrollment["student_id"]
+            profile = enrollment.get("profiles") or {}
+            scores = grades.get(student_id, {})
+            valid_scores = []
+            row_scores = []
+            for assessment in assessments:
+                score = scores.get(assessment["id"])
+                if score is not None:
+                    try:
+                        numeric_score = float(score)
+                    except (TypeError, ValueError):
+                        numeric_score = None
+                    if numeric_score is not None:
+                        row_scores.append(numeric_score)
+                        valid_scores.append(numeric_score)
+                        continue
+                row_scores.append(None)
+
+            class_average = (
+                sum(valid_scores) / len(valid_scores)
+                if valid_scores
+                else None
+            )
+            output.seek(0)
+            output.truncate(0)
+            writer.writerow(
+                [
+                    profile.get("full_name") or profile.get("email") or "Student",
+                    profile.get("email") or "",
+                    *[
+                        f"{score:g}%" if score is not None else "--"
+                        for score in row_scores
+                    ],
+                    f"{class_average:.2f}%" if class_average is not None else "--"
+                ]
+            )
+            yield output.getvalue()
 
     return StreamingResponse(
-        iter([output.getvalue()]),
+        generate_csv_rows(),
         media_type="text/csv",
         headers={
             "Content-Disposition": (

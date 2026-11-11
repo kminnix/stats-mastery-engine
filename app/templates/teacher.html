@@ -425,31 +425,28 @@
         <div class="view-nav">
             <button id="nav-gradebook-btn" class="view-nav-btn active" onclick="switchView('gradebook')">📈 Gradebook</button>
             <button id="nav-assess-btn" class="view-nav-btn" onclick="switchView('assessments')">📝 Assignments &amp; Tests</button>
-            <button id="nav-roster-btn" class="view-nav-btn" onclick="switchView('roster')">👥 Roster &amp; Mastery</button>
+            <button id="nav-roster-btn" class="view-nav-btn" onclick="switchView('roster')">👥 Roster</button>
             <button id="nav-settings-btn" class="view-nav-btn" onclick="switchView('settings')">⚙️ Settings</button>
         </div>
 
         <!-- 1. Roster View -->
         <div id="roster-view" class="card-panel" style="display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h2 style="margin: 0; font-size: 1.2rem; color: #1e293b;">Live Class Mastery Matrix</h2>
-                <button class="btn-secondary" onclick="refreshRoster()" style="font-size: 0.85rem; padding: 6px 12px;">↻ Refresh Matrix</button>
+                <h2 id="roster-heading" style="margin: 0; font-size: 1.2rem; color: #1e293b;">Class Roster</h2>
+                <button class="btn-secondary" onclick="refreshRoster()" style="font-size: 0.85rem; padding: 6px 12px;">↻ Refresh Roster</button>
             </div>
             
             <table class="data-table roster-table" id="roster-table">
                 <thead>
                     <tr>
-                        <th class="col-left" style="min-width: 180px;">Student Name</th>
-                        <th>Between (P)</th>
-                        <th>Left Tail (P)</th>
-                        <th>Right Tail (P)</th>
-                        <th>Inverse Cutoff</th>
-                        <th>Mean (t) CI</th>
-                        <th>Prop (z) CI</th>
+                        <th class="col-student" style="text-align: left;">Student Name</th>
+                        <th style="text-align: left;">Email</th>
+                        <th>Joined Date</th>
+                        <th style="text-align: center; width: 120px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="roster-tbody">
-                    <tr><td colspan="7" style="color: #94a3b8; padding: 24px;">Select a class to view student progress.</td></tr>
+                    <tr><td colspan="4" style="color: #94a3b8; padding: 24px;">Select a class to view the roster.</td></tr>
                 </tbody>
             </table>
         </div>
@@ -470,16 +467,21 @@
             <table class="data-table" id="assess-table">
                 <thead>
                     <tr>
-                        <th class="col-left">Title</th>
-                        <th>Type</th>
-                        <th>Topics Covered</th>
-                        <th>Due Date</th>
+                        <th class="col-left sortable-th" onclick="handleAssessSort('title')" style="cursor: pointer; user-select: none;">
+                            Title <span id="sort-indicator-title" class="sort-arrow">↕</span>
+                        </th>
+                        <th class="sortable-th" onclick="handleAssessSort('type')" style="cursor: pointer; user-select: none;">
+                            Type <span id="sort-indicator-type" class="sort-arrow">↕</span>
+                        </th>
+                        <th class="sortable-th" onclick="handleAssessSort('due_date')" style="cursor: pointer; user-select: none;">
+                            Due Date <span id="sort-indicator-due_date" class="sort-arrow">↕</span>
+                        </th>
                         <th>Submissions</th>
-                        <th>Actions</th>
+                        <th style="min-width: 260px; text-align: center;">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="assess-tbody">
-                    <tr><td colspan="6" style="color: #94a3b8; padding: 24px;">Loading assessments...</td></tr>
+                    <tr><td colspan="5" style="color: #94a3b8; padding: 24px;">Loading assessments...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -545,6 +547,16 @@
     let currentSession = null;
     let currentClasses = [];
     let currentAssessments = [];
+    const teacherCache = {
+        classId: null,
+        roster: null,
+        assessments: null,
+        gradebook: null
+    };
+    const teacherRequests = { roster: null, assessments: null, gradebook: null };
+    const teacherRequestVersions = { roster: 0, assessments: 0, gradebook: 0 };
+    let assessSortField = 'created_at';
+    let assessSortAsc = false;
     let activeView = 'gradebook';
     let showArchivedAssessments = false;
     let assessmentBlocks = [];
@@ -871,6 +883,11 @@
     }
 
     async function handleSession(session) {
+        if (currentUser?.id !== session?.user?.id) {
+            teacherCache.classId = null;
+            invalidateTeacherCache('roster', 'assessments', 'gradebook');
+            currentAssessments = [];
+        }
         currentSession = session;
         currentUser = session ? session.user : null;
         const authBtn = document.getElementById('auth-btn');
@@ -953,10 +970,52 @@
             document.getElementById(buttonId).className = name === viewName ? 'view-nav-btn active' : 'view-nav-btn';
         });
 
-        if (viewName === 'gradebook') loadGradebook();
-        else if (viewName === 'assessments') loadAssessments();
-        else if (viewName === 'roster') refreshRoster();
+        if (viewName === 'gradebook') loadGradebook(false);
+        else if (viewName === 'assessments') loadAssessments(false);
+        else if (viewName === 'roster') refreshRoster(false);
         else loadClassSettings();
+    }
+
+    function invalidateTeacherCache(...fields) {
+        fields.forEach(field => {
+            teacherCache[field] = null;
+            teacherRequests[field] = null;
+            teacherRequestVersions[field] += 1;
+        });
+    }
+
+    async function fetchTeacherData(field, classId, url, force) {
+        if (!force && teacherCache[field] !== null) return teacherCache[field];
+        if (!force && teacherRequests[field]) return teacherRequests[field];
+
+        const version = ++teacherRequestVersions[field];
+        teacherCache[field] = null;
+        const request = (async () => {
+            try {
+                const response = await fetch(url, { headers: getAuthHeaders() });
+                if (!response.ok) throw new Error(`Could not load ${field} (${response.status}).`);
+                const data = await response.json();
+                if (teacherCache.classId !== classId || teacherRequestVersions[field] !== version) return null;
+                teacherCache[field] = data;
+                return data;
+            } catch (error) {
+                if (teacherCache.classId !== classId || teacherRequestVersions[field] !== version) return null;
+                throw error;
+            } finally {
+                if (teacherRequestVersions[field] === version) teacherRequests[field] = null;
+            }
+        })();
+        teacherRequests[field] = request;
+        return request;
+    }
+
+    async function preloadAllSectionData(force = false) {
+        if (!teacherCache.classId) return;
+        await Promise.all([
+            refreshRoster(force),
+            loadAssessments(force),
+            loadGradebook(force)
+        ]);
     }
 
     async function loadTeacherClasses() {
@@ -992,9 +1051,16 @@
         const codeBadge = document.getElementById('active-code-badge');
         const classId = select.value;
 
+        if (teacherCache.classId !== classId) {
+            teacherCache.classId = classId;
+            invalidateTeacherCache('roster', 'assessments', 'gradebook');
+            currentAssessments = [];
+        }
         if (!classId) {
             codeContainer.style.display = 'none';
-            if (activeView === 'gradebook') loadGradebook();
+            if (activeView === 'gradebook') loadGradebook(false);
+            else if (activeView === 'roster') refreshRoster(false);
+            else if (activeView === 'assessments') loadAssessments(false);
             else if (activeView === 'settings') loadClassSettings();
             return;
         }
@@ -1003,10 +1069,8 @@
         if (activeCls) {
             codeBadge.innerText = activeCls.join_code;
             codeContainer.style.display = 'inline-flex';
-            if (activeView === 'roster') refreshRoster();
-            else if (activeView === 'assessments') loadAssessments();
-            else if (activeView === 'gradebook') loadGradebook();
-            else if (activeView === 'settings') loadClassSettings();
+            if (activeView === 'settings') loadClassSettings();
+            preloadAllSectionData();
         }
     }
 
@@ -1099,126 +1163,227 @@
         }
     }
 
-    async function refreshRoster() {
+    async function refreshRoster(force = true) {
         const classId = document.getElementById('class-select').value;
-        if (!classId) return;
-
         const tbody = document.getElementById('roster-tbody');
-        tbody.innerHTML = `<tr><td colspan="7" style="color: #94a3b8; padding: 24px;">Loading student matrix...</td></tr>`;
-
+        if (!classId) {
+            tbody.innerHTML = `<tr><td colspan="4" style="color: #94a3b8; padding: 24px;">Select a class to view the roster.</td></tr>`;
+            return;
+        }
+        if (!force && teacherCache.roster !== null) {
+            renderRoster(teacherCache.roster, classId);
+            return;
+        }
         try {
-            const res = await fetch(`/api/teacher/roster/${classId}`, { headers: getAuthHeaders() });
-            const students = await res.json();
-
-            if (students.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" style="color: #94a3b8; padding: 24px;">No students enrolled yet.</td></tr>`;
-                return;
+            if (force || teacherCache.roster === null) {
+                tbody.innerHTML = `<tr><td colspan="4" style="color: #94a3b8; padding: 24px;">Loading roster...</td></tr>`;
             }
-
-            tbody.innerHTML = '';
-            students.forEach(st => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td class="col-left">${st.name}</td>
-                    <td>${renderSkillCell(st.skills['between'])}</td>
-                    <td>${renderSkillCell(st.skills['left_tail'])}</td>
-                    <td>${renderSkillCell(st.skills['right_tail'])}</td>
-                    <td>${renderSkillCell(st.skills['inverse'])}</td>
-                    <td>${renderSkillCell(st.skills['ci_mean_t'])}</td>
-                    <td>${renderSkillCell(st.skills['ci_prop_z'])}</td>
-                `;
-                tbody.appendChild(tr);
-            });
-        } catch (e) {
-            tbody.innerHTML = `<tr><td colspan="7" style="color: #ef4444; padding: 24px;">Failed to fetch roster.</td></tr>`;
+            const students = await fetchTeacherData(
+                'roster', classId, `/api/teacher/roster/${encodeURIComponent(classId)}`, force
+            );
+            if (students === null || teacherCache.classId !== classId || teacherCache.roster !== students) return;
+            renderRoster(students, classId);
+        } catch (error) {
+            if (teacherCache.classId !== classId) return;
+            tbody.innerHTML = `<tr><td colspan="4" style="color: #ef4444; padding: 24px;">${escapeHtml(error.message || 'Failed to fetch roster.')}</td></tr>`;
         }
     }
 
-    async function loadAssessments() {
-        const classId = document.getElementById('class-select').value;
-        if (!classId) return;
+    function renderRoster(students, classId) {
+        const tbody = document.getElementById('roster-tbody');
+        if (students.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" style="color: #94a3b8; padding: 24px;">No students enrolled yet. Share the join code with your class!</td></tr>`;
+            return;
+        }
+        tbody.replaceChildren();
+        students.forEach(st => {
+            const tr = document.createElement('tr');
+            const nameCell = document.createElement('td');
+            nameCell.className = 'col-left';
+            const name = document.createElement('strong');
+            name.textContent = st.name || 'Student';
+            nameCell.appendChild(name);
+            const emailCell = document.createElement('td');
+            emailCell.textContent = st.email || '';
+            const joinedCell = document.createElement('td');
+            joinedCell.textContent = st.joined_at && st.joined_at !== 'Enrolled'
+                ? new Date(st.joined_at).toLocaleDateString()
+                : 'Enrolled';
+            const actionsCell = document.createElement('td');
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className = 'btn-danger-subtle btn-sm';
+            removeButton.textContent = 'Remove';
+            removeButton.addEventListener('click', () =>
+                removeStudentFromClass(classId, st.id, st.name || 'Student')
+            );
+            actionsCell.appendChild(removeButton);
+            tr.append(nameCell, emailCell, joinedCell, actionsCell);
+            tbody.appendChild(tr);
+        });
+    }
 
+    async function removeStudentFromClass(classId, studentId, studentName) {
+        if (!confirm(`Remove ${studentName} from this class section?`)) return;
+        try {
+            const response = await fetch(
+                `/api/teacher/classes/${encodeURIComponent(classId)}/students/${encodeURIComponent(studentId)}`,
+                { method: 'DELETE', headers: getAuthHeaders() }
+            );
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(result.detail || 'Could not remove this student.');
+            if (teacherCache.classId === classId) {
+                invalidateTeacherCache('roster', 'gradebook');
+                await Promise.all([refreshRoster(false), loadGradebook(false)]);
+            }
+        } catch (error) {
+            alert(error.message || 'Could not remove this student.');
+        }
+    }
+
+    function sortAssessmentsArray(assessments) {
+        return [...assessments].sort((a, b) => {
+            let comparison;
+            if (assessSortField === 'due_date') {
+                const aMissing = !a.due_date;
+                const bMissing = !b.due_date;
+                if (aMissing || bMissing) return aMissing === bMissing ? 0 : (aMissing ? 1 : -1);
+                comparison = new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+            } else if (assessSortField === 'title') {
+                comparison = String(a.title || '').localeCompare(String(b.title || ''));
+            } else if (assessSortField === 'type') {
+                comparison = String(a.type || '').localeCompare(String(b.type || ''));
+            } else {
+                comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+            }
+            return assessSortAsc ? comparison : -comparison;
+        });
+    }
+
+    function handleAssessSort(field) {
+        if (assessSortField === field) {
+            assessSortAsc = !assessSortAsc;
+        } else {
+            assessSortField = field;
+            assessSortAsc = true;
+        }
+        ['title', 'type', 'due_date'].forEach(sortField => {
+            const indicator = document.getElementById(`sort-indicator-${sortField}`);
+            if (indicator) {
+                indicator.textContent = assessSortField === sortField
+                    ? (assessSortAsc ? '▲' : '▼')
+                    : '↕';
+            }
+        });
+        renderAssessmentsList();
+    }
+
+    async function loadAssessments(force = true) {
+        const classId = document.getElementById('class-select').value;
         const tbody = document.getElementById('assess-tbody');
-        tbody.innerHTML = `<tr><td colspan="6" style="color: #94a3b8; padding: 24px;">Loading assessments...</td></tr>`;
+        if (!classId) {
+            currentAssessments = [];
+            tbody.innerHTML = `<tr><td colspan="5" style="color: #94a3b8; padding: 24px;">Select a class to view assessments.</td></tr>`;
+            return;
+        }
+        if (!force && teacherCache.assessments !== null) {
+            currentAssessments = teacherCache.assessments.filter(item =>
+                Boolean(item.is_active) !== showArchivedAssessments
+            );
+            renderAssessmentsList();
+            return;
+        }
 
         try {
-            const res = await fetch(
-                `/api/teacher/assessments/${encodeURIComponent(classId)}?include_archived=${showArchivedAssessments}`,
-                { headers: getAuthHeaders() }
+            if (force || teacherCache.assessments === null) {
+                tbody.innerHTML = `<tr><td colspan="5" style="color: #94a3b8; padding: 24px;">Loading assessments...</td></tr>`;
+            }
+            const assessments = await fetchTeacherData(
+                'assessments', classId,
+                `/api/teacher/assessments/${encodeURIComponent(classId)}?include_archived=true`,
+                force
             );
-            if (!res.ok) throw new Error(`Could not load assessments (${res.status}).`);
-            const assessments = await res.json();
+            if (assessments === null || teacherCache.classId !== classId || teacherCache.assessments !== assessments) return;
             currentAssessments = assessments.filter(item =>
                 Boolean(item.is_active) !== showArchivedAssessments
             );
-
-            if (currentAssessments.length === 0) {
-                const message = showArchivedAssessments
-                    ? 'No archived assignments or tests.'
-                    : 'No active assignments or tests created yet.';
-                tbody.innerHTML = `<tr><td colspan="6" style="color: #94a3b8; padding: 24px;">${message}</td></tr>`;
-                return;
-            }
-
-            tbody.innerHTML = '';
-            currentAssessments.forEach(item => {
-                const tr = document.createElement('tr');
-                const badgeClass = item.type === 'test' ? 'badge-test' : (item.type === 'test_correction' ? 'badge-correction' : 'badge-assignment');
-                const topics = item.config?.topics ? item.config.topics.join(', ') : 'Custom';
-                const count = item.assessment_submissions?.[0]?.count || 0;
-                const title = String(item.title || '');
-                const itemType = String(item.type || 'assignment');
-
-                tr.innerHTML = `
-                    <td class="col-left"><strong>${escapeHtml(title)}</strong></td>
-                    <td><span class="badge-type ${badgeClass}">${escapeHtml(itemType.replace('_', ' '))}</span></td>
-                    <td style="font-size: 0.85rem; color: #475569;">${escapeHtml(topics)}</td>
-                    <td style="font-size: 0.85rem;">${item.due_date ? new Date(item.due_date).toLocaleDateString() : 'None'}</td>
-                    <td>${count} completed</td>
-                    <td></td>
-                `;
-                const actions = tr.querySelector('td:last-child');
-                const resultsButton = document.createElement('button');
-                resultsButton.className = 'btn-primary';
-                resultsButton.textContent = 'View Results';
-                resultsButton.style.cssText = 'font-size: 0.8rem; padding: 4px 10px; margin-right: 6px;';
-                resultsButton.addEventListener('click', () => viewAssessmentResults(item.id, title));
-                actions.appendChild(resultsButton);
-                if (!showArchivedAssessments && itemType === 'test') {
-                    const correctionsButton = document.createElement('button');
-                    correctionsButton.className = 'btn-secondary';
-                    correctionsButton.textContent = 'Create Corrections';
-                    correctionsButton.style.cssText = 'font-size: 0.8rem; padding: 4px 8px;';
-                    correctionsButton.addEventListener('click', () => promptCreateCorrections(item.id, title));
-                    actions.appendChild(correctionsButton);
-                }
-                const archiveButton = document.createElement('button');
-                archiveButton.className = 'btn-secondary';
-                archiveButton.style.cssText = 'font-size: 0.8rem; padding: 4px 8px; margin-left: 6px;';
-                if (showArchivedAssessments) {
-                    archiveButton.textContent = '♻ Restore';
-                    archiveButton.addEventListener('click', () => restoreAssessment(item.id, title));
-                } else {
-                    archiveButton.textContent = '🗑 Archive';
-                    archiveButton.addEventListener('click', () => archiveAssessment(item.id, title));
-                }
-                actions.appendChild(archiveButton);
-                tbody.appendChild(tr);
-            });
+            currentAssessments = sortAssessmentsArray(currentAssessments);
+            renderAssessmentsList();
         } catch (e) {
-            tbody.innerHTML = `<tr><td colspan="6" style="color: #ef4444; padding: 24px;">Failed to load assessments.</td></tr>`;
+            if (teacherCache.classId !== classId) return;
+            tbody.innerHTML = `<tr><td colspan="5" style="color: #ef4444; padding: 24px;">Failed to load assessments.</td></tr>`;
         }
+    }
+
+    function renderAssessmentsList() {
+        const tbody = document.getElementById('assess-tbody');
+        currentAssessments = sortAssessmentsArray(currentAssessments);
+        tbody.replaceChildren();
+
+        if (currentAssessments.length === 0) {
+            const message = showArchivedAssessments
+                ? 'No archived assignments or tests.'
+                : 'No active assignments or tests created yet.';
+            tbody.innerHTML = `<tr><td colspan="5" style="color: #94a3b8; padding: 24px;">${message}</td></tr>`;
+            return;
+        }
+
+        currentAssessments.forEach(item => {
+            const tr = document.createElement('tr');
+            const badgeClass = item.type === 'test' ? 'badge-test' : (item.type === 'test_correction' ? 'badge-correction' : 'badge-assignment');
+            const title = String(item.title || '');
+            const itemType = String(item.type || 'assignment');
+            const count = item.assessment_submissions?.[0]?.count || 0;
+            tr.innerHTML = `
+                <td class="col-left"><strong>${escapeHtml(title)}</strong></td>
+                <td><span class="badge-type ${badgeClass}">${escapeHtml(itemType.replace('_', ' '))}</span></td>
+                <td style="font-size: 0.85rem;">${item.due_date ? new Date(item.due_date).toLocaleDateString() : 'None'}</td>
+                <td>${count} completed</td>
+                <td class="action-cell"></td>
+            `;
+            const group = document.createElement('div');
+            group.className = 'table-btn-group';
+
+            const addActionButton = (label, className, titleText, onClick) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = className;
+                button.textContent = label;
+                if (titleText) button.title = titleText;
+                button.addEventListener('click', onClick);
+                group.appendChild(button);
+            };
+
+            addActionButton('Results', 'btn-primary btn-sm', '', () => viewAssessmentResults(item.id, title));
+            if (!showArchivedAssessments) {
+                addActionButton('📋 Duplicate', 'btn-secondary btn-sm', 'Duplicate assignment', () => duplicateAssessment(item.id));
+                if (itemType === 'test') {
+                    addActionButton('Corrections', 'btn-secondary btn-sm', '', () => promptCreateCorrections(item.id, title));
+                }
+                addActionButton('🗑', 'btn-danger-subtle btn-sm', 'Archive / Move to Trash', () => archiveAssessment(item.id, title));
+            } else {
+                addActionButton('♻ Restore', 'btn-secondary btn-sm', 'Restore assignment', () => restoreAssessment(item.id, title));
+            }
+            tr.querySelector('.action-cell').appendChild(group);
+            tbody.appendChild(tr);
+        });
+    }
+
+    function duplicateAssessment(assessmentId) {
+        invalidateTeacherCache('assessments');
+        window.location.href = '/teacher/assignments/new?clone_from=' + assessmentId;
     }
 
     function setTaskArchiveFilter(showArchived) {
         showArchivedAssessments = Boolean(showArchived);
         document.getElementById('filter-active-tasks-btn')?.classList.toggle('active', !showArchivedAssessments);
         document.getElementById('filter-archived-tasks-btn')?.classList.toggle('active', showArchivedAssessments);
-        loadAssessments();
+        loadAssessments(false);
     }
 
     async function archiveAssessment(assessmentId, title) {
         if (!confirm(`Archive "${title}"? Students will no longer be able to access it.`)) return;
+        const classId = teacherCache.classId;
         try {
             const response = await fetch(
                 `/api/teacher/assessments/${encodeURIComponent(assessmentId)}/archive`,
@@ -1226,7 +1391,10 @@
             );
             const result = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(result.detail || 'Could not archive this assessment.');
-            await loadAssessments();
+            if (teacherCache.classId === classId) {
+                invalidateTeacherCache('assessments', 'gradebook');
+                await Promise.all([loadAssessments(false), loadGradebook(false)]);
+            }
         } catch (error) {
             alert(error.message || 'Could not archive this assessment.');
         }
@@ -1234,6 +1402,7 @@
 
     async function restoreAssessment(assessmentId, title) {
         if (!confirm(`Restore "${title}" to active assignments?`)) return;
+        const classId = teacherCache.classId;
         try {
             const response = await fetch(
                 `/api/teacher/assessments/${encodeURIComponent(assessmentId)}/restore`,
@@ -1241,7 +1410,10 @@
             );
             const result = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(result.detail || 'Could not restore this assessment.');
-            await loadAssessments();
+            if (teacherCache.classId === classId) {
+                invalidateTeacherCache('assessments', 'gradebook');
+                await Promise.all([loadAssessments(false), loadGradebook(false)]);
+            }
         } catch (error) {
             alert(error.message || 'Could not restore this assessment.');
         }
@@ -1272,25 +1444,55 @@
         }
     }
 
-    async function loadGradebook() {
+    async function loadGradebook(force = true) {
         const classId = document.getElementById('class-select').value;
         const thead = document.getElementById('gradebook-thead');
         const tbody = document.getElementById('gradebook-tbody');
         const tfoot = document.getElementById('gradebook-tfoot');
-        thead.innerHTML = '';
-        tbody.innerHTML = '';
-        if (tfoot) tfoot.innerHTML = '';
         if (!classId) {
             thead.innerHTML = '<tr><th>Student Name</th></tr>';
             tbody.innerHTML = '<tr><td style="color: #94a3b8; padding: 24px;">Select a class to view the gradebook.</td></tr>';
+            if (tfoot) tfoot.innerHTML = '';
+            return;
+        }
+        if (!force && teacherCache.gradebook !== null) {
+            renderGradebook(teacherCache.gradebook);
             return;
         }
 
-        tbody.innerHTML = '<tr><td style="color: #94a3b8; padding: 24px;">Loading gradebook...</td></tr>';
         try {
-            const res = await fetch(`/api/teacher/gradebook/${encodeURIComponent(classId)}`, { headers: getAuthHeaders() });
-            if (!res.ok) throw new Error(`Could not load gradebook (${res.status}).`);
-            const gradebook = await res.json();
+            if (force || teacherCache.gradebook === null) {
+                thead.innerHTML = '';
+                tbody.innerHTML = '<tr><td style="color: #94a3b8; padding: 24px;">Loading gradebook...</td></tr>';
+                if (tfoot) tfoot.innerHTML = '';
+            }
+            const gradebook = await fetchTeacherData(
+                'gradebook', classId, `/api/teacher/gradebook/${encodeURIComponent(classId)}`, force
+            );
+            if (gradebook === null || teacherCache.classId !== classId || teacherCache.gradebook !== gradebook) return;
+            renderGradebook(gradebook);
+        } catch (error) {
+            if (teacherCache.classId !== classId) return;
+            console.error('Failed to load gradebook:', error);
+            thead.innerHTML = '<tr><th class="col-left">Student Name</th></tr>';
+            tbody.innerHTML = '';
+            const row = document.createElement('tr');
+            const cell = document.createElement('td');
+            cell.colSpan = 1;
+            cell.style.cssText = 'color: #ef4444; padding: 24px;';
+            cell.textContent = error.message || 'Failed to load gradebook.';
+            row.appendChild(cell);
+            tbody.appendChild(row);
+        }
+    }
+
+    function renderGradebook(gradebook) {
+            const thead = document.getElementById('gradebook-thead');
+            const tbody = document.getElementById('gradebook-tbody');
+            const tfoot = document.getElementById('gradebook-tfoot');
+            thead.replaceChildren();
+            tbody.replaceChildren();
+            if (tfoot) tfoot.replaceChildren();
             const students = gradebook.students || [];
             const assessments = gradebook.assessments || [];
             const grades = gradebook.grades || {};
@@ -1406,18 +1608,6 @@
             });
             footerRow.appendChild(document.createElement('td'));
             if (tfoot) tfoot.appendChild(footerRow);
-        } catch (error) {
-            console.error('Failed to load gradebook:', error);
-            thead.innerHTML = '<tr><th class="col-left">Student Name</th></tr>';
-            tbody.innerHTML = '';
-            const row = document.createElement('tr');
-            const cell = document.createElement('td');
-            cell.colSpan = 1;
-            cell.style.cssText = 'color: #ef4444; padding: 24px;';
-            cell.textContent = error.message || 'Failed to load gradebook.';
-            row.appendChild(cell);
-            tbody.appendChild(row);
-        }
     }
 
     async function viewAssessmentResults(assessmentId, title) {
@@ -1492,13 +1682,6 @@
         window.location.href = `/teacher/assignments/new?${params}`;
     }
 
-    function renderSkillCell(skillData) {
-        if (!skillData) return `<span style="color: #cbd5e1;">—</span>`;
-        if (skillData.mastered) return `<span class="badge-mastered">✔ Mastered</span>`;
-        if (skillData.streak > 0) return `<span class="badge-streak">Streak: ${skillData.streak}/5</span>`;
-        return `<span style="color: #94a3b8; font-size: 0.85rem;">0/5</span>`;
-    }
-
     async function promptCreateClass() {
         if (!currentUser) return;
         const name = prompt("Enter course section name (e.g., MTH 245 - Period 2):");
@@ -1518,6 +1701,12 @@
     }
 
     window.addEventListener('load', initTeacherAuth);
+    window.addEventListener('pageshow', event => {
+        if (event.persisted && currentUser) {
+            invalidateTeacherCache('roster', 'assessments', 'gradebook');
+            preloadAllSectionData();
+        }
+    });
 </script>
 <div id="results-modal" class="modal-overlay" style="display: none;">
     <div class="modal-card">
