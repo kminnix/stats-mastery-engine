@@ -2,9 +2,11 @@
 import random
 import string
 import traceback
+import csv
+import io
 from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, Request, HTTPException, Header
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -36,7 +38,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "118"
+STATIC_VERSION = "120"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -497,29 +499,38 @@ async def create_assessment(req: AssessmentCreateRequest, authorization: Optiona
     raise HTTPException(status_code=400, detail="Could not create assessment")
 
 @app.get("/api/teacher/assessments/{class_id}")
-async def get_class_assessments(class_id: str, authorization: Optional[str] = Header(None)):
+async def get_class_assessments(
+    class_id: str,
+    include_archived: bool = False,
+    authorization: Optional[str] = Header(None)
+):
     """Retrieves all assessments and student submission counts for a section."""
     access = verify_teacher_access(authorization)
     db = get_scoped_supabase(authorization)
     verify_teacher_class_access(db, class_id, access["user"].id)
     
     try:
-        res = db.table("assessments").select("*, assessment_submissions(count)").eq("class_id", class_id).eq("is_active", True).order("created_at", desc=True).execute()
+        query = (
+            db.table("assessments")
+            .select("*, assessment_submissions(count)")
+            .eq("class_id", class_id)
+        )
+        if not include_archived:
+            query = query.eq("is_active", True)
+        res = query.order("created_at", desc=True).execute()
         return res.data or []
     except Exception as e:
         print(f"Error fetching class assessments: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.delete("/api/teacher/assessments/{assessment_id}")
-async def delete_assessment(assessment_id: str, authorization: Optional[str] = Header(None)):
-    """Soft-deletes an assessment owned by the authenticated teacher."""
+@app.patch("/api/teacher/assessments/{assessment_id}/archive")
+async def archive_assessment(assessment_id: str, authorization: Optional[str] = Header(None)):
     access = verify_teacher_access(authorization)
     db = get_scoped_supabase(authorization)
     assessment_res = (
         db.table("assessments")
         .select("id, class_id")
         .eq("id", assessment_id)
-        .eq("is_active", True)
         .execute()
     )
     if not assessment_res.data:
@@ -532,12 +543,39 @@ async def delete_assessment(assessment_id: str, authorization: Optional[str] = H
         .update({"is_active": False})
         .eq("id", assessment_id)
         .eq("class_id", class_id)
-        .eq("is_active", True)
+        .select("id")
         .execute()
     )
     if not result.data:
+        raise HTTPException(status_code=404, detail="Assessment could not be archived")
+    return {"status": "archived"}
+
+@app.patch("/api/teacher/assessments/{assessment_id}/restore")
+async def restore_assessment(assessment_id: str, authorization: Optional[str] = Header(None)):
+    access = verify_teacher_access(authorization)
+    db = get_scoped_supabase(authorization)
+    assessment_res = (
+        db.table("assessments")
+        .select("id, class_id")
+        .eq("id", assessment_id)
+        .execute()
+    )
+    if not assessment_res.data:
         raise HTTPException(status_code=404, detail="Assessment not found")
-    return {"status": "deleted"}
+
+    class_id = assessment_res.data[0]["class_id"]
+    verify_teacher_class_access(db, class_id, access["user"].id)
+    result = (
+        db.table("assessments")
+        .update({"is_active": True})
+        .eq("id", assessment_id)
+        .eq("class_id", class_id)
+        .select("id")
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Assessment could not be restored")
+    return {"status": "restored"}
 
 @app.get("/api/teacher/assessment/{assessment_id}/submissions")
 async def get_assessment_submissions(assessment_id: str, authorization: Optional[str] = Header(None)):
@@ -651,6 +689,111 @@ async def get_class_gradebook(class_id: str, authorization: Optional[str] = Head
         "assessments": assessments,
         "grades": grades
     }
+
+@app.get("/api/teacher/gradebook/{class_id}/export-csv")
+async def export_gradebook_csv(class_id: str, authorization: Optional[str] = Header(None)):
+    """Exports enrolled students' active assessment scores as a CSV gradebook."""
+    access = verify_teacher_access(authorization)
+    db = get_scoped_supabase(authorization)
+    verify_teacher_class_access(db, class_id, access["user"].id)
+
+    enroll_res = (
+        db.table("enrollments")
+        .select("student_id")
+        .eq("class_id", class_id)
+        .execute()
+    )
+    student_ids = [enrollment["student_id"] for enrollment in (enroll_res.data or [])]
+    assessments_res = (
+        db.table("assessments")
+        .select("id, title")
+        .eq("class_id", class_id)
+        .eq("is_active", True)
+        .order("created_at")
+        .execute()
+    )
+    assessments = assessments_res.data or []
+
+    profiles = []
+    if student_ids:
+        profiles_res = (
+            db.table("profiles")
+            .select("id, full_name, email")
+            .in_("id", student_ids)
+            .execute()
+        )
+        profiles = profiles_res.data or []
+    profiles_by_id = {profile["id"]: profile for profile in profiles}
+
+    grades: Dict[str, Dict[str, Any]] = {}
+    assessment_ids = [assessment["id"] for assessment in assessments]
+    if student_ids and assessment_ids:
+        submissions_res = (
+            db.table("assessment_submissions")
+            .select("assessment_id, student_id, score")
+            .in_("assessment_id", assessment_ids)
+            .in_("student_id", student_ids)
+            .execute()
+        )
+        for submission in submissions_res.data or []:
+            grades.setdefault(submission["student_id"], {})[
+                submission["assessment_id"]
+            ] = submission.get("score")
+
+    output = io.StringIO(newline="")
+    writer = csv.writer(output)
+    writer.writerow(
+        ["Student Name", "Email"]
+        + [assessment.get("title") or "Untitled Assessment" for assessment in assessments]
+        + ["Class Average"]
+    )
+
+    for student_id in student_ids:
+        profile = profiles_by_id.get(student_id, {})
+        scores = grades.get(student_id, {})
+        valid_scores = []
+        row_scores = []
+        for assessment in assessments:
+            score = scores.get(assessment["id"])
+            if score is not None:
+                try:
+                    numeric_score = float(score)
+                except (TypeError, ValueError):
+                    numeric_score = None
+                if numeric_score is not None:
+                    row_scores.append(numeric_score)
+                    valid_scores.append(numeric_score)
+                    continue
+            row_scores.append(None)
+
+        class_average = (
+            sum(valid_scores) / len(valid_scores)
+            if valid_scores
+            else None
+        )
+        writer.writerow(
+            [
+                profile.get("full_name") or profile.get("email") or "Student",
+                profile.get("email") or "",
+                *[
+                    f"{score:g}%" if score is not None else "--"
+                    for score in row_scores
+                ],
+                f"{class_average:.2f}%" if class_average is not None else "--"
+            ]
+        )
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": (
+                'attachment; filename="gradebook_'
+                + "".join(character for character in class_id if character.isalnum() or character in "-_")
+                + '.csv"'
+            )
+        }
+    )
 
 @app.get("/api/student/tasks/{student_id}")
 async def get_student_tasks(student_id: str, authorization: Optional[str] = Header(None)):

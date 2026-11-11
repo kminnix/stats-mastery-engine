@@ -458,7 +458,13 @@
         <div id="assess-view" class="card-panel" style="display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <h2 style="margin: 0; font-size: 1.2rem; color: #1e293b;">Assigned Tasks &amp; Exams</h2>
-                <a href="/teacher/assignments/new" class="btn-primary" style="text-decoration: none; padding: 8px 16px;">+ Create Assignment / Test</a>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div class="filter-pills">
+                        <button id="filter-active-tasks-btn" class="btn-pill active" onclick="setTaskArchiveFilter(false)">Active</button>
+                        <button id="filter-archived-tasks-btn" class="btn-pill" onclick="setTaskArchiveFilter(true)">🗑 Trash / Archived</button>
+                    </div>
+                    <a href="/teacher/assignments/new" class="btn-primary" style="text-decoration: none; padding: 8px 16px;">+ Create Assignment / Test</a>
+                </div>
             </div>
 
             <table class="data-table" id="assess-table">
@@ -481,7 +487,10 @@
         <div id="gradebook-view" class="card-panel" style="display: block;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <h2 style="margin: 0; font-size: 1.2rem; color: #1e293b;">Assignment Gradebook</h2>
-                <button class="btn-secondary" onclick="loadGradebook()" style="font-size: 0.85rem; padding: 6px 12px;">↻ Refresh Gradebook</button>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-secondary" onclick="loadGradebook()" style="font-size: 0.85rem; padding: 6px 12px;">↻ Refresh Gradebook</button>
+                    <button class="btn-secondary" onclick="exportGradebookCSV()" style="font-size: 0.85rem; padding: 6px 12px;">📥 Export CSV</button>
+                </div>
             </div>
             <table class="data-table" id="gradebook-table">
                 <thead id="gradebook-thead">
@@ -537,6 +546,7 @@
     let currentClasses = [];
     let currentAssessments = [];
     let activeView = 'gradebook';
+    let showArchivedAssessments = false;
     let assessmentBlocks = [];
 
     const ASSESSABLE_SKILLS = [
@@ -1132,11 +1142,21 @@
         tbody.innerHTML = `<tr><td colspan="6" style="color: #94a3b8; padding: 24px;">Loading assessments...</td></tr>`;
 
         try {
-            const res = await fetch(`/api/teacher/assessments/${classId}`, { headers: getAuthHeaders() });
-            currentAssessments = await res.json();
+            const res = await fetch(
+                `/api/teacher/assessments/${encodeURIComponent(classId)}?include_archived=${showArchivedAssessments}`,
+                { headers: getAuthHeaders() }
+            );
+            if (!res.ok) throw new Error(`Could not load assessments (${res.status}).`);
+            const assessments = await res.json();
+            currentAssessments = assessments.filter(item =>
+                Boolean(item.is_active) !== showArchivedAssessments
+            );
 
             if (currentAssessments.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" style="color: #94a3b8; padding: 24px;">No assignments or tests created yet.</td></tr>`;
+                const message = showArchivedAssessments
+                    ? 'No archived assignments or tests.'
+                    : 'No active assignments or tests created yet.';
+                tbody.innerHTML = `<tr><td colspan="6" style="color: #94a3b8; padding: 24px;">${message}</td></tr>`;
                 return;
             }
 
@@ -1164,7 +1184,7 @@
                 resultsButton.style.cssText = 'font-size: 0.8rem; padding: 4px 10px; margin-right: 6px;';
                 resultsButton.addEventListener('click', () => viewAssessmentResults(item.id, title));
                 actions.appendChild(resultsButton);
-                if (itemType === 'test') {
+                if (!showArchivedAssessments && itemType === 'test') {
                     const correctionsButton = document.createElement('button');
                     correctionsButton.className = 'btn-secondary';
                     correctionsButton.textContent = 'Create Corrections';
@@ -1172,12 +1192,17 @@
                     correctionsButton.addEventListener('click', () => promptCreateCorrections(item.id, title));
                     actions.appendChild(correctionsButton);
                 }
-                const deleteButton = document.createElement('button');
-                deleteButton.className = 'btn-secondary';
-                deleteButton.textContent = 'Delete / Trash';
-                deleteButton.style.cssText = 'font-size: 0.8rem; padding: 4px 8px; margin-left: 6px; color: #b91c1c;';
-                deleteButton.addEventListener('click', () => deleteAssessment(item.id, title));
-                actions.appendChild(deleteButton);
+                const archiveButton = document.createElement('button');
+                archiveButton.className = 'btn-secondary';
+                archiveButton.style.cssText = 'font-size: 0.8rem; padding: 4px 8px; margin-left: 6px;';
+                if (showArchivedAssessments) {
+                    archiveButton.textContent = '♻ Restore';
+                    archiveButton.addEventListener('click', () => restoreAssessment(item.id, title));
+                } else {
+                    archiveButton.textContent = '🗑 Archive';
+                    archiveButton.addEventListener('click', () => archiveAssessment(item.id, title));
+                }
+                actions.appendChild(archiveButton);
                 tbody.appendChild(tr);
             });
         } catch (e) {
@@ -1185,18 +1210,65 @@
         }
     }
 
-    async function deleteAssessment(assessmentId, title) {
-        if (!confirm(`Move "${title}" to trash? Students will no longer be able to access it.`)) return;
+    function setTaskArchiveFilter(showArchived) {
+        showArchivedAssessments = Boolean(showArchived);
+        document.getElementById('filter-active-tasks-btn')?.classList.toggle('active', !showArchivedAssessments);
+        document.getElementById('filter-archived-tasks-btn')?.classList.toggle('active', showArchivedAssessments);
+        loadAssessments();
+    }
+
+    async function archiveAssessment(assessmentId, title) {
+        if (!confirm(`Archive "${title}"? Students will no longer be able to access it.`)) return;
         try {
             const response = await fetch(
-                `/api/teacher/assessments/${encodeURIComponent(assessmentId)}`,
-                { method: 'DELETE', headers: getAuthHeaders() }
+                `/api/teacher/assessments/${encodeURIComponent(assessmentId)}/archive`,
+                { method: 'PATCH', headers: getAuthHeaders() }
             );
             const result = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(result.detail || 'Could not delete this assessment.');
+            if (!response.ok) throw new Error(result.detail || 'Could not archive this assessment.');
             await loadAssessments();
         } catch (error) {
-            alert(error.message || 'Could not delete this assessment.');
+            alert(error.message || 'Could not archive this assessment.');
+        }
+    }
+
+    async function restoreAssessment(assessmentId, title) {
+        if (!confirm(`Restore "${title}" to active assignments?`)) return;
+        try {
+            const response = await fetch(
+                `/api/teacher/assessments/${encodeURIComponent(assessmentId)}/restore`,
+                { method: 'PATCH', headers: getAuthHeaders() }
+            );
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(result.detail || 'Could not restore this assessment.');
+            await loadAssessments();
+        } catch (error) {
+            alert(error.message || 'Could not restore this assessment.');
+        }
+    }
+
+    async function exportGradebookCSV() {
+        const classId = document.getElementById('class-select').value;
+        if (!classId) {
+            alert('Select a class before exporting the gradebook.');
+            return;
+        }
+        try {
+            const response = await fetch(
+                `/api/teacher/gradebook/${encodeURIComponent(classId)}/export-csv`,
+                { headers: getAuthHeaders() }
+            );
+            if (!response.ok) throw new Error(`Could not export gradebook (${response.status}).`);
+            const downloadUrl = URL.createObjectURL(await response.blob());
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = `gradebook_${classId}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(downloadUrl);
+        } catch (error) {
+            alert(error.message || 'Could not export gradebook.');
         }
     }
 
