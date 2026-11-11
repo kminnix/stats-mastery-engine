@@ -25,6 +25,17 @@ function evaluateMathInput(rawStringOrLatex) {
     }
 }
 
+function updateEvaluationDisplay(control, rawAnswer, numericAnswer, isCorrect) {
+    const oldBadge = control.nextElementSibling;
+    if (oldBadge?.classList.contains('evaluated-decimal')) oldBadge.remove();
+    if (!isCorrect || Number.isFinite(Number(rawAnswer)) || !Number.isFinite(numericAnswer)) return;
+
+    const badge = document.createElement('span');
+    badge.className = 'evaluated-decimal';
+    badge.textContent = `≈ ${numericAnswer.toFixed(3)}`;
+    control.insertAdjacentElement('afterend', badge);
+}
+
 window.addEventListener('wheel', () => {
     if (document.activeElement?.type === 'number') {
         document.activeElement.blur();
@@ -85,38 +96,38 @@ const TOPIC_REGISTRY = [
     { id: 'left_tail', title: 'Left Tail Cumulative Area', topic: 'Normal Distributions', notation: 'P(X < b)' },
     { id: 'right_tail', title: 'Right Tail Cumulative Area', topic: 'Normal Distributions', notation: 'P(X > a)' },
     { id: 'inverse', title: 'Inverse Cutoffs & Percentiles', topic: 'Normal Distributions', notation: 'x = μ + zσ' },
-    { id: 'cond_check_prop', title: 'Sub-Skill: Checking Conditions for Proportions', topic: 'Confidence Intervals for Proportions (p)', notation: 'Random, 10%, Large Counts' },
-    { id: 'drill_se_prop', title: 'Sub-Skill: Standard Error for Proportions', topic: 'Confidence Intervals for Proportions (p)', notation: 'SE = √(p̂(1 − p̂)/n)' },
+    { id: 'cond_check_prop', title: 'Sub-Topic: Checking Conditions for Proportions', topic: 'Confidence Intervals for Proportions (p)', notation: 'Random, 10%, Large Counts' },
+    { id: 'drill_se_prop', title: 'Sub-Topic: Standard Error for Proportions', topic: 'Confidence Intervals for Proportions (p)', notation: 'SE = √(p̂(1 − p̂)/n)' },
     { id: 'ci_prop_z', title: '1-Sample z-Interval for Proportion', topic: 'Confidence Intervals for Proportions (p)', notation: 'p' },
     { id: 'ci_prop_z_2samp', title: '2-Sample z-Interval for Proportions', topic: 'Confidence Intervals for Proportions (p)', notation: 'p₁ - p₂' },
-    { id: 'drill_hypo_prop', title: 'Sub-Skill: Stating Hypotheses for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'H₀, Hₐ' },
-    { id: 'drill_stat_prop', title: 'Sub-Skill: Test Statistic & SE for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'SE₀, z' },
-    { id: 'drill_conclusion_prop', title: 'Sub-Skill: P-Value & Conclusion for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'p-value vs. α' },
+    { id: 'drill_hypo_prop', title: 'Sub-Topic: Stating Hypotheses for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'H₀, Hₐ' },
+    { id: 'drill_stat_prop', title: 'Sub-Topic: Test Statistic & SE for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'SE₀, z' },
+    { id: 'drill_conclusion_prop', title: 'Sub-Topic: P-Value & Conclusion for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'p-value vs. α' },
     { id: 'ht_prop_z', title: '1-Sample z-Test for Proportion', topic: 'Significance Tests for Proportions (p)', notation: 'H₀: p = p₀' },
     { id: 'ht_prop_z_2samp', title: '2-Sample z-Test for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'H₀: p₁ = p₂' },
-    { id: 'cond_check_mean', title: 'Sub-Skill: Checking Conditions for Means', topic: 'Confidence Intervals for Means (μ)', notation: 'Random, 10%, Normality' },
-    { id: 'drill_se_mean', title: 'Sub-Skill: Standard Error & t* for Means', topic: 'Confidence Intervals for Means (μ)', notation: 'SE = s/√n, t*' },
+    { id: 'cond_check_mean', title: 'Sub-Topic: Checking Conditions for Means', topic: 'Confidence Intervals for Means (μ)', notation: 'Random, 10%, Normality' },
+    { id: 'drill_se_mean', title: 'Sub-Topic: Standard Error & t* for Means', topic: 'Confidence Intervals for Means (μ)', notation: 'SE = s/√n, t*' },
     { id: 'ci_mean_t', title: '1-Sample t-Interval for Mean', topic: 'Confidence Intervals for Means (μ)', notation: 'μ' },
     { id: 'ci_mean_t_2samp', title: '2-Sample t-Interval for Means', topic: 'Confidence Intervals for Means (μ)', notation: 'μ₁ - μ₂' },
     { id: 'ci_matched_pairs_t', title: 'Matched Pairs t-Interval for Mean Difference', topic: 'Confidence Intervals for Means (μ)', notation: 'μ_diff' },
-    { id: 'drill_hypo_mean', title: 'Sub-Skill: Stating Hypotheses for Means', topic: 'Significance Tests for Means (μ)', notation: 'H₀, Hₐ' },
-    { id: 'drill_stat_mean', title: 'Sub-Skill: Test Statistic & SE for Means', topic: 'Significance Tests for Means (μ)', notation: 'SE₀, t' },
-    { id: 'drill_conclusion_mean', title: 'Sub-Skill: P-Value & Conclusion for Means', topic: 'Significance Tests for Means (μ)', notation: 'p-value vs. α' },
+    { id: 'drill_hypo_mean', title: 'Sub-Topic: Stating Hypotheses for Means', topic: 'Significance Tests for Means (μ)', notation: 'H₀, Hₐ' },
+    { id: 'drill_stat_mean', title: 'Sub-Topic: Test Statistic & SE for Means', topic: 'Significance Tests for Means (μ)', notation: 'SE₀, t' },
+    { id: 'drill_conclusion_mean', title: 'Sub-Topic: P-Value & Conclusion for Means', topic: 'Significance Tests for Means (μ)', notation: 'p-value vs. α' },
     { id: 'ht_mean_t', title: '1-Sample t-Test for Mean', topic: 'Significance Tests for Means (μ)', notation: 'H₀: μ = μ₀' },
     { id: 'ht_mean_t_2samp', title: '2-Sample t-Test for Means', topic: 'Significance Tests for Means (μ)', notation: 'H₀: μ₁ = μ₂' },
     { id: 'ht_matched_pairs_t', title: 'Matched Pairs t-Test', topic: 'Significance Tests for Means (μ)', notation: 'H₀: μ_diff = 0' },
     { id: 'chi_gof', title: 'Chi-Square Goodness-of-Fit Test', topic: 'Chi-Square Tests (χ²)', notation: 'df = k - 1' },
     { id: 'chi_two_way', title: 'Chi-Square Test of Independence / Homogeneity', topic: 'Chi-Square Tests (χ²)', notation: 'df = (r-1)(c-1)' },
-    { id: 'reg_lsrl', title: 'Finding the LSRL Equation', topic: 'Linear Regression Analysis', notation: 'ŷ = b₀ + b₁x' },
-    { id: 'reg_predict_residual', title: 'Predictions & Residuals (Equation Given)', topic: 'Linear Regression Analysis', notation: 'e = y - ŷ' },
+    { id: 'reg_lsrl', title: 'Least-Squares Regression Line (LSRL)', topic: 'Linear Regression Analysis', notation: 'ŷ = b₀ + b₁x' },
+    { id: 'reg_pred_res', title: 'Predictions & Residual Analysis', topic: 'Linear Regression Analysis', notation: 'e = y - ŷ' },
     { id: 'reg_raw_data', title: 'Full Regression from Data', topic: 'Linear Regression Analysis', notation: 'Data Table → LSRL' },
-    { id: 'reg_slope_inference', title: 'Inference for Slope (t-Test & CI)', topic: 'Linear Regression Analysis', notation: 'df = n - 2' }
+    { id: 'reg_slope_ci', title: 'Confidence Interval for Slope (β₁)', topic: 'Linear Regression Analysis', notation: 'b₁ ± t*SE_b₁' },
+    { id: 'reg_slope_test', title: 'Significance Test for Slope (β₁)', topic: 'Linear Regression Analysis', notation: 'H₀: β₁ = 0' }
 ];
 
 let state = {
     selectedTopic: 'random',
-    totalAttempted: 0,
-    totalCorrect: 0
+    previousView: 'catalog'
 };
 
 function getTaskTopics(task) {
@@ -125,10 +136,10 @@ function getTaskTopics(task) {
     return configuredTopics.filter(topic => supportedTopics.includes(topic));
 }
 
-function updateCurrentSkillName() {
-    const skillName = document.getElementById('current-skill-name');
+function updateCurrentTopicName() {
+    const topicName = document.getElementById('current-skill-name');
     const topic = TOPIC_REGISTRY.find(item => item.id === state.selectedTopic);
-    if (skillName) skillName.textContent = topic?.title || 'All Normal Types (Mixed)';
+    if (topicName) topicName.textContent = topic?.title || 'All Normal Types (Mixed)';
 }
 
 function renderTopicCatalog() {
@@ -200,57 +211,116 @@ function filterTopicCatalog() {
     const input = document.getElementById('topic-search-input');
     const query = input ? input.value.trim().toLowerCase() : '';
     document.querySelectorAll('#catalog-accordion .catalog-category-accordion').forEach(category => {
-        let visibleSkills = 0;
+        let visibleTopics = 0;
         category.querySelectorAll('.catalog-item-row').forEach(row => {
             const matches = !query || row.dataset.searchText.includes(query);
             row.style.display = matches ? '' : 'none';
-            if (matches) visibleSkills += 1;
+            if (matches) visibleTopics += 1;
         });
-        category.style.display = visibleSkills ? '' : 'none';
+        category.style.display = visibleTopics ? '' : 'none';
         const heading = category.querySelector('.catalog-category-heading');
         const chevron = category.querySelector('.catalog-category-chevron');
-        const expanded = !query || visibleSkills > 0;
+        const expanded = !query || visibleTopics > 0;
         category.classList.toggle('is-collapsed', !expanded);
         if (heading) heading.setAttribute('aria-expanded', String(expanded));
         if (chevron) chevron.textContent = expanded ? '▾' : '▸';
     });
 }
 
-function switchPracticeView(viewName, shouldLoadTasks = true) {
-    if (activeTaskState.active && viewName === 'catalog') return;
+function getActivePracticeView() {
+    return ['practice', 'tasks', 'catalog'].find(viewName => {
+        const view = document.getElementById(`${viewName}-view`);
+        return view && view.style.display !== 'none';
+    });
+}
 
+function switchPracticeView(targetView, skipHistoryPush = false) {
+    if (activeTaskState.active && targetView === 'catalog') return;
     const views = {
         practice: document.getElementById('practice-view'),
         tasks: document.getElementById('tasks-view'),
         catalog: document.getElementById('catalog-view')
     };
+    if (!views[targetView]) return;
+
+    const currentActiveView = getActivePracticeView();
+    if (targetView === 'practice' && ['tasks', 'catalog'].includes(currentActiveView)) {
+        state.previousView = currentActiveView;
+    }
+
+    if (!skipHistoryPush) {
+        history.pushState({ appView: targetView }, '', `#${targetView}`);
+    } else {
+        history.replaceState({ appView: targetView }, '', `#${targetView}`);
+    }
+
     const buttons = {
         tasks: document.getElementById('nav-tasks-btn'),
         catalog: document.getElementById('nav-topics-btn')
     };
 
     Object.entries(views).forEach(([name, view]) => {
-        if (view) view.style.display = name === viewName ? 'block' : 'none';
+        if (view) view.style.display = name === targetView ? 'block' : 'none';
     });
     Object.entries(buttons).forEach(([name, button]) => {
-        if (button) button.classList.toggle('active', name === viewName);
+        if (button) button.classList.toggle('active', name === targetView);
     });
-    if (viewName === 'tasks' && shouldLoadTasks && typeof fetchStudentTasks === 'function') {
+    if (targetView === 'tasks' && !skipHistoryPush && typeof fetchStudentTasks === 'function') {
         fetchStudentTasks();
-    } else if (viewName === 'catalog') {
+    } else if (targetView === 'catalog') {
         renderTopicCatalog();
     }
 }
+
+function handleBackNavigation() {
+    const practiceView = document.getElementById('practice-view');
+    const tasksView = document.getElementById('tasks-view');
+    if (practiceView && practiceView.style.display !== 'none') {
+        if (activeTaskState.active) {
+            exitTask();
+            return;
+        }
+        const dest = state.previousView === 'tasks' ? 'tasks' : 'catalog';
+        switchPracticeView(dest, true);
+    } else if (tasksView && tasksView.style.display !== 'none') {
+        switchPracticeView('catalog', true);
+    }
+}
+window.handleBackNavigation = handleBackNavigation;
+
+window.addEventListener('popstate', event => {
+    const practiceView = document.getElementById('practice-view');
+    if (practiceView && practiceView.style.display !== 'none') {
+        event.preventDefault();
+        handleBackNavigation();
+        if (practiceView.style.display !== 'none') {
+            history.pushState({ appView: 'practice' }, '', '#practice');
+        }
+        return;
+    }
+
+    if (event.state?.appView) {
+        switchPracticeView(event.state.appView, true);
+    }
+    if (event.state?.navigationRoot) {
+        const currentView = getActivePracticeView() || event.state.appView;
+        history.pushState(
+            { appView: currentView, navigationRoot: true },
+            '',
+            `#${currentView}`
+        );
+    }
+});
 
 function startPracticingTopic(topicId, title) {
     if (activeTaskState.active) return;
 
     state.selectedTopic = topicId;
-    const skillName = document.getElementById('current-skill-name');
+    const topicName = document.getElementById('current-skill-name');
     const topic = TOPIC_REGISTRY.find(item => item.id === topicId);
-    if (skillName) skillName.textContent = title || topic?.title || 'All Normal Types (Mixed)';
+    if (topicName) topicName.textContent = title || topic?.title || 'All Normal Types (Mixed)';
     saveState();
-    switchPracticeView('practice', false);
+    switchPracticeView('practice');
     loadProblem();
 }
 
@@ -521,7 +591,7 @@ async function loadTaskQuestion(targetIndex) {
     if (!activeTaskState.active || targetIndex < 1 || targetIndex > activeTaskState.totalQuestions) return;
     activeTaskState.currentIndex = targetIndex;
     selectTaskTopic();
-    updateCurrentSkillName();
+    updateCurrentTopicName();
     updateTaskRunnerUI();
     renderTaskNavigationChips();
     const cachedQuestion = activeTaskState.questionsState[targetIndex - 1];
@@ -632,7 +702,7 @@ function selectTaskTopic() {
             activeTaskState.currentPhase = queuedQuestion.allow_hints ? 'guided' : 'independent';
         }
         state.selectedTopic = queuedQuestion.topic;
-        updateCurrentSkillName();
+        updateCurrentTopicName();
         return;
     }
 
@@ -641,7 +711,7 @@ function selectTaskTopic() {
         ? topics[(activeTaskState.currentIndex - 1) % topics.length]
         : activeTaskState.selectedTopic;
     state.selectedTopic = topic || 'random';
-    updateCurrentSkillName();
+    updateCurrentTopicName();
 }
 
 function removeTaskIdFromUrl() {
@@ -689,7 +759,7 @@ async function startStudentTask(task) {
         }
         taskBlocks.forEach((block, blockIndex) => {
             if (!block || !supportedTopics.has(block.topic)) {
-                throw new Error('This task contains a block for an unsupported skill.');
+                throw new Error('This task contains a block for an unsupported topic.');
             }
             if (!['scaffold', 'mastery', 'all_hints', 'no_hints'].includes(block.mode)) {
                 throw new Error('This task contains a block with an unsupported practice mode.');
@@ -729,7 +799,7 @@ async function startStudentTask(task) {
         }
         configuredQuestions.forEach(question => {
             if (!question || !supportedTopics.has(question.topic)) {
-                throw new Error('This task contains a question for an unsupported skill.');
+                throw new Error('This task contains a question for an unsupported topic.');
             }
             questionQueue.push({
                 topic: question.topic,
@@ -863,7 +933,7 @@ function exitTask() {
         isPreview: false
     };
     state.selectedTopic = previousTopic || 'random';
-    updateCurrentSkillName();
+    updateCurrentTopicName();
     saveState();
     const nextBtn = document.getElementById('next-btn');
     nextBtn.innerText = 'Next Problem →';
@@ -872,7 +942,7 @@ function exitTask() {
     renderTaskNavigationChips();
     document.getElementById('task-completion-modal').style.display = 'none';
     removeTaskIdFromUrl();
-    if (typeof switchStudentTab === 'function') switchStudentTab('tasks');
+    switchPracticeView(state.previousView === 'catalog' ? 'catalog' : 'tasks', true);
 }
 window.exitTask = exitTask;
 
@@ -941,7 +1011,7 @@ async function completeStudentTask() {
 
 function finishStudentTask() {
     state.selectedTopic = activeTaskState.previousTopic || 'random';
-    updateCurrentSkillName();
+    updateCurrentTopicName();
     saveState();
     activeTaskState = {
         active: false,
@@ -979,7 +1049,7 @@ function finishStudentTask() {
     updateTaskRunnerUI();
     removeTaskIdFromUrl();
     document.getElementById('task-completion-modal').style.display = 'none';
-    if (typeof switchStudentTab === 'function') switchStudentTab('tasks', false);
+    if (typeof switchStudentTab === 'function') switchStudentTab('tasks', true);
     if (typeof loadStudentTasks === 'function') loadStudentTasks();
 }
 
@@ -1033,7 +1103,7 @@ async function handleSession(session) {
             if (teacherFilterBar) teacherFilterBar.style.display = 'none';
         }
 
-        loadCloudState();
+        loadSavedState();
     } else {
         if (authBtnLabel) authBtnLabel.innerText = 'Sign In';
         if (teacherBtn) teacherBtn.style.display = 'none';
@@ -1065,70 +1135,32 @@ async function toggleAuth() {
     }
 }
 
-// Progress State Synchronization
-async function loadCloudState() {
-    if (!supabaseClient || !currentUser) return;
-    try {
-        const { data, error } = await supabaseClient
-            .from('skill_progress')
-            .select('*')
-            .eq('student_id', currentUser.id);
-
-        if (!error && data) {
-            let totalAtt = 0;
-            let totalCorr = 0;
-            data.forEach(row => {
-                totalAtt += (row.total_attempted || 0);
-                totalCorr += (row.total_correct || 0);
-            });
-            state.totalAttempted = totalAtt;
-            state.totalCorrect = totalCorr;
-            updateCurrentSkillName();
-        }
-    } catch (e) {
-        console.warn("Could not load cloud progress:", e);
-    }
-}
-
 function loadSavedState() {
     try {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
             const parsed = JSON.parse(saved);
             state.selectedTopic = parsed.selectedTopic || 'random';
-            state.totalAttempted = parsed.totalAttempted || 0;
-            state.totalCorrect = parsed.totalCorrect || 0;
         }
     } catch (e) {
         console.warn('localStorage not accessible');
     }
-    updateCurrentSkillName();
+    updateCurrentTopicName();
+    saveState();
 }
 
-async function saveState() {
+function saveState() {
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            selectedTopic: state.selectedTopic || 'random'
+        }));
     } catch (e) {}
-    if (supabaseClient && currentUser) {
-        const topic = state.selectedTopic || 'random';
-        try {
-            await supabaseClient.from('skill_progress').upsert({
-                student_id: currentUser.id,
-                skill_id: topic,
-                total_attempted: state.totalAttempted,
-                total_correct: state.totalCorrect,
-                last_practiced_at: new Date().toISOString()
-            }, { onConflict: 'student_id,skill_id' });
-        } catch (err) {
-            console.warn("Failed to sync progress to cloud:", err);
-        }
-    }
 }
 
 function onTopicChange() {
     const topicSelect = document.getElementById('topic-select');
     state.selectedTopic = topicSelect?.value || state.selectedTopic || 'random';
-    updateCurrentSkillName();
+    updateCurrentTopicName();
     saveState();
     loadProblem();
 }
@@ -1436,11 +1468,18 @@ function renderMultiStageUI(topic) {
         };
         if (step.input_type === 'parameter_definition') {
             inputRow.classList.add('stage-parameter-definition');
-            inputRow.append('Let ');
-            appendComponent(inputRow, 'parameter-symbol');
-            inputRow.append(' represent ');
-            appendComponent(inputRow, 'parameter-context');
-            inputRow.append('.');
+            if (topic === 'reg_slope_test') {
+                inputRow.append('Choose the parameter definition for ');
+                appendComponent(inputRow, 'parameter-symbol');
+                inputRow.append(': ');
+                appendComponent(inputRow, 'parameter-context');
+            } else {
+                inputRow.append('Let ');
+                appendComponent(inputRow, 'parameter-symbol');
+                inputRow.append(' represent ');
+                appendComponent(inputRow, 'parameter-context');
+                inputRow.append('.');
+            }
         } else if (step.input_type === 'hypotheses') {
             inputRow.classList.add('stage-hypothesis-lines');
             step.rows.forEach(row => {
@@ -1470,6 +1509,35 @@ function renderMultiStageUI(topic) {
             standardErrorLine.append('Standard error: ');
             appendComponent(standardErrorLine, 'standard-error');
             inputRow.append(statisticLine, standardErrorLine);
+        } else if (step.input_type === 'regression_conditions') {
+            inputRow.classList.add('stage-hypothesis-lines');
+            step.rows.forEach(row => {
+                const line = document.createElement('div');
+                line.className = 'stage-hypothesis-line';
+                const label = document.createElement('span');
+                label.textContent = row.label;
+                line.append(label);
+                appendComponent(line, row.component);
+                inputRow.appendChild(line);
+            });
+        } else if (step.input_type === 'slope_test_statistic') {
+            inputRow.classList.add('stage-hypothesis-lines');
+            step.rows.forEach(row => {
+                const line = document.createElement('div');
+                line.className = 'stat-calc-row';
+                line.style.display = 'flex';
+                line.style.alignItems = 'center';
+                line.style.flexWrap = 'wrap';
+                line.style.gap = '10px';
+                line.style.marginBottom = '12px';
+                line.style.width = '100%';
+                const formula = document.createElement('span');
+                formula.className = 'stat-calc-formula';
+                formula.innerHTML = row.formula;
+                line.appendChild(formula);
+                appendComponent(line, row.component);
+                inputRow.appendChild(line);
+            });
         } else if (step.input_type === 'cloze') {
             inputRow.classList.add('stage-cloze');
             const paragraph = document.createElement('p');
@@ -1518,7 +1586,7 @@ function renderMultiStageUI(topic) {
 
         box.append(header, inputRow, hint, inputWarning, reveal);
         container.appendChild(box);
-        if (showHints && idx === 0) triggerKaTeX(box);
+        triggerKaTeX(box);
     });
 
     if (isTest) {
@@ -1639,25 +1707,21 @@ async function submitStage(idx) {
             let componentCorrect;
             if (definition.type === 'select') {
                 componentCorrect = definition.expected.some(expected => String(expected) === answer);
-            } else if (controls[inputIndex].control.matches('math-field')) {
-                const value = numericValues[inputIndex];
-                const tolerance = definition.tolerance ?? step.tolerance ?? 0;
-                componentCorrect = Number.isFinite(value) && definition.expected.some(
-                    expected => Math.abs(value - Number(expected)) <= tolerance
-                );
             } else {
-                const res = await fetch('/api/verify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        user_answer: numericValues[inputIndex],
-                        expected_answers: definition.expected,
-                        tolerance: definition.tolerance ?? step.tolerance
-                    })
-                });
-                if (!res.ok) throw new Error(`Could not verify step (${res.status}).`);
-                const data = await res.json();
-                componentCorrect = data.correct;
+                const value = numericValues[inputIndex];
+                const tolerance = definition.tolerance ?? step.tolerance ?? 0.005;
+                componentCorrect = Number.isFinite(value) && definition.expected.some(
+                    expected => Number.isFinite(Number(expected))
+                        && Math.abs(value - Number(expected)) <= tolerance
+                );
+            }
+            if (definition.type !== 'select') {
+                updateEvaluationDisplay(
+                    controls[inputIndex].control,
+                    answer,
+                    numericValues[inputIndex],
+                    componentCorrect
+                );
             }
             componentResults.push(componentCorrect);
             isCorrect = componentCorrect && isCorrect;
@@ -1794,18 +1858,13 @@ async function finalizeProblem(isSuccess, answer = null) {
         feedback.className = 'banner';
         feedback.textContent = 'Test response recorded. Continue to the next question.';
     } else {
-        state.totalAttempted += 1;
-
         if (isSuccess) {
-            state.totalCorrect += 1;
             feedback.className = 'banner correct';
             feedback.innerHTML = '&#10004; Problem complete! All steps solved cleanly.';
         } else {
             feedback.className = 'banner incorrect';
             feedback.innerHTML = '&#10008; Problem finished with step errors.';
         }
-
-        saveState();
     }
 
     const nextBtn = document.getElementById('next-btn');
@@ -1897,7 +1956,7 @@ async function finalizeProblem(isSuccess, answer = null) {
                 } else if (blockState.attemptsCount >= blockState.maxAttempts) {
                     blockState.completed = true;
                     if (questionState) questionState.maxAttemptsReached = true;
-                    feedback.innerHTML += ' <strong>⚠️ Max Attempts Reached for this Skill.</strong> Move on to the next section or review with your teacher.';
+                    feedback.innerHTML += ' <strong>⚠️ Max Attempts Reached for this Topic.</strong> Move on to the next section or review with your teacher.';
                     discardRemainingBlockQuestions();
                 } else {
                     blockState.phase = 'independent';
@@ -1912,7 +1971,7 @@ async function finalizeProblem(isSuccess, answer = null) {
                 if (blockState.attemptsCount >= blockState.maxAttempts) {
                     blockState.completed = true;
                     if (questionState) questionState.maxAttemptsReached = true;
-                    feedback.innerHTML = '<strong>⚠️ Max Attempts Reached for this Skill.</strong><br>You have completed the allowed attempts for this practice block. Move on to the next section or review with your teacher.';
+                    feedback.innerHTML = '<strong>⚠️ Max Attempts Reached for this Topic.</strong><br>You have completed the allowed attempts for this practice block. Move on to the next section or review with your teacher.';
                     discardRemainingBlockQuestions();
                 } else {
                     feedback.innerHTML += ' Review the derivation, then return to guided practice.';
@@ -1952,9 +2011,14 @@ async function finalizeProblem(isSuccess, answer = null) {
 }
 
 window.addEventListener('load', async () => {
+    const rootView = taskId ? 'tasks' : 'catalog';
+    state.previousView = rootView;
+    history.replaceState({ appView: rootView, navigationRoot: true }, '', `#${rootView}`);
+    history.pushState({ appView: rootView, navigationRoot: true }, '', `#${rootView}`);
+
     await initAuth();
     const exitTaskButton = document.getElementById('btn-exit-task');
-    if (exitTaskButton) exitTaskButton.addEventListener('click', exitTask);
+    if (exitTaskButton) exitTaskButton.addEventListener('click', handleBackNavigation);
     const finishTaskButton = document.getElementById('btn-finish-task');
     if (finishTaskButton) finishTaskButton.addEventListener('click', finishStudentTask);
     if (taskId) {
@@ -1963,7 +2027,7 @@ window.addEventListener('load', async () => {
         } catch (error) {
             console.error('Could not start assigned task:', error);
             await fetchStudentTasks();
-            switchPracticeView('tasks', false);
+            switchPracticeView('tasks', true);
             const message = document.createElement('p');
             message.setAttribute('role', 'alert');
             message.className = 'banner incorrect';
@@ -1973,9 +2037,9 @@ window.addEventListener('load', async () => {
     } else {
         const tasks = await fetchStudentTasks();
         if (tasks && tasks.length > 0) {
-            switchPracticeView('tasks', false);
+            switchPracticeView('tasks', true);
         } else {
-            switchPracticeView('catalog');
+            switchPracticeView('catalog', true);
         }
     }
     const ansInput = document.getElementById('answer-input');

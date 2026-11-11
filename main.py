@@ -36,7 +36,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "110"
+STATIC_VERSION = "118"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -241,8 +241,8 @@ async def get_chi_problem(topic: str = "random"):
     return generate_chi_problem(topic or "random")
 
 @app.get("/api/problem/regression")
-async def get_regression_problem(topic: str = "reg_lsrl"):
-    return generate_regression_problem(topic or "reg_lsrl")
+async def get_regression_problem(topic: str = "reg_lsrl", notation_style: str = "b0b1"):
+    return generate_regression_problem(topic or "reg_lsrl", notation_style)
 
 @app.get("/api/problem/drill")
 async def get_inference_drill(topic: str):
@@ -504,11 +504,40 @@ async def get_class_assessments(class_id: str, authorization: Optional[str] = He
     verify_teacher_class_access(db, class_id, access["user"].id)
     
     try:
-        res = db.table("assessments").select("*, assessment_submissions(count)").eq("class_id", class_id).order("created_at", desc=True).execute()
+        res = db.table("assessments").select("*, assessment_submissions(count)").eq("class_id", class_id).eq("is_active", True).order("created_at", desc=True).execute()
         return res.data or []
     except Exception as e:
         print(f"Error fetching class assessments: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/api/teacher/assessments/{assessment_id}")
+async def delete_assessment(assessment_id: str, authorization: Optional[str] = Header(None)):
+    """Soft-deletes an assessment owned by the authenticated teacher."""
+    access = verify_teacher_access(authorization)
+    db = get_scoped_supabase(authorization)
+    assessment_res = (
+        db.table("assessments")
+        .select("id, class_id")
+        .eq("id", assessment_id)
+        .eq("is_active", True)
+        .execute()
+    )
+    if not assessment_res.data:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    class_id = assessment_res.data[0]["class_id"]
+    verify_teacher_class_access(db, class_id, access["user"].id)
+    result = (
+        db.table("assessments")
+        .update({"is_active": False})
+        .eq("id", assessment_id)
+        .eq("class_id", class_id)
+        .eq("is_active", True)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+    return {"status": "deleted"}
 
 @app.get("/api/teacher/assessment/{assessment_id}/submissions")
 async def get_assessment_submissions(assessment_id: str, authorization: Optional[str] = Header(None)):

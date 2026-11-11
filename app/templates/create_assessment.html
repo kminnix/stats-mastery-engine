@@ -227,10 +227,11 @@
         { id: 'ht_matched_pairs_t', title: 'Matched Pairs t-Test', topic: 'Significance Tests for Means (μ)', notation: 'H_0: \\mu_{\\text{diff}} = 0' },
         { id: 'chi_gof', title: 'Chi-Square Goodness-of-Fit Test', topic: 'Chi-Square Tests (χ²)', notation: 'df = k - 1' },
         { id: 'chi_two_way', title: 'Chi-Square Test of Independence / Homogeneity', topic: 'Chi-Square Tests (χ²)', notation: 'df = (r-1)(c-1)' },
-        { id: 'reg_lsrl', title: 'Finding the LSRL Equation', topic: 'Linear Regression Analysis', notation: 'ŷ = b_0 + b_1x' },
-        { id: 'reg_predict_residual', title: 'Predictions & Residuals (Equation Given)', topic: 'Linear Regression Analysis', notation: 'e = y - ŷ' },
+        { id: 'reg_lsrl', title: 'Least-Squares Regression Line (LSRL)', topic: 'Linear Regression Analysis', notation: 'ŷ = b_0 + b_1x' },
+        { id: 'reg_pred_res', title: 'Predictions & Residual Analysis', topic: 'Linear Regression Analysis', notation: 'e = y - ŷ' },
         { id: 'reg_raw_data', title: 'Full Regression from Data', topic: 'Linear Regression Analysis', notation: 'Data Table → LSRL' },
-        { id: 'reg_slope_inference', title: 'Inference for Slope (t-Test & CI)', topic: 'Linear Regression Analysis', notation: 'df = n - 2' }
+        { id: 'reg_slope_ci', title: 'Confidence Interval for Slope (β₁)', topic: 'Linear Regression Analysis', notation: 'b_1 ± t*SE_b_1' },
+        { id: 'reg_slope_test', title: 'Significance Test for Slope (β₁)', topic: 'Linear Regression Analysis', notation: 'H_0: β_1 = 0' }
     ];
 
     function showBuilderError(message) {
