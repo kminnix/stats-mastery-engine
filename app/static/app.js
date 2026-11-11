@@ -106,7 +106,11 @@ const TOPIC_REGISTRY = [
     { id: 'ht_mean_t_2samp', title: '2-Sample t-Test for Means', topic: 'Significance Tests for Means (μ)', notation: 'H₀: μ₁ = μ₂' },
     { id: 'ht_matched_pairs_t', title: 'Matched Pairs t-Test', topic: 'Significance Tests for Means (μ)', notation: 'H₀: μ_diff = 0' },
     { id: 'chi_gof', title: 'Chi-Square Goodness-of-Fit Test', topic: 'Chi-Square Tests (χ²)', notation: 'df = k - 1' },
-    { id: 'chi_two_way', title: 'Chi-Square Test of Independence / Homogeneity', topic: 'Chi-Square Tests (χ²)', notation: 'df = (r-1)(c-1)' }
+    { id: 'chi_two_way', title: 'Chi-Square Test of Independence / Homogeneity', topic: 'Chi-Square Tests (χ²)', notation: 'df = (r-1)(c-1)' },
+    { id: 'reg_lsrl', title: 'Finding the LSRL Equation', topic: 'Linear Regression Analysis', notation: 'ŷ = b₀ + b₁x' },
+    { id: 'reg_predict_residual', title: 'Predictions & Residuals (Equation Given)', topic: 'Linear Regression Analysis', notation: 'e = y - ŷ' },
+    { id: 'reg_raw_data', title: 'Full Regression from Data', topic: 'Linear Regression Analysis', notation: 'Data Table → LSRL' },
+    { id: 'reg_slope_inference', title: 'Inference for Slope (t-Test & CI)', topic: 'Linear Regression Analysis', notation: 'df = n - 2' }
 ];
 
 let state = {
@@ -1199,6 +1203,7 @@ async function loadProblem(problemToRender = null) {
 
     const topic = state.selectedTopic || 'random';
     isMultiStage = topic.startsWith('ci_') || topic.startsWith('ht_') || topic.startsWith('chi_') ||
+        topic.startsWith('reg_') ||
         topic.startsWith('cond_') || topic.startsWith('drill_');
     currentProblem = problemToRender;
 
@@ -1210,12 +1215,16 @@ async function loadProblem(problemToRender = null) {
         if (!currentProblem) {
             const isHypothesisTest = topic.startsWith('ht_');
             const isChiSquare = topic.startsWith('chi_');
+            const isRegression = topic.startsWith('reg_');
             const isInferenceDrill = topic.startsWith('cond_') || topic.startsWith('drill_');
-            const problemTopic = isHypothesisTest || isChiSquare ? topic : topic.replace('ci_', '');
+            const problemTopic = isHypothesisTest || isChiSquare || isRegression
+                ? topic
+                : topic.replace('ci_', '');
             const endpoint = isInferenceDrill
                 ? '/api/problem/drill'
                 : isHypothesisTest ? '/api/problem/ht'
-                    : isChiSquare ? '/api/problem/chi' : '/api/problem/ci';
+                    : isChiSquare ? '/api/problem/chi'
+                        : isRegression ? '/api/problem/regression' : '/api/problem/ci';
             const res = await fetch(`${endpoint}?topic=${encodeURIComponent(problemTopic)}`);
             currentProblem = await res.json();
         }
@@ -1295,6 +1304,7 @@ function getStageControlId(idx, definition) {
 
 function isMathComputationField(step, definition) {
     if (definition.type === 'select') return false;
+    if (currentProblem.type?.startsWith('reg_')) return true;
     return ['sample-statistic-value', 'standard-error', 'stage-pval'].includes(definition.id) ||
         currentProblem.type?.startsWith('ht_') && step.step_num === 4;
 }
@@ -1464,7 +1474,8 @@ function renderMultiStageUI(topic) {
             inputRow.classList.add('stage-cloze');
             const paragraph = document.createElement('p');
             step.parts.forEach(part => {
-                if (typeof part === 'string') paragraph.append(part);
+                if (part === '<br>') paragraph.appendChild(document.createElement('br'));
+                else if (typeof part === 'string') paragraph.append(part);
                 else appendComponent(paragraph, part.component);
             });
             inputRow.appendChild(paragraph);
