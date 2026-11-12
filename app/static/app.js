@@ -125,6 +125,35 @@ const TOPIC_REGISTRY = [
     { id: 'reg_slope_test', title: 'Significance Test for Slope (β₁)', topic: 'Linear Regression Analysis', notation: 'H₀: β₁ = 0' }
 ];
 
+// Helper to merge tool permissions: students always have full access unless a policy explicitly denies
+function mergeStudentToolPermissions(assignmentPolicy = null, classPolicy = null) {
+    const defaultFull = {
+        allow_calc: true,
+        allow_stats_tool: true,
+        allow_tables: true,
+        allow_popouts: true
+    };
+    
+    // Start with full permissions
+    const merged = { ...defaultFull };
+    
+    // Apply class policy (if any) - restricts from default full
+    if (classPolicy) {
+        Object.keys(merged).forEach(key => {
+            if (classPolicy[key] === false) merged[key] = false;
+        });
+    }
+    
+    // Apply assignment policy (if any) - further restricts
+    if (assignmentPolicy) {
+        Object.keys(merged).forEach(key => {
+            if (assignmentPolicy[key] === false) merged[key] = false;
+        });
+    }
+    
+    return merged;
+}
+
 let state = {
     selectedTopic: 'random',
     previousView: 'catalog',
@@ -157,19 +186,28 @@ function getActiveLsrlNotation() {
 window.getActiveLsrlNotation = getActiveLsrlNotation;
 
 function applyStudentToolPermissions(policy = {}) {
+    // Default policy: students have full unrestricted access unless explicitly restricted
+    const defaultPolicy = {
+        allow_calc: true,
+        allow_stats_tool: true,
+        allow_tables: true,
+        allow_popouts: true
+    };
+    const mergedPolicy = { ...defaultPolicy, ...policy };
+    
     const tools = [
         ['allow_calc', 'tool-calc-button', 'calc-dock', window.closeCalculatorWindow],
         ['allow_stats_tool', 'tool-stats-button', 'floating-stats-window', window.closeStatsGrapherWindow],
         ['allow_tables', 'tool-tables-button', 'floating-tables-window', window.closeFloatingWindow]
     ];
     tools.forEach(([key, buttonId, windowId, close]) => {
-        const allowed = policy[key] !== false;
+        const allowed = mergedPolicy[key] !== false;
         const button = document.getElementById(buttonId);
         const tool = document.getElementById(windowId);
         if (button) button.hidden = !allowed;
         if (!allowed && tool && getComputedStyle(tool).display !== 'none' && typeof close === 'function') close();
     });
-    document.querySelectorAll('.tool-popout').forEach(button => { button.hidden = policy.allow_popouts === false; });
+    document.querySelectorAll('.tool-popout').forEach(button => { button.hidden = mergedPolicy.allow_popouts === false; });
 }
 window.applyStudentToolPermissions = applyStudentToolPermissions;
 
@@ -976,7 +1014,12 @@ async function startStudentTask(task) {
         console.error('Could not read incomplete test:', error);
         throw new Error('The saved incomplete test could not be read on this device. Contact your teacher before continuing.');
     }
-    applyStudentToolPermissions({ ...(task.tool_policy || {}), ...(task.config?.tool_policy || {}) });
+    applyStudentToolPermissions(
+        mergeStudentToolPermissions(
+            task.config?.tool_policy || null,
+            task.tool_policy || null
+        )
+    );
     updateTaskRunnerUI();
 
     document.getElementById('task-completion-modal').style.display = 'none';

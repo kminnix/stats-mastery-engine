@@ -417,17 +417,6 @@
                 <span style="font-size: 0.85rem; color: #64748b;">Join Code:</span>
                 <span id="active-code-badge" class="code-display">------</span>
             </span>
-            <label for="class-notation-select">Default LSRL Form:</label>
-            <select id="class-notation-select" onchange="updateClassNotation()" disabled>
-                <option value="ab">ŷ = a + bx (AP Standard)</option>
-                <option value="b0b1">ŷ = b₀ + b₁x (Collegiate Standard)</option>
-            </select>
-            <span id="class-tool-policy" style="display:flex; flex-wrap:wrap; gap:8px; font-size:0.8rem;">
-                <label><input type="checkbox" data-tool="allow_calc" onchange="updateClassToolPolicy(this)" disabled> Calculator</label>
-                <label><input type="checkbox" data-tool="allow_stats_tool" onchange="updateClassToolPolicy(this)" disabled> Stats &amp; Plots</label>
-                <label><input type="checkbox" data-tool="allow_tables" onchange="updateClassToolPolicy(this)" disabled> Tables &amp; Formulas</label>
-                <label><input type="checkbox" data-tool="allow_popouts" onchange="updateClassToolPolicy(this)" disabled> Allow Pop-Out Windows</label>
-            </span>
 
             <button class="btn-secondary" onclick="promptCreateClass()" style="margin-left: auto; padding: 8px 14px;">+ Create New Class</button>
         </div>
@@ -437,7 +426,8 @@
             <button id="nav-gradebook-btn" class="view-nav-btn active" onclick="switchView('gradebook')">📈 Gradebook</button>
             <button id="nav-assess-btn" class="view-nav-btn" onclick="switchView('assessments')">📝 Assignments &amp; Tests</button>
             <button id="nav-roster-btn" class="view-nav-btn" onclick="switchView('roster')">👥 Roster</button>
-            <button id="nav-settings-btn" class="view-nav-btn" onclick="switchView('settings')">⚙️ Settings</button>
+            <button id="nav-class-settings-btn" class="view-nav-btn" onclick="switchView('class-settings')">⚙️ Class Settings</button>
+            <button id="nav-settings-btn" class="view-nav-btn" onclick="switchView('settings')">🔧 Section Management</button>
         </div>
 
         <!-- 1. Roster View -->
@@ -516,8 +506,55 @@
             </table>
         </div>
 
+        <!-- Class Settings View -->
+        <div id="class-settings-view" class="card-panel" style="display: none;">
+            <h2 style="margin: 0 0 20px; font-size: 1.2rem; color: #1e293b;">Class Tool & Notation Settings</h2>
+            <div style="max-width: 720px; display: grid; gap: 24px;">
+                <!-- Section 1: Default Mathematical Notation -->
+                <section style="padding: 18px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fafbfc;">
+                    <h3 style="margin: 0 0 12px; color: #334155; font-weight: 700;">📐 Default Mathematical Notation</h3>
+                    <p style="margin: 0 0 12px; color: #64748b; font-size: 0.9rem;">Choose how students will see regression equations in this class by default (teachers can override per assessment).</p>
+                    <label for="class-notation-select" style="display: block; margin-bottom: 8px; color: #475569; font-weight: 600;">Regression Equation Format:</label>
+                    <select id="class-notation-select" onchange="updateClassNotation()" style="padding: 10px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.95rem; width: 100%; max-width: 420px;">
+                        <option value="ab">ŷ = a + bx (AP / High School Standard)</option>
+                        <option value="b0b1">ŷ = b₀ + b₁x (Collegiate Standard)</option>
+                    </select>
+                </section>
+
+                <!-- Section 2: Student Tool & Window Permissions -->
+                <section style="padding: 18px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fafbfc;">
+                    <h3 style="margin: 0 0 12px; color: #334155; font-weight: 700;">🛠️ Default Student Tool Permissions</h3>
+                    <p style="margin: 0 0 12px; color: #64748b; font-size: 0.9rem;">Students have full access to all tools during independent practice and by default on classwork. Uncheck any tool below to restrict it by default for this class (you can override per assignment or test).</p>
+                    <div style="display: grid; gap: 10px;">
+                        <label style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; background: #fff;">
+                            <input id="policy-allow-calc" type="checkbox" data-tool="allow_calc" onchange="updateClassToolPolicy(this)" style="width: 18px; height: 18px; cursor: pointer;">
+                            <span style="font-weight: 600; color: #1e293b;">Scientific Calculator</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; background: #fff;">
+                            <input id="policy-allow-stats" type="checkbox" data-tool="allow_stats_tool" onchange="updateClassToolPolicy(this)" style="width: 18px; height: 18px; cursor: pointer;">
+                            <span style="font-weight: 600; color: #1e293b;">Stats &amp; Graphing Plotter</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; background: #fff;">
+                            <input id="policy-allow-tables" type="checkbox" data-tool="allow_tables" onchange="updateClassToolPolicy(this)" style="width: 18px; height: 18px; cursor: pointer;">
+                            <span style="font-weight: 600; color: #1e293b;">Formulas &amp; Reference Tables</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; background: #fff;">
+                            <input id="policy-allow-popouts" type="checkbox" data-tool="allow_popouts" onchange="updateClassToolPolicy(this)" style="width: 18px; height: 18px; cursor: pointer;">
+                            <span style="font-weight: 600; color: #1e293b;">Allow Pop-Out to Separate Browser Tab/Window</span>
+                        </label>
+                    </div>
+                </section>
+
+                <!-- Save Status -->
+                <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 8px; background: #eff6ff; border: 1px solid #bfdbfe; display: none;" id="class-settings-status">
+                    <span style="font-size: 1.1rem;">✓</span>
+                    <span id="class-settings-status-text" style="color: #1e3a8a; font-size: 0.9rem; font-weight: 600;">Settings saved</span>
+                </div>
+            </div>
+        </div>
+
         <div id="settings-view" class="card-panel" style="display: none;">
-            <h2 style="margin: 0 0 16px; font-size: 1.2rem; color: #1e293b;">Section Settings</h2>
+            <h2 style="margin: 0 0 16px; font-size: 1.2rem; color: #1e293b;">Section Management</h2>
             <div style="max-width: 640px; display: grid; gap: 20px;">
                 <section style="padding: 16px; border: 1px solid #e2e8f0; border-radius: 8px;">
                     <h3 style="margin: 0 0 12px; color: #334155;">Rename Section</h3>
@@ -971,6 +1008,7 @@
             gradebook: ['gradebook-view', 'nav-gradebook-btn'],
             assessments: ['assess-view', 'nav-assess-btn'],
             roster: ['roster-view', 'nav-roster-btn'],
+            'class-settings': ['class-settings-view', 'nav-class-settings-btn'],
             settings: ['settings-view', 'nav-settings-btn']
         };
         if (!viewElements[viewName]) return;
@@ -984,6 +1022,7 @@
         if (viewName === 'gradebook') loadGradebook(false);
         else if (viewName === 'assessments') loadAssessments(false);
         else if (viewName === 'roster') refreshRoster(false);
+        else if (viewName === 'class-settings') loadClassSettingsPanel();
         else loadClassSettings();
     }
 
@@ -1068,7 +1107,7 @@
         const selectedClass = currentClasses.find(item => String(item.id) === classId);
         notationSelect.disabled = !selectedClass || pendingNotationSaves.has(String(classId));
         notationSelect.value = selectedClass?.default_notation || 'ab';
-        document.querySelectorAll('#class-tool-policy input').forEach(input => {
+        document.querySelectorAll('#class-settings-view input[type="checkbox"]').forEach(input => {
             input.disabled = !selectedClass || pendingToolPolicySaves.has(String(classId));
             input.checked = selectedClass?.tool_policy?.[input.dataset.tool] !== false;
         });
@@ -1083,6 +1122,7 @@
             if (activeView === 'gradebook') loadGradebook(false);
             else if (activeView === 'roster') refreshRoster(false);
             else if (activeView === 'assessments') loadAssessments(false);
+            else if (activeView === 'class-settings') loadClassSettingsPanel();
             else if (activeView === 'settings') loadClassSettings();
             return;
         }
@@ -1091,7 +1131,8 @@
         if (activeCls) {
             codeBadge.innerText = activeCls.join_code;
             codeContainer.style.display = 'inline-flex';
-            if (activeView === 'settings') loadClassSettings();
+            if (activeView === 'class-settings') loadClassSettingsPanel();
+            else if (activeView === 'settings') loadClassSettings();
             preloadAllSectionData();
         }
     }
@@ -1117,7 +1158,14 @@
             const result = await response.json();
             if (!response.ok) throw new Error(result.detail || 'Could not save class notation.');
             activeClass.default_notation = result.default_notation;
-            if (getActiveClass()?.id === activeClass.id) select.value = result.default_notation;
+            if (getActiveClass()?.id === activeClass.id) {
+                select.value = result.default_notation;
+                const statusEl = document.getElementById('class-settings-status');
+                if (statusEl) {
+                    statusEl.style.display = 'flex';
+                    setTimeout(() => { statusEl.style.display = 'none'; }, 2500);
+                }
+            }
         } catch (error) {
             if (getActiveClass()?.id === activeClass.id) select.value = previous;
             alert(error.message || 'Could not save class notation.');
@@ -1131,7 +1179,7 @@
     async function updateClassToolPolicy(changed) {
         const activeClass = getActiveClass();
         if (!activeClass) return;
-        const controls = [...document.querySelectorAll('#class-tool-policy input')];
+        const controls = [...document.querySelectorAll('#class-settings-view input[type="checkbox"]')];
         const previous = activeClass.tool_policy || {};
         const policy = Object.fromEntries(controls.map(input => [input.dataset.tool, input.checked]));
         pendingToolPolicySaves.add(String(activeClass.id));
@@ -1145,6 +1193,11 @@
             activeClass.tool_policy = result.tool_policy;
             if (getActiveClass()?.id === activeClass.id) {
                 controls.forEach(input => { input.checked = result.tool_policy?.[input.dataset.tool] !== false; });
+                const statusEl = document.getElementById('class-settings-status');
+                if (statusEl) {
+                    statusEl.style.display = 'flex';
+                    setTimeout(() => { statusEl.style.display = 'none'; }, 2500);
+                }
             }
         } catch (error) {
             if (getActiveClass()?.id === activeClass.id) changed.checked = previous[changed.dataset.tool] !== false;
@@ -1163,6 +1216,32 @@
         feedback.textContent = message;
         feedback.style.color = isError ? '#b91c1c' : '#475569';
         feedback.style.display = 'block';
+    }
+
+    function loadClassSettingsPanel() {
+        const activeClass = getActiveClass();
+        const notationSelect = document.getElementById('class-notation-select');
+        const statusEl = document.getElementById('class-settings-status');
+        
+        if (!activeClass) {
+            notationSelect.disabled = true;
+            document.querySelectorAll('#class-settings-view input[type="checkbox"]').forEach(input => {
+                input.disabled = true;
+                input.checked = true;
+            });
+            if (statusEl) statusEl.style.display = 'none';
+            return;
+        }
+        
+        notationSelect.disabled = pendingNotationSaves.has(String(activeClass.id));
+        notationSelect.value = activeClass.default_notation || 'ab';
+        
+        document.querySelectorAll('#class-settings-view input[type="checkbox"]').forEach(input => {
+            input.disabled = pendingToolPolicySaves.has(String(activeClass.id));
+            input.checked = activeClass.tool_policy?.[input.dataset.tool] !== false;
+        });
+        
+        if (statusEl) statusEl.style.display = 'none';
     }
 
     function loadClassSettings() {
