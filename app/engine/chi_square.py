@@ -189,7 +189,8 @@ def generate_chi_square_gof() -> Dict[str, Any]:
         {
             "step_num": 3,
             "label": "Test Statistic (χ²):",
-            "input_type": "number",
+            "input_type": "math",
+            "math_symbols": ["frac", "pow", "parens"],
             "placeholder": "χ²",
             "expected": [chi2_stat],
             "tolerance": 0.05,
@@ -427,7 +428,8 @@ def generate_chi_square_two_way() -> Dict[str, Any]:
             {
                 "step_num": 3,
                 "label": "Test Statistic (χ²):",
-                "input_type": "number",
+                "input_type": "math",
+                "math_symbols": ["frac", "pow", "parens"],
                 "placeholder": "χ²",
                 "expected": [chi2_stat],
                 "tolerance": 0.05,

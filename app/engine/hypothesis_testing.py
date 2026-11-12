@@ -241,6 +241,7 @@ def _build_inference_pipeline(
                 {
                     "id": "h0-value",
                     "type": "number",
+                    "input_type": "number",
                     "placeholder": "null value",
                     "expected": [null_value],
                     "tolerance": 0.00001
@@ -248,6 +249,7 @@ def _build_inference_pipeline(
                 {
                     "id": "ha-value",
                     "type": "number",
+                    "input_type": "number",
                     "placeholder": "null value",
                     "expected": [null_value],
                     "tolerance": 0.00001
@@ -276,6 +278,7 @@ def _build_inference_pipeline(
                 {
                     "id": "sample-statistic-value",
                     "type": "number",
+                    "input_type": "number",
                     "placeholder": "sample statistic",
                     "expected": [sample_statistic_value],
                     "tolerance": 0.01,
@@ -283,6 +286,8 @@ def _build_inference_pipeline(
                 {
                     "id": "standard-error",
                     "type": "number",
+                    "input_type": "math",
+                    "math_symbols": ["sqrt", "frac", "parens"],
                     "placeholder": "SE",
                     "expected": [standard_error],
                     "tolerance": 0.005,
@@ -293,6 +298,8 @@ def _build_inference_pipeline(
         {
             "step_num": 4,
             "label": f"Standardized Test Statistic {test_statistic_label}:",
+            "input_type": "math",
+            "math_symbols": ["sqrt", "frac", "parens"],
             "placeholder": "e.g. 1.42",
             "expected": [round(test_statistic, 4), round(test_statistic, 3), round(test_statistic, 2)],
             "tolerance": 0.05,
@@ -306,6 +313,7 @@ def _build_inference_pipeline(
                 {
                     "id": "stage-pval",
                     "type": "number",
+                    "input_type": "number",
                     "placeholder": "P-value",
                     "expected": [p_value],
                     "tolerance": 0.005,
@@ -337,6 +345,7 @@ def _build_inference_pipeline(
                 {
                     "id": "decision-p-value",
                     "type": "number",
+                    "input_type": "number",
                     "placeholder": "P-value",
                     "expected": [p_value],
                     "tolerance": 0.005,
@@ -344,6 +353,7 @@ def _build_inference_pipeline(
                 {
                     "id": "decision-alpha",
                     "type": "number",
+                    "input_type": "number",
                     "placeholder": "α",
                     "expected": [alpha],
                     "tolerance": 0.00001,
@@ -384,6 +394,7 @@ def _build_inference_pipeline(
                 {
                     "id": "claim-val",
                     "type": "number",
+                    "input_type": "number",
                     "placeholder": "claimed value",
                     "expected": [null_value],
                     "tolerance": 0.00001,

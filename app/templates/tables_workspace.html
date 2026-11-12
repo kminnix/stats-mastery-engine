@@ -15,6 +15,7 @@
         <button class="window-tab-btn active" id="btn-tab-table-a" onclick="switchTab('tab-table-a')">Table A (Z)</button>
         <button class="window-tab-btn" id="btn-tab-table-b" onclick="switchTab('tab-table-b')">Table B (t)</button>
         <button class="window-tab-btn" id="btn-tab-table-c" onclick="switchTab('tab-table-c')">Table C (&chi;&sup2;)</button>
+        <button class="window-tab-btn" id="btn-tab-form-desc" onclick="switchTab('tab-form-desc')">Probability Formulas</button>
         <button class="window-tab-btn" id="btn-tab-form-inf" onclick="switchTab('tab-form-inf')">Inference Formulas</button>
     </div>
     <div class="window-body">
@@ -137,9 +138,47 @@
                 </table>
             </div>
         </div>
+        <div id="tab-form-desc" class="tab-pane" style="display: none;">
+            <div class="formula-sheet">
+                <h3>Section I: Descriptive &amp; Probability Formulas</h3>
+                <div class="formula-item">
+                    <h4>Mean</h4>
+                    <p>$$\bar{x} = \frac{\sum x_i}{n}$$</p>
+                </div>
+                <div class="formula-item">
+                    <h4>Sample Standard Deviation</h4>
+                    <p>$$s_x = \sqrt{\frac{\sum (x_i - \bar{x})^2}{n - 1}}$$</p>
+                </div>
+                <div class="formula-item">
+                    <h4>Addition Rule</h4>
+                    <p>$$P(A \cup B) = P(A) + P(B) - P(A \cap B)$$</p>
+                </div>
+                <div class="formula-item">
+                    <h4>Conditional Probability</h4>
+                    <p>$$P(A \mid B) = \frac{P(A \cap B)}{P(B)}$$</p>
+                </div>
+                <div class="formula-item">
+                    <h4>Discrete Random Variables</h4>
+                    <p>$$\mu_X = E(X) = \sum x_i P(x_i), \qquad \sigma_X = \sqrt{\sum (x_i - \mu_X)^2 P(x_i)}$$</p>
+                </div>
+                <div class="formula-item">
+                    <h4>Binomial Distribution (n trials, probability p)</h4>
+                    <p>$$P(X = k) = \binom{n}{k} p^k (1-p)^{n-k}, \qquad \mu_X = np, \qquad \sigma_X = \sqrt{np(1-p)}$$</p>
+                </div>
+                <div class="formula-item">
+                    <h4>Geometric Distribution (first success on trial k)</h4>
+                    <p>$$P(X = k) = (1-p)^{k-1}p, \qquad \mu_X = \frac{1}{p}, \qquad \sigma_X = \sqrt{\frac{1-p}{p^2}}$$</p>
+                </div>
+                <div class="formula-item">
+                    <h4>Sampling Distributions</h4>
+                    <p>Sample Proportion: $$\mu_{\hat{p}} = p, \quad \sigma_{\hat{p}} = \sqrt{\frac{p(1-p)}{n}}$$</p>
+                    <p>Sample Mean: $$\mu_{\bar{x}} = \mu, \quad \sigma_{\bar{x}} = \frac{\sigma}{\sqrt{n}}$$</p>
+                </div>
+            </div>
+        </div>
         <div id="tab-form-inf" class="tab-pane" style="display: none;">
             <div class="formula-sheet">
-                <h3>Key Statistical Formulas</h3>
+                <h3>Section II: Inference Formulas</h3>
                 <div class="formula-item">
                     <h4>Standardizing Normal Variables</h4>
                     <p>$$z = \frac{x - \mu}{\sigma}$$</p>
@@ -155,6 +194,23 @@
                 <div class="formula-item">
                     <h4>Confidence Interval for a Proportion (z-Distribution)</h4>
                     <p>$$\hat{p} \pm z^* \cdot \sqrt{\frac{\hat{p}(1 - \hat{p})}{n}}$$</p>
+                </div>
+                <div class="formula-item">
+                    <h4>Two-Sample Proportions ($p_1 - p_2$)</h4>
+                    <p>Confidence Interval SE: $$SE = \sqrt{\frac{\hat{p}_1(1-\hat{p}_1)}{n_1} + \frac{\hat{p}_2(1-\hat{p}_2)}{n_2}}$$</p>
+                    <p>Hypothesis Test Pooled SE: $$SE_0 = \sqrt{\hat{p}_c(1-\hat{p}_c)\left(\frac{1}{n_1} + \frac{1}{n_2}\right)}, \quad \hat{p}_c = \frac{x_1 + x_2}{n_1 + n_2}$$</p>
+                </div>
+                <div class="formula-item">
+                    <h4>Two-Sample Means ($\mu_1 - \mu_2$)</h4>
+                    <p>$$SE = \sqrt{\frac{s_1^2}{n_1} + \frac{s_2^2}{n_2}}$$</p>
+                </div>
+                <div class="formula-item">
+                    <h4>Matched Pairs ($\mu_{\text{diff}}$)</h4>
+                    <p>$$SE = \frac{s_{\text{diff}}}{\sqrt{n}}$$</p>
+                </div>
+                <div class="formula-item">
+                    <h4>Chi-Square ($\chi^2$) &amp; Linear Regression</h4>
+                    <p>$$\chi^2 = \sum \frac{(O - E)^2}{E}, \qquad \hat{y} = a + bx \;\; (\text{or } b_0 + b_1 x), \quad b = r\frac{s_y}{s_x}, \quad a = \bar{y} - b\bar{x}$$</p>
                 </div>
             </div>
         </div>

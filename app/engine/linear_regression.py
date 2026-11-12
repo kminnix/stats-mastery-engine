@@ -28,9 +28,9 @@ def _solution_paragraphs(*paragraphs: str) -> str:
     return "".join(f"<p>{paragraph}</p>" for paragraph in paragraphs)
 
 
-def generate_lsrl_equation_problem(notation_style: str = "ab") -> Dict[str, Any]:
-    if notation_style not in {"ab", "b0b1"}:
-        raise ValueError(f"Unknown LSRL notation style: {notation_style}")
+def generate_lsrl_equation_problem(notation: str = "ab") -> Dict[str, Any]:
+    if notation not in {"ab", "b0b1"}:
+        raise ValueError(f"Unknown LSRL notation style: {notation}")
     scenarios = [
         ("study time (hours)", "exam score (points)", 1),
         ("car weight (1000 lb)", "fuel economy (mpg)", -1),
@@ -47,8 +47,8 @@ def generate_lsrl_equation_problem(notation_style: str = "ab") -> Dict[str, Any]
     correlation = round(direction * random.uniform(0.5, 0.94), 3)
     slope = correlation * y_sd / x_sd
     intercept = y_mean - slope * x_mean
-    intercept_symbol, slope_symbol = ("a", "b") if notation_style == "ab" else ("b_0", "b_1")
-    intercept_placeholder, slope_placeholder = ("a", "b") if notation_style == "ab" else ("b₀", "b₁")
+    intercept_symbol, slope_symbol = ("a", "b") if notation == "ab" else ("b_0", "b_1")
+    intercept_placeholder, slope_placeholder = ("a", "b") if notation == "ab" else ("b₀", "b₁")
     operator = "+" if slope >= 0 else "-"
     magnitude = abs(slope)
     prompt = (
@@ -69,6 +69,8 @@ def generate_lsrl_equation_problem(notation_style: str = "ab") -> Dict[str, Any]
             {
                 "id": "lsrl-intercept",
                 "type": "number",
+                "input_type": "math",
+                "math_symbols": ["frac", "parens"],
                 "placeholder": intercept_placeholder,
                 "expected": [intercept],
                 "tolerance": 0.05,
@@ -85,6 +87,8 @@ def generate_lsrl_equation_problem(notation_style: str = "ab") -> Dict[str, Any]
             {
                 "id": "lsrl-slope-magnitude",
                 "type": "number",
+                "input_type": "math",
+                "math_symbols": ["frac", "parens"],
                 "placeholder": f"|{slope_placeholder}|",
                 "expected": [magnitude],
                 "tolerance": 0.01,
@@ -110,7 +114,8 @@ def generate_lsrl_equation_problem(notation_style: str = "ab") -> Dict[str, Any]
             {
                 "step_num": 1,
                 "label": f"Slope ({slope_placeholder}):",
-                "input_type": "number",
+                "input_type": "math",
+                "math_symbols": ["frac", "parens"],
                 "placeholder": slope_placeholder,
                 "expected": [slope],
                 "tolerance": 0.01,
@@ -119,7 +124,8 @@ def generate_lsrl_equation_problem(notation_style: str = "ab") -> Dict[str, Any]
             {
                 "step_num": 2,
                 "label": f"y-Intercept ({intercept_placeholder}):",
-                "input_type": "number",
+                "input_type": "math",
+                "math_symbols": ["frac", "parens"],
                 "placeholder": intercept_placeholder,
                 "expected": [intercept],
                 "tolerance": 0.05,
@@ -140,8 +146,8 @@ def generate_lsrl_equation_problem(notation_style: str = "ab") -> Dict[str, Any]
     }
 
 
-def generate_prediction_residual_problem(notation_style: str = "ab") -> Dict[str, Any]:
-    intercept_symbol, slope_symbol = _notation_symbols(notation_style)
+def generate_prediction_residual_problem(notation: str = "ab") -> Dict[str, Any]:
+    intercept_symbol, slope_symbol = _notation_symbols(notation)
     scenarios = [
         ("study time (hours)", "exam score (points)", 1),
         ("car weight (1000 lb)", "fuel economy (mpg)", -1),
@@ -177,7 +183,8 @@ def generate_prediction_residual_problem(notation_style: str = "ab") -> Dict[str
             {
                 "step_num": 1,
                 "label": f"Predicted {y_name} at x = {x_observed}:",
-                "input_type": "number",
+                "input_type": "math",
+                "math_symbols": ["frac", "parens"],
                 "placeholder": "ŷ",
                 "expected": [y_hat_observed],
                 "tolerance": 0.05,
@@ -186,7 +193,8 @@ def generate_prediction_residual_problem(notation_style: str = "ab") -> Dict[str
             {
                 "step_num": 2,
                 "label": "Residual for the Observed Point:",
-                "input_type": "number",
+                "input_type": "math",
+                "math_symbols": ["frac", "parens"],
                 "placeholder": "e = y − ŷ",
                 "expected": [residual],
                 "tolerance": 0.05,
@@ -226,6 +234,181 @@ def generate_prediction_residual_problem(notation_style: str = "ab") -> Dict[str
     }
 
 
+def generate_computer_output_problem(notation: str = "ab") -> Dict[str, Any]:
+    intercept_symbol, slope_symbol = _notation_symbols(notation)
+    intercept_placeholder, slope_placeholder = ("a", "b") if notation == "ab" else ("b₀", "b₁")
+    scenarios = [
+        ("weekly practice hours", "quiz score", "points"),
+        ("vehicle age (years)", "resale value", "thousands of dollars"),
+        ("daily temperature (°C)", "ice cream sales", "hundreds of dollars"),
+        ("work experience (years)", "annual salary", "thousands of dollars"),
+    ]
+    explanatory, response, response_units = random.choice(scenarios)
+    n = random.randint(12, 35)
+    df = n - 2
+    slope = round(random.choice([-1, 1]) * random.uniform(0.7, 3.8), 3)
+    slope_se = round(random.uniform(0.14, 0.55), 3)
+    intercept = round(random.uniform(8.0, 42.0), 3)
+    intercept_se = round(random.uniform(2.0, 7.0), 3)
+    slope_t = slope / slope_se
+    intercept_t = intercept / intercept_se
+    slope_p = float(2 * t.sf(abs(slope_t), df))
+    intercept_p = float(2 * t.sf(abs(intercept_t), df))
+    r_squared = slope_t**2 / (slope_t**2 + df)
+    r_squared_percent = 100 * r_squared
+    residual_standard_error = random.uniform(2.0, 12.0)
+    slope_sign = "+" if slope >= 0 else "−"
+    slope_magnitude = abs(slope)
+    table = (
+        '<table class="regression-output-table">'
+        "<thead><tr><th>Predictor</th><th>Coef</th><th>SE Coef</th><th>T</th><th>P</th></tr></thead>"
+        "<tbody>"
+        f"<tr><td>Constant</td><td>{intercept:.3f}</td><td>{intercept_se:.3f}</td>"
+        f"<td>{intercept_t:.3f}</td><td>{intercept_p:.4f}</td></tr>"
+        f"<tr><td>{explanatory}</td><td>{slope:.3f}</td><td>{slope_se:.3f}</td>"
+        f"<td>{slope_t:.3f}</td><td>{slope_p:.4f}</td></tr>"
+        "</tbody></table>"
+        f"<p><strong>S =</strong> {residual_standard_error:.3f}"
+        f"&nbsp;&nbsp; <strong>R-Sq =</strong> {r_squared_percent:.1f}%</p>"
+    )
+    interpretation = f"the linear relationship between {explanatory} and {response}"
+    return {
+        "type": "reg_comp_output",
+        "title": "Reading Regression Computer Output",
+        "prompt": (
+            f"A statistical software package analyzed the relationship between "
+            f"{explanatory} and {response} ({response_units}) using {n} observations. "
+            f"Use the output to answer the questions below.<br><br>{table}"
+        ),
+        "steps": [
+            {
+                "step_num": 1,
+                "label": "Identify the Intercept and Slope:",
+                "input_type": "cloze",
+                "components": [
+                    {
+                        "id": "computer-output-intercept",
+                        "type": "number",
+                        "input_type": "math",
+                        "math_symbols": ["frac", "parens"],
+                        "placeholder": intercept_placeholder,
+                        "expected": [intercept],
+                        "tolerance": 0.001,
+                    },
+                    {
+                        "id": "computer-output-slope",
+                        "type": "number",
+                        "input_type": "math",
+                        "math_symbols": ["frac", "parens"],
+                        "placeholder": slope_placeholder,
+                        "expected": [slope],
+                        "tolerance": 0.001,
+                    },
+                ],
+                "parts": [
+                    rf"\({intercept_symbol}=\)",
+                    {"component": "computer-output-intercept"},
+                    "<br>",
+                    rf"\({slope_symbol}=\)",
+                    {"component": "computer-output-slope"},
+                ],
+                "hint": "Read the Coef column: Constant is the intercept and the explanatory-variable row is the slope.",
+            },
+            {
+                "step_num": 2,
+                "label": "State the Least-Squares Regression Equation:",
+                "input_type": "cloze",
+                "components": [
+                    {
+                        "id": "computer-output-equation-intercept",
+                        "type": "number",
+                        "input_type": "math",
+                        "math_symbols": ["frac", "parens"],
+                        "placeholder": intercept_placeholder,
+                        "expected": [intercept],
+                        "tolerance": 0.001,
+                    },
+                    {
+                        "id": "computer-output-equation-slope",
+                        "type": "number",
+                        "input_type": "math",
+                        "math_symbols": ["frac", "parens"],
+                        "placeholder": slope_placeholder,
+                        "expected": [slope_magnitude],
+                        "tolerance": 0.001,
+                    },
+                ],
+                "parts": [
+                    r"\(\hat{y}=\)",
+                    {"component": "computer-output-equation-intercept"},
+                    f" {slope_sign} ",
+                    {"component": "computer-output-equation-slope"},
+                    "(x)",
+                ],
+                "hint": rf"Use \(\hat{{y}}={intercept_symbol}+{slope_symbol}x\), preserving the coefficient's sign.",
+            },
+            {
+                "step_num": 3,
+                "label": "Test Statistic for the Slope:",
+                "input_type": "math",
+                "math_symbols": ["sqrt", "frac", "parens"],
+                "placeholder": "t",
+                "expected": [slope_t],
+                "tolerance": 0.02,
+                "hint": rf"Divide the slope coefficient by its standard error: \(t={slope_symbol}/SE_{{{slope_symbol}}}\).",
+            },
+            {
+                "step_num": 4,
+                "label": "Interpret R-Sq:",
+                "input_type": "cloze",
+                "components": [
+                    {
+                        "id": "computer-output-r-squared",
+                        "type": "number",
+                        "placeholder": "R² (%)",
+                        "expected": [r_squared_percent],
+                        "tolerance": 0.15,
+                    },
+                    {
+                        "id": "computer-output-r-squared-context",
+                        "type": "select",
+                        "options": [
+                            {"value": interpretation, "label": interpretation},
+                            {
+                                "value": f"the linear relationship between {response} and itself",
+                                "label": f"the linear relationship between {response} and itself",
+                            },
+                            {
+                                "value": f"the linear relationship between {explanatory} and itself",
+                                "label": f"the linear relationship between {explanatory} and itself",
+                            },
+                        ],
+                        "expected": [interpretation],
+                    },
+                ],
+                "parts": [
+                    "About ",
+                    {"component": "computer-output-r-squared"},
+                    "% of the variation in ",
+                    response,
+                    " is explained by ",
+                    {"component": "computer-output-r-squared-context"},
+                    ".",
+                ],
+                "hint": "R-Sq is the percent of variation in the response explained by its linear model with the explanatory variable.",
+            },
+        ],
+        "solution": _solution_paragraphs(
+            rf"The Constant coefficient gives \({intercept_symbol}={intercept:.3f}\), while the "
+            rf"{explanatory} coefficient gives \({slope_symbol}={slope:.3f}\).",
+            rf"The regression equation is \(\hat{{y}}={intercept:.3f}{slope_sign}{slope_magnitude:.3f}x\). "
+            rf"The slope test statistic is \(t={slope:.3f}/{slope_se:.3f}={slope_t:.3f}\) with \(df={df}\).",
+            f"About {r_squared_percent:.1f}% of the variation in {response} is explained by "
+            f"the linear relationship between {explanatory} and {response}.",
+        ),
+    }
+
+
 def _raw_data_values() -> Tuple[List[float], List[float], float]:
     count = random.randint(5, 7)
     x_values = [float(index) for index in range(1, count + 1)]
@@ -249,7 +432,7 @@ def _raw_data_values() -> Tuple[List[float], List[float], float]:
         if norm_noise > 1e-8:
             break
 
-    target_r = random.uniform(0.52, 0.90)
+    target_r = random.uniform(0.76, 0.92)
     sign = random.choice([-1, 1])
     y_mean = random.uniform(35.0, 85.0)
     y_scale = random.uniform(5.0, 16.0)
@@ -265,9 +448,9 @@ def _raw_data_values() -> Tuple[List[float], List[float], float]:
     return x_values, y_values, y_mean
 
 
-def generate_raw_data_regression_problem(notation_style: str = "ab") -> Dict[str, Any]:
-    intercept_symbol, slope_symbol = _notation_symbols(notation_style)
-    intercept_placeholder, slope_placeholder = ("a", "b") if notation_style == "ab" else ("b₀", "b₁")
+def generate_raw_data_regression_problem(notation: str = "ab") -> Dict[str, Any]:
+    intercept_symbol, slope_symbol = _notation_symbols(notation)
+    intercept_placeholder, slope_placeholder = ("a", "b") if notation == "ab" else ("b₀", "b₁")
     scenarios = [
         ("weekly practice hours", "quiz score (points)"),
         ("car weight (1000 lb)", "fuel economy (mpg)"),
@@ -276,34 +459,60 @@ def generate_raw_data_regression_problem(notation_style: str = "ab") -> Dict[str
     ]
     x_name, y_name = random.choice(scenarios)
     x_values, y_values, _ = _raw_data_values()
+    y_values = [round(value, 2) for value in y_values]
     x_mean, x_sd, y_mean, y_sd, correlation = _sample_statistics(x_values, y_values)
     slope = correlation * y_sd / x_sd
     intercept = y_mean - slope * x_mean
-    # Select the observed point FIRST so Steps 3 and 4 use the same (x, y)
+    # Select one observed point for both the prediction and residual.
     observed_index = random.randrange(len(x_values))
     x_obs = x_values[observed_index]
     y_obs = y_values[observed_index]
-    # Step 3: predict at the same x-value as Step 4's observation
     predicted_obs = intercept + slope * x_obs
-    # Step 4: residual for that same observation
     residual = y_obs - predicted_obs
-    table_rows = r" \\ ".join(
-        rf"{x_value:g} & {y_value:.2f}"
-        for x_value, y_value in zip(x_values, y_values)
-    )
     data_table = (
-        rf"\[\begin{{array}}{{c|c}} {x_name} & {y_name} \\ \hline "
-        rf"{table_rows} \end{{array}}\]"
+        '<table class="regression-data-table"><thead><tr>'
+        f"<th>{x_name}</th><th>{y_name}</th></tr></thead><tbody>"
+        + "".join(
+            f"<tr><td>{x_value:g}</td><td>{y_value:.2f}</td></tr>"
+            for x_value, y_value in zip(x_values, y_values)
+        )
+        + "</tbody></table>"
     )
     steps = [
         {
             "step_num": 1,
-            "label": "Correlation Coefficient (r):",
-            "input_type": "number",
-            "placeholder": "r",
-            "expected": [correlation],
-            "tolerance": 0.02,
-            "hint": r"Use \(r=\frac{\sum(x-\bar{x})(y-\bar{y})}{\sqrt{\sum(x-\bar{x})^2\sum(y-\bar{y})^2}}\).",
+            "label": "Correlation Coefficient (r) and R²:",
+            "input_type": "cloze",
+            "components": [
+                {
+                    "id": "raw-correlation",
+                    "type": "number",
+                    "placeholder": "r",
+                    "expected": [correlation],
+                    "tolerance": 0.02,
+                },
+                {
+                    "id": "raw-r-squared",
+                    "type": "number",
+                    "placeholder": "R²",
+                    "expected": [
+                        correlation**2,
+                        100 * correlation**2,
+                        round(100 * correlation**2, 1),
+                        round(100 * correlation**2),
+                    ],
+                    "tolerance": 0.02,
+                },
+            ],
+            "parts": [
+                r"\(r=\)",
+                {"component": "raw-correlation"},
+                "<br>",
+                r"\(R^2=\)",
+                {"component": "raw-r-squared"},
+                " (as a decimal or percent)",
+            ],
+            "hint": r"Calculate \(r\) from the data, then square it to find \(R^2\).",
         },
         {
             "step_num": 2,
@@ -313,6 +522,8 @@ def generate_raw_data_regression_problem(notation_style: str = "ab") -> Dict[str
                 {
                     "id": "raw-slope",
                     "type": "number",
+                    "input_type": "math",
+                    "math_symbols": ["frac", "parens"],
                     "placeholder": slope_placeholder,
                     "expected": [slope],
                     "tolerance": 0.02,
@@ -320,6 +531,8 @@ def generate_raw_data_regression_problem(notation_style: str = "ab") -> Dict[str
                 {
                     "id": "raw-intercept",
                     "type": "number",
+                    "input_type": "math",
+                    "math_symbols": ["frac", "parens"],
                     "placeholder": intercept_placeholder,
                     "expected": [intercept],
                     "tolerance": 0.05,
@@ -336,31 +549,46 @@ def generate_raw_data_regression_problem(notation_style: str = "ab") -> Dict[str
         },
         {
             "step_num": 3,
-            "label": f"Prediction at x = {x_obs:g}:",
-            "input_type": "number",
-            "placeholder": "ŷ",
-            "expected": [predicted_obs],
-            "tolerance": 0.05,
-            "hint": r"Use your regression equation and substitute the target \(x\)-value.",
-        },
-        {
-            "step_num": 4,
-            "label": f"Residual for the point ({x_obs:g}, {y_obs:.2f}):",
-            "input_type": "number",
-            "placeholder": "e = y − ŷ",
-            "expected": [residual],
-            "tolerance": 0.05,
-            "hint": r"Subtract your predicted value from Step 3 from the observed y-value: \(e=y-\hat{y}\).",
+            "label": f"Prediction and Residual for ({x_obs:g}, {y_obs:.2f}):",
+            "input_type": "cloze",
+            "components": [
+                {
+                    "id": "raw-prediction",
+                    "type": "number",
+                    "input_type": "math",
+                    "math_symbols": ["frac", "parens"],
+                    "placeholder": "ŷ",
+                    "expected": [predicted_obs],
+                    "tolerance": 0.05,
+                },
+                {
+                    "id": "raw-residual",
+                    "type": "number",
+                    "input_type": "math",
+                    "math_symbols": ["frac", "parens"],
+                    "placeholder": "e = y − ŷ",
+                    "expected": [residual],
+                    "tolerance": 0.05,
+                },
+            ],
+            "parts": [
+                r"\(\hat{y}=\)",
+                {"component": "raw-prediction"},
+                "<br>",
+                r"\(e=y-\hat{y}=\)",
+                {"component": "raw-residual"},
+            ],
+            "hint": r"Use the fitted line to predict at \(x\), then calculate \(e=y-\hat{y}\).",
         },
     ]
     return {
         "type": "reg_raw_data",
-        "title": "Full Regression from Data",
+        "title": "Regression from Raw Data Table",
         "prompt": (
             f"Use the data on {x_name} and {y_name} to analyze the linear relationship."
-            f"<br><br>{data_table}<br><br>Find the correlation, least-squares line, "
-            f"predicted {y_name} at x = {x_obs:g}, and residual for the point "
-            f"({x_obs:g}, {y_obs:.2f}). "
+            f"<br><br>{data_table}<br><br>Calculate the correlation and regression line. "
+            f"Then predict {y_name} "
+            f"at x = {x_obs:g} and find the residual for ({x_obs:g}, {y_obs:.2f}). "
             rf"Use \(\hat{{y}}={intercept_symbol}+{slope_symbol}x\), where "
             rf"\({intercept_symbol}\) is the intercept and \({slope_symbol}\) is the slope."
         ),
@@ -378,8 +606,8 @@ def generate_raw_data_regression_problem(notation_style: str = "ab") -> Dict[str
     }
 
 
-def generate_slope_confidence_interval(notation_style: str = "ab") -> Dict[str, Any]:
-    _, slope_symbol = _notation_symbols(notation_style)
+def generate_slope_confidence_interval(notation: str = "ab") -> Dict[str, Any]:
+    _, slope_symbol = _notation_symbols(notation)
     contexts = [
         ("weekly study time and exam score", "points per additional study hour"),
         ("car weight and fuel economy", "mpg per additional 1000 lb"),
@@ -430,7 +658,8 @@ def generate_slope_confidence_interval(notation_style: str = "ab") -> Dict[str, 
             {
                 "step_num": 3,
                 "label": "Margin of Error:",
-                "input_type": "number",
+                "input_type": "math",
+                "math_symbols": ["sqrt", "frac", "parens"],
                 "placeholder": "MOE",
                 "expected": [margin_of_error],
                 "tolerance": 0.02,
@@ -481,8 +710,8 @@ def generate_slope_confidence_interval(notation_style: str = "ab") -> Dict[str, 
     }
 
 
-def generate_slope_significance_test(notation_style: str = "ab") -> Dict[str, Any]:
-    _, slope_symbol = _notation_symbols(notation_style)
+def generate_slope_significance_test(notation: str = "ab") -> Dict[str, Any]:
+    _, slope_symbol = _notation_symbols(notation)
     contexts = {
         ">": [
             ("work experience", "salary", "thousands of dollars per additional year"),
@@ -747,6 +976,8 @@ def generate_slope_significance_test(notation_style: str = "ab") -> Dict[str, An
                     {
                         "id": "slope-test-statistic",
                         "type": "number",
+                        "input_type": "math",
+                        "math_symbols": ["sqrt", "frac", "parens"],
                         "placeholder": "t",
                         "expected": [test_statistic],
                         "tolerance": 0.02,
@@ -906,19 +1137,20 @@ def generate_slope_significance_test(notation_style: str = "ab") -> Dict[str, An
     }
 
 
-def _notation_symbols(notation_style: str) -> Tuple[str, str]:
-    if notation_style == "ab":
+def _notation_symbols(notation: str) -> Tuple[str, str]:
+    if notation == "ab":
         return "a", "b"
-    if notation_style == "b0b1":
+    if notation == "b0b1":
         return "b_0", "b_1"
-    raise ValueError(f"Unknown LSRL notation style: {notation_style}")
+    raise ValueError(f"Unknown LSRL notation style: {notation}")
 
 
-def generate_regression_problem(topic: str, notation_style: str = "ab") -> Dict[str, Any]:
+def generate_regression_problem(topic: str, notation: str = "ab") -> Dict[str, Any]:
     generators = {
         "reg_lsrl": generate_lsrl_equation_problem,
         "reg_pred_res": generate_prediction_residual_problem,
         "reg_predict_residual": generate_prediction_residual_problem,
+        "reg_comp_output": generate_computer_output_problem,
         "reg_raw_data": generate_raw_data_regression_problem,
         "reg_slope_ci": generate_slope_confidence_interval,
         "reg_slope_test": generate_slope_significance_test,
@@ -926,4 +1158,4 @@ def generate_regression_problem(topic: str, notation_style: str = "ab") -> Dict[
     generator = generators.get(topic)
     if generator is None:
         raise ValueError(f"Unknown linear-regression topic: {topic}")
-    return generator(notation_style)
+    return generator(notation)

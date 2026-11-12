@@ -1282,3 +1282,24 @@ body.stats-standalone #stats-resize-grip,
     font-weight: 700;
 }
 .calc-btn-enter:hover { background: #163a2c !important; }
+
+.regression-data-table,
+.regression-output-table {
+    margin: 12px 0;
+    border-collapse: collapse;
+    color: #1e293b;
+    font-size: 0.92rem;
+}
+.regression-data-table th,
+.regression-output-table th,
+.regression-data-table td,
+.regression-output-table td {
+    padding: 7px 12px;
+    border: 1px solid #cbd5e1;
+    text-align: left;
+}
+.regression-data-table th,
+.regression-output-table th {
+    background: #f1f5f9;
+    font-weight: 700;
+}

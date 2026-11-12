@@ -18,6 +18,8 @@ from app.engine.confidence_intervals import generate_ci_problem
 from app.engine.hypothesis_testing import generate_ht_problem
 from app.engine.chi_square import generate_chi_problem
 from app.engine.linear_regression import generate_regression_problem
+from app.engine.probability_sampling import generate_prob_sampling_problem
+from app.engine.input_types import tag_problem_input_types
 from app.engine.inference_drills import (
     generate_condition_check_mean,
     generate_condition_check_proportion,
@@ -38,7 +40,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "137"
+STATIC_VERSION = "141"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -249,14 +251,14 @@ async def get_normal_problem(topic: str = "random", problem_type: str = "random"
 async def get_ci_problem(topic: str = "mean_t", problem_type: str = "mean_t"):
     selected = topic if topic != "mean_t" else problem_type
     try:
-        return generate_ci_problem(selected)
+        return tag_problem_input_types(generate_ci_problem(selected))
     except TypeError:
-        return generate_ci_problem()
+        return tag_problem_input_types(generate_ci_problem())
 
 @app.get("/api/problem/ht")
 async def get_ht_problem(topic: str = "ht_prop_z"):
     try:
-        return generate_ht_problem(topic or "ht_prop_z")
+        return tag_problem_input_types(generate_ht_problem(topic or "ht_prop_z"))
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(
@@ -266,11 +268,15 @@ async def get_ht_problem(topic: str = "ht_prop_z"):
 
 @app.get("/api/problem/chi")
 async def get_chi_problem(topic: str = "random"):
-    return generate_chi_problem(topic or "random")
+    return tag_problem_input_types(generate_chi_problem(topic or "random"))
 
 @app.get("/api/problem/regression")
-async def get_regression_problem(topic: str = "reg_lsrl", notation_style: str = "ab"):
-    return generate_regression_problem(topic or "reg_lsrl", notation_style)
+async def get_regression_problem(topic: str = "reg_lsrl", notation: str = "ab"):
+    return tag_problem_input_types(generate_regression_problem(topic or "reg_lsrl", notation))
+
+@app.get("/api/problem/prob_sampling")
+async def get_prob_sampling_problem(topic: str):
+    return tag_problem_input_types(generate_prob_sampling_problem(topic))
 
 @app.get("/api/problem/drill")
 async def get_inference_drill(topic: str):
@@ -289,7 +295,7 @@ async def get_inference_drill(topic: str):
     generator = generators.get(topic)
     if generator is None:
         raise HTTPException(status_code=404, detail=f"Unknown inference drill topic: {topic}")
-    return generator()
+    return tag_problem_input_types(generator())
 
 @app.post("/api/verify")
 async def check_answer(payload: VerifyPayload):

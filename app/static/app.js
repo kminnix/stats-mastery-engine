@@ -46,6 +46,7 @@ let currentProblem = null;
 let isMultiStage = false;
 let hadStageMistake = false;
 let currentQuestionAnswers = [];
+let currentStepAttemptStates = [];
 let currentUser = null;
 let currentSession = null;
 let supabaseClient = null;
@@ -59,6 +60,7 @@ let activeTaskState = {
     totalQuestions: 5,
     currentIndex: 1,
     correctCount: 0,
+    earnedPoints: 0,
     responses: [],
     selectedTopic: '',
     topics: [],
@@ -96,6 +98,9 @@ const TOPIC_REGISTRY = [
     { id: 'left_tail', title: 'Left Tail Cumulative Area', topic: 'Normal Distributions', notation: 'P(X < b)' },
     { id: 'right_tail', title: 'Right Tail Cumulative Area', topic: 'Normal Distributions', notation: 'P(X > a)' },
     { id: 'inverse', title: 'Inverse Cutoffs & Percentiles', topic: 'Normal Distributions', notation: 'x = μ + zσ' },
+    { id: 'prob_discrete_rv', title: 'Discrete Random Variables (E(X) & SD)', topic: 'Random Variables & Probability Distributions', notation: 'E(X), σ_X' },
+    { id: 'prob_binom_geom', title: 'Binomial & Geometric Distributions', topic: 'Random Variables & Probability Distributions', notation: 'Binom(n, p), Geom(p)' },
+    { id: 'sampling_dist', title: 'Sampling Distributions for x̄ and p̂', topic: 'Sampling Distributions (CLT)', notation: 'x̄, p̂' },
     { id: 'cond_check_prop', title: 'Sub-Topic: Checking Conditions for Proportions', topic: 'Confidence Intervals for Proportions (p)', notation: 'Random, 10%, Large Counts' },
     { id: 'drill_se_prop', title: 'Sub-Topic: Standard Error for Proportions', topic: 'Confidence Intervals for Proportions (p)', notation: 'SE = √(p̂(1 − p̂)/n)' },
     { id: 'ci_prop_z', title: '1-Sample z-Interval for Proportion', topic: 'Confidence Intervals for Proportions (p)', notation: 'p' },
@@ -120,7 +125,8 @@ const TOPIC_REGISTRY = [
     { id: 'chi_two_way', title: 'Chi-Square Test of Independence / Homogeneity', topic: 'Chi-Square Tests (χ²)', notation: 'df = (r-1)(c-1)' },
     { id: 'reg_lsrl', title: 'Least-Squares Regression Line (LSRL)', topic: 'Linear Regression Analysis', notation: 'ŷ = b₀ + b₁x' },
     { id: 'reg_pred_res', title: 'Predictions & Residual Analysis', topic: 'Linear Regression Analysis', notation: 'e = y - ŷ' },
-    { id: 'reg_raw_data', title: 'Full Regression from Data', topic: 'Linear Regression Analysis', notation: 'Data Table → LSRL' },
+    { id: 'reg_comp_output', title: 'Reading Regression Computer Output', topic: 'Linear Regression Analysis', notation: 'Coef, SE Coef, T, P' },
+    { id: 'reg_raw_data', title: 'Regression from Raw Data Table', topic: 'Linear Regression Analysis', notation: 'Data Table → LSRL' },
     { id: 'reg_slope_ci', title: 'Confidence Interval for Slope (β₁)', topic: 'Linear Regression Analysis', notation: 'b₁ ± t*SE_b₁' },
     { id: 'reg_slope_test', title: 'Significance Test for Slope (β₁)', topic: 'Linear Regression Analysis', notation: 'H₀: β₁ = 0' }
 ];
@@ -553,7 +559,9 @@ function captureTaskQuestionState() {
                 status: document.getElementById(`stage-status-${stageIndex}`)?.innerHTML || '',
                 revealDisplay: document.getElementById(`stage-reveal-${stageIndex}`)?.style.display || 'none',
                 revealText: document.getElementById(`stage-reveal-${stageIndex}`)?.textContent || '',
-                buttonDisabled: document.getElementById(`stage-btn-${stageIndex}`)?.disabled ?? true
+                buttonDisabled: document.getElementById(`stage-btn-${stageIndex}`)?.disabled ?? true,
+                attemptWarning: document.getElementById(`stage-input-warning-${stageIndex}`)?.textContent || '',
+                attemptWarningDisplay: document.getElementById(`stage-input-warning-${stageIndex}`)?.style.display || 'none'
             };
         })
         : [];
@@ -563,6 +571,7 @@ function captureTaskQuestionState() {
         answer: singleInput?.value || '',
         answerDisabled: Boolean(singleInput?.disabled),
         stageInputs: currentQuestionAnswers.slice(),
+        stepAttemptStates: currentStepAttemptStates.map(step => ({ ...step })),
         stageStates,
         hadStageMistake,
         feedbackHtml: document.getElementById('feedback-banner')?.innerHTML || '',
@@ -584,6 +593,9 @@ function captureTaskQuestionState() {
 function restoreTaskQuestionState(questionState) {
     currentQuestionAnswers = questionState.stageInputs?.slice() || [];
     hadStageMistake = Boolean(questionState.hadStageMistake);
+    if (questionState.stepAttemptStates) {
+        currentStepAttemptStates = questionState.stepAttemptStates.map(step => ({ ...step }));
+    }
     if (currentProblem.steps) {
         questionState.stageStates?.forEach((stage, index) => {
             const controls = Array.from(
@@ -593,6 +605,7 @@ function restoreTaskQuestionState(questionState) {
             const status = document.getElementById(`stage-status-${index}`);
             const reveal = document.getElementById(`stage-reveal-${index}`);
             const verifyButton = document.getElementById(`stage-btn-${index}`);
+            const warning = document.getElementById(`stage-input-warning-${index}`);
             if (box && stage.display !== undefined) box.style.display = stage.display;
             if (stage.values) {
                 controls.forEach((control, controlIndex) => {
@@ -620,6 +633,10 @@ function restoreTaskQuestionState(questionState) {
                 reveal.textContent = stage.revealText;
             }
             if (verifyButton) verifyButton.disabled = stage.buttonDisabled;
+            if (warning) {
+                warning.textContent = stage.attemptWarning || '';
+                warning.style.display = stage.attemptWarningDisplay || 'none';
+            }
         });
     } else {
         const input = document.getElementById('answer-input');
@@ -857,11 +874,18 @@ async function startStudentTask(task) {
     const questionQueue = [];
     const configuredBlocks = Array.isArray(task.config?.blocks) ? task.config.blocks : null;
     const taskBlocks = configuredBlocks
-        ? configuredBlocks.map((block, index) => ({
-            ...block,
-            id: block?.id || `block-${index}`,
-            mode: isTest ? 'no_hints' : block.mode
-        }))
+        ? configuredBlocks.map((block, index) => {
+            const stepAttemptLimit = Number(block?.max_step_attempts);
+            return {
+                ...block,
+                id: block?.id || `block-${index}`,
+                mode: isTest ? 'no_hints' : block.mode,
+                max_step_attempts: Number.isInteger(stepAttemptLimit) &&
+                    stepAttemptLimit >= 1 && stepAttemptLimit <= 5
+                    ? stepAttemptLimit
+                    : null
+            };
+        })
         : [];
     if (configuredBlocks) {
         if (!taskBlocks.length) {
@@ -957,6 +981,7 @@ async function startStudentTask(task) {
         totalQuestions: questionQueue.length,
         currentIndex: 1,
         correctCount: 0,
+        earnedPoints: 0,
         responses: [],
         selectedTopic,
         topics: assignedTopic ? [assignedTopic] : topics,
@@ -1013,6 +1038,14 @@ async function startStudentTask(task) {
         activeTaskState = previousTaskState;
         console.error('Could not read incomplete test:', error);
         throw new Error('The saved incomplete test could not be read on this device. Contact your teacher before continuing.');
+    }
+    if (!Number.isFinite(activeTaskState.earnedPoints)) {
+        activeTaskState.earnedPoints = activeTaskState.responses.reduce(
+            (total, response) => total + (Number.isFinite(response.score)
+                ? response.score
+                : response.correct ? 1 : 0),
+            0
+        );
     }
     applyStudentToolPermissions(
         mergeStudentToolPermissions(
@@ -1076,6 +1109,7 @@ function exitActiveTask() {
         totalQuestions: 5,
         currentIndex: 1,
         correctCount: 0,
+        earnedPoints: 0,
         responses: [],
         selectedTopic: '',
         topics: [],
@@ -1146,7 +1180,10 @@ async function completeStudentTask() {
     const responseCount = activeTaskState.taskType === 'test'
         ? activeTaskState.totalQuestions
         : activeTaskState.responses.length;
-    const score = responseCount ? Math.round((activeTaskState.correctCount / responseCount) * 100) : 0;
+    const earnedPoints = Number.isFinite(activeTaskState.earnedPoints)
+        ? activeTaskState.earnedPoints
+        : activeTaskState.correctCount;
+    const score = responseCount ? Math.round((earnedPoints / responseCount) * 100) : 0;
     if (supabaseClient && currentUser && !activeTaskState.isPreview) {
         activeTaskState.isSubmitting = true;
         try {
@@ -1171,7 +1208,7 @@ async function completeStudentTask() {
 
     document.getElementById('completion-title').textContent = activeTaskState.taskTitle;
     document.getElementById('completion-score').textContent =
-        `${activeTaskState.correctCount} / ${responseCount}`;
+        `${Number(earnedPoints.toFixed(2))} / ${responseCount}`;
     document.getElementById('completion-percent').textContent = `(${score}%)`;
     document.getElementById('completion-icon').textContent = score >= 70 ? '🎉' : '📝';
     document.getElementById('task-completion-modal').style.display = 'flex';
@@ -1200,6 +1237,7 @@ function finishStudentTask() {
         totalQuestions: 5,
         currentIndex: 1,
         correctCount: 0,
+        earnedPoints: 0,
         responses: [],
         selectedTopic: '',
         topics: [],
@@ -1403,6 +1441,59 @@ function drawNormalDistribution(plotData) {
     svg.appendChild(curvePath);
 }
 
+function renderProblemPrompt(promptEl, problem) {
+    const promptTemplate = document.createElement('template');
+    promptTemplate.innerHTML = problem.prompt || '';
+    const legacyTable = promptTemplate.content.querySelector('table');
+    let tableData = problem.table_data;
+
+    if (!tableData && legacyTable) {
+        const headerRow = legacyTable.tHead?.rows[0];
+        const tableRows = Array.from(legacyTable.rows);
+        const headers = Array.from(headerRow?.cells || tableRows[0]?.cells || [])
+            .map(cell => cell.textContent.trim());
+        const bodyRows = legacyTable.tBodies.length
+            ? Array.from(legacyTable.tBodies).flatMap(body => Array.from(body.rows))
+            : tableRows.slice(headerRow ? 1 : 0);
+        if (!headerRow) bodyRows.shift();
+        tableData = {
+            headers,
+            rows: bodyRows.map(row =>
+                Array.from(row.cells).map(cell => cell.textContent.trim())
+            )
+        };
+    }
+
+    promptTemplate.content.querySelectorAll('table').forEach(table => table.remove());
+    promptEl.replaceChildren(promptTemplate.content);
+
+    if (tableData && Array.isArray(tableData.headers) && Array.isArray(tableData.rows)) {
+        const table = document.createElement('table');
+        table.className = 'prob-dist-table';
+        table.style.cssText = 'border-collapse: collapse; margin: 12px 0; min-width: 240px;';
+        const head = table.createTHead();
+        const headerRow = head.insertRow();
+        tableData.headers.forEach(value => {
+            const cell = document.createElement('th');
+            cell.textContent = value;
+            cell.style.cssText = 'border: 1px solid #e2e8f0; background: #f8fafc; text-align: center; padding: 8px 12px;';
+            headerRow.appendChild(cell);
+        });
+        const body = table.createTBody();
+        tableData.rows.forEach(row => {
+            const tableRow = body.insertRow();
+            row.forEach(value => {
+                const cell = tableRow.insertCell();
+                cell.textContent = value;
+                cell.style.cssText = 'border: 1px solid #e2e8f0; text-align: center; padding: 8px 12px;';
+                if (value === '?') cell.style.fontWeight = '700';
+            });
+        });
+        promptEl.appendChild(table);
+    }
+    triggerKaTeX(promptEl);
+}
+
 async function loadProblem(problemToRender = null) {
     const feedbackBanner = document.getElementById('feedback-banner');
     const solutionCard = document.getElementById('solution-card');
@@ -1413,11 +1504,13 @@ async function loadProblem(problemToRender = null) {
     hideTaskAdvanceButton();
     hadStageMistake = false;
     currentQuestionAnswers = [];
+    currentStepAttemptStates = [];
 
     const topic = state.selectedTopic || 'random';
     isMultiStage = topic.startsWith('ci_') || topic.startsWith('ht_') || topic.startsWith('chi_') ||
         topic.startsWith('reg_') ||
-        topic.startsWith('cond_') || topic.startsWith('drill_');
+        topic.startsWith('cond_') || topic.startsWith('drill_') ||
+        topic.startsWith('prob_') || topic.startsWith('sampling_');
     currentProblem = problemToRender;
 
     if (isMultiStage) {
@@ -1430,16 +1523,18 @@ async function loadProblem(problemToRender = null) {
             const isChiSquare = topic.startsWith('chi_');
             const isRegression = topic.startsWith('reg_');
             const isInferenceDrill = topic.startsWith('cond_') || topic.startsWith('drill_');
+            const isProbSampling = topic.startsWith('prob_') || topic.startsWith('sampling_');
             const problemTopic = isHypothesisTest || isChiSquare || isRegression
-                ? topic
+                || isProbSampling ? topic
                 : topic.replace('ci_', '');
             const endpoint = isInferenceDrill
                 ? '/api/problem/drill'
                 : isHypothesisTest ? '/api/problem/ht'
                     : isChiSquare ? '/api/problem/chi'
-                        : isRegression ? '/api/problem/regression' : '/api/problem/ci';
+                        : isRegression ? '/api/problem/regression'
+                            : isProbSampling ? '/api/problem/prob_sampling' : '/api/problem/ci';
             const notation = getActiveLsrlNotation();
-            const notationParam = isRegression ? `&notation_style=${encodeURIComponent(notation)}` : '';
+            const notationParam = isRegression ? `&notation=${encodeURIComponent(notation)}` : '';
             const res = await fetch(`${endpoint}?topic=${encodeURIComponent(problemTopic)}${notationParam}`);
             if (!res.ok) throw new Error(`Could not load problem (${res.status}).`);
             currentProblem = await res.json();
@@ -1466,8 +1561,7 @@ async function loadProblem(problemToRender = null) {
     }
 
     const promptEl = document.getElementById('problem-prompt');
-    promptEl.innerHTML = currentProblem.prompt;
-    triggerKaTeX(promptEl);
+    renderProblemPrompt(promptEl, currentProblem);
     if (activeTaskState.active) {
         const index = activeTaskState.currentIndex - 1;
         const cachedQuestion = activeTaskState.questionsState[index];
@@ -1480,6 +1574,7 @@ async function loadProblem(problemToRender = null) {
                 completed: false,
                 correct: null,
                 stageInputs: [],
+                stepAttemptStates: currentStepAttemptStates.map(step => ({ ...step })),
                 stageStates: []
             };
         }
@@ -1497,19 +1592,41 @@ function getStageInputDefinitions(step) {
         return step.components.map(definition => definition.id === 'stage-pval'
             ? {
                 ...definition,
+                input_type: definition.input_type || (definition.type === 'select' ? 'select' : 'number'),
                 expected: [currentProblem.metadata.expected_pval]
             }
-            : definition);
+            : {
+                ...definition,
+                input_type: definition.input_type || (definition.type === 'select' ? 'select' : 'number')
+            });
     }
-    if (step.input_type === 'compound') return step.inputs || [];
+    if (step.input_type === 'compound') {
+        return (step.inputs || []).map(definition => ({
+            ...definition,
+            input_type: definition.input_type || (definition.type === 'select' ? 'select' : 'number')
+        }));
+    }
     return [{
         id: null,
         type: step.input_type === 'select' ? 'select' : 'number',
+        input_type: step.input_type === 'math' ? 'math'
+            : step.input_type === 'select' ? 'select' : 'number',
         options: step.options,
         placeholder: step.placeholder,
         expected: step.expected,
         tolerance: step.tolerance
     }];
+}
+
+function getAllowedStepAttempts(step) {
+    const configuredLimit = Number(activeTaskState.currentBlock?.max_step_attempts);
+    if (Number.isInteger(configuredLimit) && configuredLimit >= 1 && configuredLimit <= 5) {
+        return configuredLimit;
+    }
+    const isMC = getStageInputDefinitions(step).some(definition =>
+        definition.type === 'select' || definition.input_type === 'select'
+    );
+    return isMC ? 1 : 2;
 }
 
 function getStageControlId(idx, definition) {
@@ -1519,10 +1636,7 @@ function getStageControlId(idx, definition) {
 }
 
 function isMathComputationField(step, definition) {
-    if (definition.type === 'select') return false;
-    if (currentProblem.type?.startsWith('reg_')) return true;
-    return ['sample-statistic-value', 'standard-error', 'stage-pval'].includes(definition.id) ||
-        currentProblem.type?.startsWith('ht_') && step.step_num === 4;
+    return (definition.input_type || step.input_type) === 'math';
 }
 
 function getStageControlValue(control) {
@@ -1538,6 +1652,20 @@ function renderMultiStageUI(topic) {
     const container = document.getElementById('multi-stage-panel');
     container.innerHTML = '';
     const isTest = activeTaskState.active && activeTaskState.taskType === 'test';
+    const questionState = activeTaskState.active
+        ? activeTaskState.questionsState[activeTaskState.currentIndex - 1]
+        : null;
+    const savedStepStates = questionState?.stepAttemptStates || [];
+    currentStepAttemptStates = currentProblem.steps.map((step, index) => {
+        const saved = savedStepStates[index];
+        return {
+            attemptsUsed: saved?.attemptsUsed || 0,
+            maxAttempts: saved?.maxAttempts || getAllowedStepAttempts(step),
+            firstAttemptCorrect: saved?.firstAttemptCorrect ?? null,
+            resolved: Boolean(saved?.resolved),
+            earnedCredit: Boolean(saved?.earnedCredit)
+        };
+    });
     const showHints = !isTest && (
         topic.startsWith('chi_') ||
         !activeTaskState.active ||
@@ -1562,8 +1690,9 @@ function renderMultiStageUI(topic) {
         const controlId = definition => getStageControlId(idx, definition);
         const createControl = definition => {
             const isMathField = isMathComputationField(step, definition);
+            const isSelect = definition.type === 'select' || definition.input_type === 'select';
             const control = document.createElement(
-                isMathField ? 'math-field' : definition.type === 'select' ? 'select' : 'input'
+                isMathField ? 'math-field' : isSelect ? 'select' : 'input'
             );
             control.id = controlId(definition);
             control.autocomplete = 'off';
@@ -1575,7 +1704,7 @@ function renderMultiStageUI(topic) {
             } else {
                 control.disabled = idx > 0 && !isTest;
             }
-            if (definition.type === 'select') {
+            if (isSelect) {
                 control.add(new Option('Choose an answer...', ''));
                 const options = definition.id === 'chi-p-alpha'
                     ? [
@@ -1600,7 +1729,7 @@ function renderMultiStageUI(topic) {
                 if (definition.id === 'param-context') control.style.maxWidth = 'min(440px, 100%)';
             } else if (!isMathField) {
                 control.type = 'text';
-                control.inputMode = 'text';
+                control.inputMode = 'decimal';
                 control.placeholder = definition.placeholder || step.placeholder || '';
                 if (definition.id === 'stage-pval') {
                     control.style.width = '110px';
@@ -1621,11 +1750,14 @@ function renderMultiStageUI(topic) {
             wrapper.appendChild(control);
             const toolbar = document.createElement('div');
             toolbar.className = 'math-micro-toolbar';
-            [
-                { label: '√', title: 'Insert a square root', latex: '\\sqrt{#0}' },
-                { label: 'a/b', title: 'Insert a fraction', latex: '\\frac{#?}{#?}' },
-                { label: '( )', title: 'Insert parentheses', latex: '\\left(#0\\right)' }
-            ].forEach(symbol => {
+            const availableSymbols = {
+                sqrt: { label: '√', title: 'Insert a square root', latex: '\\sqrt{#0}' },
+                frac: { label: 'a/b', title: 'Insert a fraction', latex: '\\frac{#?}{#?}' },
+                parens: { label: '( )', title: 'Insert parentheses', latex: '\\left(#0\\right)' },
+                pow: { label: 'xʸ', title: 'Insert an exponent', latex: '#0^{#?}' }
+            };
+            const mathSymbols = definition.math_symbols || step.math_symbols || ['sqrt', 'frac', 'parens'];
+            mathSymbols.map(symbolName => availableSymbols[symbolName]).filter(Boolean).forEach(symbol => {
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.className = 'btn-micro-symbol';
@@ -1801,7 +1933,7 @@ async function submitTestQuestion() {
     if (!activeTaskState.active || activeTaskState.taskType !== 'test' || activeTaskState.isVerifying) return;
 
     const submittedAnswers = [];
-    let isCorrect = true;
+    let firstAttemptCorrectCount = 0;
     currentProblem.steps.forEach((step, stepIndex) => {
         const answers = {};
         getStageInputDefinitions(step).forEach(definition => {
@@ -1829,31 +1961,49 @@ async function submitTestQuestion() {
     const questionState = activeTaskState.questionsState[activeTaskState.currentIndex - 1];
     if (questionState) questionState.attempted = true;
     try {
-        for (const [stepIndex, step] of currentProblem.steps.entries()) {
+        currentStepAttemptStates = currentProblem.steps.map((step, stepIndex) => {
+            let stepCorrect = true;
             for (const definition of getStageInputDefinitions(step)) {
                 const control = document.getElementById(getStageControlId(stepIndex, definition));
                 const answer = getStageControlValue(control).trim();
                 if (definition.type === 'select') {
-                    if (!definition.expected.includes(answer)) isCorrect = false;
+                    if (!definition.expected.includes(answer)) stepCorrect = false;
                 } else {
                     const value = evaluateMathInput(answer);
                     const tolerance = definition.tolerance ?? step.tolerance ?? 0;
                     if (!Number.isFinite(value) || !definition.expected.some(
                         expected => Math.abs(value - Number(expected)) <= tolerance
                     )) {
-                        isCorrect = false;
+                        stepCorrect = false;
                     }
                 }
             }
-        }
+            if (stepCorrect) firstAttemptCorrectCount += 1;
+            return {
+                attemptsUsed: 1,
+                maxAttempts: getAllowedStepAttempts(step),
+                firstAttemptCorrect: stepCorrect,
+                resolved: true,
+                earnedCredit: stepCorrect
+            };
+        });
     } finally {
         activeTaskState.isVerifying = false;
     }
-    await finalizeProblem(isCorrect, submittedAnswers);
+    const questionScore = currentProblem.steps.length
+        ? firstAttemptCorrectCount / currentProblem.steps.length
+        : 0;
+    await finalizeProblem(
+        firstAttemptCorrectCount === currentProblem.steps.length,
+        submittedAnswers,
+        questionScore
+    );
 }
 
 async function submitStage(idx) {
     const step = currentProblem.steps[idx];
+    const stepState = currentStepAttemptStates[idx];
+    if (!stepState || stepState.resolved) return;
     const controls = getStageInputDefinitions(step).map(definition => ({
         definition,
         control: document.getElementById(getStageControlId(idx, definition))
@@ -1913,11 +2063,14 @@ async function submitStage(idx) {
     } finally {
         activeTaskState.isVerifying = false;
     }
+    stepState.attemptsUsed += 1;
+    if (stepState.firstAttemptCorrect === null) {
+        stepState.firstAttemptCorrect = isCorrect;
+    }
     const statusEl = document.getElementById(`stage-status-${idx}`);
     const box = document.getElementById(`stage-box-${idx}`);
     const revealEl = document.getElementById(`stage-reveal-${idx}`);
     const stageInputs = Array.from(box.querySelectorAll('input, select, math-field'));
-    const isTest = activeTaskState.active && activeTaskState.taskType === 'test';
     controls.forEach(({ control }, index) => {
         if (!componentResults[index]) {
             control.style.borderColor = '#dc2626';
@@ -1926,36 +2079,47 @@ async function submitStage(idx) {
     });
 
     if (isCorrect) {
+        stepState.resolved = true;
+        stepState.earnedCredit = true;
         revealEl.textContent = '';
         revealEl.style.display = 'none';
-        statusEl.innerHTML = isTest
-            ? '<span>Step recorded.</span>'
-            : '<span style="color: #10b981;">&#10004; Correct</span>';
+        statusEl.innerHTML = '<span style="color: #10b981;">&#10004; Correct</span>';
         box.className = 'stage-box completed';
         stageInputs.forEach(control => setStageControlDisabled(control, true));
         document.getElementById(`stage-btn-${idx}`).disabled = true;
-
         unlockNextStage(idx);
-    } else {
-        if (isTest) {
-            await finalizeProblem(false, currentQuestionAnswers.slice());
-            return;
-        }
-        hadStageMistake = true;
+        return;
+    }
 
-        statusEl.innerHTML = '<span style="color: #d97706;">&#10008; Incorrect — try again to reveal the next step.</span>';
-        box.className = 'stage-box revealed';
-        if (!isTest) {
-            revealEl.style.display = 'block';
-            const feedback = controls
-                .map(({ definition }, index) => definition.feedback_by_value?.[answers[index]])
-                .find(Boolean);
-            const expected = controls.map(({ definition }) => definition.expected[0]).join(', ');
-            revealEl.innerText = `${feedback ? `${feedback} ` : ''}Expected answer: ${expected}. Correct this step to continue.`;
-        }
+    hadStageMistake = true;
+    if (stepState.attemptsUsed < stepState.maxAttempts) {
+        const remaining = stepState.maxAttempts - stepState.attemptsUsed;
+        statusEl.innerHTML = '<span style="color: #d97706;">&#10008; Incorrect</span>';
+        box.className = 'stage-box active';
+        revealEl.style.display = 'none';
         stageInputs.forEach(control => setStageControlDisabled(control, false));
         document.getElementById(`stage-btn-${idx}`).disabled = false;
+        showStageInputWarning(
+            idx,
+            `Incorrect — ${remaining} attempt${remaining === 1 ? '' : 's'} remaining for this step.`
+        );
+        captureTaskQuestionState();
+        return;
     }
+
+    stepState.resolved = true;
+    stepState.earnedCredit = false;
+    statusEl.innerHTML = '<span style="color: #d97706;">&#10008; No attempts remaining</span>';
+    box.className = 'stage-box revealed';
+    showStageInputWarning(idx, '');
+    const expected = controls
+        .map(({ definition }) => definition.expected?.[0])
+        .join(', ');
+    revealEl.textContent = `Expected answer: ${expected}. Continue to the next step.`;
+    revealEl.style.display = 'block';
+    stageInputs.forEach(control => setStageControlDisabled(control, true));
+    document.getElementById(`stage-btn-${idx}`).disabled = true;
+    unlockNextStage(idx);
 }
 
 function showStageInputWarning(idx, message) {
@@ -2027,7 +2191,7 @@ async function submitSingleAnswer() {
     input.disabled = true;
 }
 
-async function finalizeProblem(isSuccess, answer = null) {
+async function finalizeProblem(isSuccess, answer = null, questionScore = null) {
     const feedback = document.getElementById('feedback-banner');
     feedback.style.display = 'block';
     const isTest = activeTaskState.active && activeTaskState.taskType === 'test';
@@ -2038,23 +2202,44 @@ async function finalizeProblem(isSuccess, answer = null) {
         ? activeTaskState.questionsState[activeTaskState.currentIndex - 1]
         : null;
     if (questionState?.completed) return;
+    let firstAttemptCorrectCount = 0;
+    if (currentProblem.steps?.length) {
+        firstAttemptCorrectCount = currentStepAttemptStates.filter(
+            step => step.firstAttemptCorrect === true
+        ).length;
+        questionScore = firstAttemptCorrectCount / currentProblem.steps.length;
+        isSuccess = currentStepAttemptStates.length === currentProblem.steps.length &&
+            currentStepAttemptStates.every(step => step.resolved && step.earnedCredit);
+    }
+    if (!Number.isFinite(questionScore)) questionScore = isSuccess ? 1 : 0;
     if (isTest) {
         feedback.className = 'banner';
         feedback.textContent = 'Test response recorded. Continue to the next question.';
-    } else {
-        if (isSuccess) {
+    } else if (currentProblem.steps?.length) {
+        if (activeTaskState.active) {
+            feedback.className = isSuccess ? 'banner correct' : 'banner incorrect';
+            feedback.textContent = isSuccess
+                ? "✓ Question Complete! Click 'Next Problem' to continue."
+                : "Question finished. Click 'Next Problem' to continue.";
+        } else if (isSuccess) {
             feedback.className = 'banner correct';
-            feedback.innerHTML = '&#10004; Problem complete! All steps solved cleanly.';
+            feedback.textContent = '✓ Problem Complete!';
         } else {
             feedback.className = 'banner incorrect';
             feedback.innerHTML = '&#10008; Problem finished with step errors.';
         }
+    } else if (isSuccess) {
+        feedback.className = 'banner correct';
+        feedback.innerHTML = '&#10004; Problem complete! All steps solved cleanly.';
+    } else {
+        feedback.className = 'banner incorrect';
+        feedback.innerHTML = '&#10008; Problem finished with step errors.';
     }
 
     const nextBtn = document.getElementById('next-btn');
     const showSolution = !isTest;
     if (!isSuccess && showSolution) {
-        feedback.innerHTML += ' Full derivation:';
+        if (!activeTaskState.active) feedback.innerHTML += ' Full derivation:';
         const solCard = document.getElementById('solution-card');
         const solContent = document.getElementById('solution-content');
         if (currentProblem.plot_data) drawNormalDistribution(currentProblem.plot_data);
@@ -2073,6 +2258,7 @@ async function finalizeProblem(isSuccess, answer = null) {
         questionIndex: activeTaskState.currentIndex,
         prompt: currentProblem.prompt,
         correct: Boolean(isSuccess),
+        score: questionScore,
         answer,
         blockId: completedQuestion?.blockId || null,
         phase: completedQuestion?.phase || null
@@ -2081,9 +2267,11 @@ async function finalizeProblem(isSuccess, answer = null) {
         questionState.attempted = true;
         questionState.completed = true;
         questionState.correct = Boolean(isSuccess);
+        questionState.score = questionScore;
         questionState.answer = answer;
     }
     if (isSuccess) activeTaskState.correctCount += 1;
+    activeTaskState.earnedPoints += questionScore;
     if (completedQuestion?.blockId) {
         const blockIndex = completedQuestion.blockIndex;
         const blockState = activeTaskState.blockStates[blockIndex];

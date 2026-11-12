@@ -54,6 +54,7 @@ def generate_mean_t_interval():
             {
                 "step_num": 1,
                 "label": "Point Estimate (x̄):",
+                "input_type": "number",
                 "placeholder": "e.g. 72.4",
                 "expected": [xbar],
                 "tolerance": 0.05,
@@ -62,6 +63,7 @@ def generate_mean_t_interval():
             {
                 "step_num": 2,
                 "label": f"Critical Value t* (df = {df}):",
+                "input_type": "number",
                 "placeholder": "e.g. 2.064",
                 "expected": [t_star_rounded, round(t_star_exact, 3), round(t_star_exact, 4)],
                 "tolerance": 0.02,
@@ -70,6 +72,8 @@ def generate_mean_t_interval():
             {
                 "step_num": 3,
                 "label": "Margin of Error (E):",
+                "input_type": "math",
+                "math_symbols": ["sqrt", "frac", "parens"],
                 "placeholder": "e.g. 3.25",
                 "expected": [round(moe_table, 2), round(moe_exact, 2), round(moe_table, 3)],
                 "tolerance": 0.08,
@@ -78,6 +82,7 @@ def generate_mean_t_interval():
             {
                 "step_num": 4,
                 "label": "Lower Bound (L):",
+                "input_type": "number",
                 "placeholder": "e.g. 69.15",
                 "expected": [lower_table, lower_exact],
                 "tolerance": 0.15,
@@ -86,6 +91,7 @@ def generate_mean_t_interval():
             {
                 "step_num": 5,
                 "label": "Upper Bound (U):",
+                "input_type": "number",
                 "placeholder": "e.g. 75.65",
                 "expected": [upper_table, upper_exact],
                 "tolerance": 0.15,
@@ -150,6 +156,7 @@ def generate_proportion_z_interval():
             {
                 "step_num": 1,
                 "label": "Point Estimate (p̂):",
+                "input_type": "number",
                 "placeholder": "e.g. 0.4500",
                 "expected": [phat],
                 "tolerance": 0.005,
@@ -158,6 +165,7 @@ def generate_proportion_z_interval():
             {
                 "step_num": 2,
                 "label": "Critical Value z*:",
+                "input_type": "number",
                 "placeholder": "e.g. 1.96",
                 "expected": [z_star_rounded, round(z_star_exact, 3), round(z_star_exact, 2)],
                 "tolerance": 0.02,
@@ -166,6 +174,8 @@ def generate_proportion_z_interval():
             {
                 "step_num": 3,
                 "label": "Margin of Error (E):",
+                "input_type": "math",
+                "math_symbols": ["sqrt", "frac", "parens"],
                 "placeholder": "e.g. 0.0485",
                 "expected": [round(moe_table, 4), round(moe_exact, 4)],
                 "tolerance": 0.003,
@@ -174,6 +184,7 @@ def generate_proportion_z_interval():
             {
                 "step_num": 4,
                 "label": "Lower Bound (L):",
+                "input_type": "number",
                 "placeholder": "e.g. 0.4015",
                 "expected": [lower_table, lower_exact],
                 "tolerance": 0.005,
@@ -182,6 +193,7 @@ def generate_proportion_z_interval():
             {
                 "step_num": 5,
                 "label": "Upper Bound (U):",
+                "input_type": "number",
                 "placeholder": "e.g. 0.4985",
                 "expected": [upper_table, upper_exact],
                 "tolerance": 0.005,
@@ -243,22 +255,22 @@ def generate_two_sample_mean_t_interval():
             f"two decimals, the critical value to three decimals, and the margin of error to two decimals."
         ),
         "steps": [
-            {"step_num": 1, "label": "Point Estimate (x̄₁ - x̄₂):", "placeholder": "e.g. 4.25",
+            {"step_num": 1, "label": "Point Estimate (x̄₁ - x̄₂):", "input_type": "number", "placeholder": "e.g. 4.25",
              "expected": [point_estimate], "tolerance": 0.05,
              "hint": "Subtract the second sample mean from the first."},
-            {"step_num": 2, "label": "Conservative Degrees of Freedom (df):", "placeholder": "e.g. 15",
+            {"step_num": 2, "label": "Conservative Degrees of Freedom (df):", "input_type": "number", "placeholder": "e.g. 15",
              "expected": [df], "tolerance": 0.01,
              "hint": "Use the smaller of n₁ - 1 and n₂ - 1."},
-            {"step_num": 3, "label": "Critical Value t*:", "placeholder": "e.g. 2.131",
+            {"step_num": 3, "label": "Critical Value t*:", "input_type": "number", "placeholder": "e.g. 2.131",
              "expected": [t_star], "tolerance": 0.01,
              "hint": f"Use {conf_level}% confidence with the conservative df."},
-            {"step_num": 4, "label": "Margin of Error (E):", "placeholder": "e.g. 5.42",
+            {"step_num": 4, "label": "Margin of Error (E):", "input_type": "math", "math_symbols": ["sqrt", "frac", "parens"], "placeholder": "e.g. 5.42",
              "expected": [moe], "tolerance": 0.08,
              "hint": "E = t* · √(s₁²/n₁ + s₂²/n₂)"},
-            {"step_num": 5, "label": "Lower Bound (L):", "placeholder": "e.g. -1.17",
+            {"step_num": 5, "label": "Lower Bound (L):", "input_type": "number", "placeholder": "e.g. -1.17",
              "expected": [lower], "tolerance": 0.12,
              "hint": "L = (x̄₁ - x̄₂) - E"},
-            {"step_num": 6, "label": "Upper Bound (U):", "placeholder": "e.g. 9.67",
+            {"step_num": 6, "label": "Upper Bound (U):", "input_type": "number", "placeholder": "e.g. 9.67",
              "expected": [upper], "tolerance": 0.12,
              "hint": "U = (x̄₁ - x̄₂) + E"}
         ],
@@ -314,19 +326,19 @@ def generate_two_sample_prop_z_interval():
             f"\\(p_1 - p_2\\). Round the point estimate, margin of error, and bounds to four decimals."
         ),
         "steps": [
-            {"step_num": 1, "label": "Point Estimate (p̂₁ - p̂₂):", "placeholder": "e.g. 0.0525",
+            {"step_num": 1, "label": "Point Estimate (p̂₁ - p̂₂):", "input_type": "number", "placeholder": "e.g. 0.0525",
              "expected": [point_estimate], "tolerance": 0.001,
              "hint": "Compute p̂₁ = x₁/n₁ and p̂₂ = x₂/n₂, then subtract."},
-            {"step_num": 2, "label": "Critical Value z*:", "placeholder": "e.g. 1.960",
+            {"step_num": 2, "label": "Critical Value z*:", "input_type": "number", "placeholder": "e.g. 1.960",
              "expected": [z_star], "tolerance": 0.01,
              "hint": f"Use the z* value for {conf_level}% confidence."},
-            {"step_num": 3, "label": "Margin of Error (E):", "placeholder": "e.g. 0.0834",
+            {"step_num": 3, "label": "Margin of Error (E):", "input_type": "math", "math_symbols": ["sqrt", "frac", "parens"], "placeholder": "e.g. 0.0834",
              "expected": [moe], "tolerance": 0.002,
              "hint": "E = z* · √[p̂₁(1-p̂₁)/n₁ + p̂₂(1-p̂₂)/n₂]"},
-            {"step_num": 4, "label": "Lower Bound (L):", "placeholder": "e.g. -0.0309",
+            {"step_num": 4, "label": "Lower Bound (L):", "input_type": "number", "placeholder": "e.g. -0.0309",
              "expected": [lower], "tolerance": 0.003,
              "hint": "L = (p̂₁ - p̂₂) - E"},
-            {"step_num": 5, "label": "Upper Bound (U):", "placeholder": "e.g. 0.1360",
+            {"step_num": 5, "label": "Upper Bound (U):", "input_type": "number", "placeholder": "e.g. 0.1360",
              "expected": [upper], "tolerance": 0.003,
              "hint": "U = (p̂₁ - p̂₂) + E"}
         ],
@@ -377,19 +389,19 @@ def generate_matched_pairs_t_interval():
             f"\\(df = n - 1\\). Round the margin of error and bounds to two decimals."
         ),
         "steps": [
-            {"step_num": 1, "label": "Point Estimate (d̄):", "placeholder": "e.g. 2.4",
+            {"step_num": 1, "label": "Point Estimate (d̄):", "input_type": "number", "placeholder": "e.g. 2.4",
              "expected": [d_bar], "tolerance": 0.05,
              "hint": "The sample mean difference is the point estimate."},
-            {"step_num": 2, "label": f"Critical Value t* (df = {df}):", "placeholder": "e.g. 2.145",
+            {"step_num": 2, "label": f"Critical Value t* (df = {df}):", "input_type": "number", "placeholder": "e.g. 2.145",
              "expected": [t_star], "tolerance": 0.01,
              "hint": f"Use {conf_level}% confidence with df = n - 1 = {df}."},
-            {"step_num": 3, "label": "Margin of Error (E):", "placeholder": "e.g. 2.35",
+            {"step_num": 3, "label": "Margin of Error (E):", "input_type": "math", "math_symbols": ["sqrt", "frac", "parens"], "placeholder": "e.g. 2.35",
              "expected": [moe], "tolerance": 0.08,
              "hint": "E = t* · (s_d / √n)"},
-            {"step_num": 4, "label": "Lower Bound (L):", "placeholder": "e.g. -0.05",
+            {"step_num": 4, "label": "Lower Bound (L):", "input_type": "number", "placeholder": "e.g. -0.05",
              "expected": [lower], "tolerance": 0.12,
              "hint": "L = d̄ - E"},
-            {"step_num": 5, "label": "Upper Bound (U):", "placeholder": "e.g. 4.75",
+            {"step_num": 5, "label": "Upper Bound (U):", "input_type": "number", "placeholder": "e.g. 4.75",
              "expected": [upper], "tolerance": 0.12,
              "hint": "U = d̄ + E"}
         ],

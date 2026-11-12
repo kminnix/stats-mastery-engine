@@ -37,6 +37,7 @@ def generate_between_problem():
 
     return {
         "type": "between",
+        "input_type": "number",
         "input_label": "Probability:",
         "placeholder": "e.g. 0.4532",
         "prompt": f"A continuous random variable \\(X\\) is normally distributed with mean \\(\\mu = {mu}\\) and standard deviation \\(\\sigma = {sigma}\\). Find \\(P({x1} < X < {x2})\\). Round your answer to four decimal places.",
@@ -78,6 +79,7 @@ def generate_left_tail_problem():
 
     return {
         "type": "left_tail",
+        "input_type": "number",
         "input_label": "Probability:",
         "placeholder": "e.g. 0.1587",
         "prompt": f"A continuous random variable \\(X\\) is normally distributed with mean \\(\\mu = {mu}\\) and standard deviation \\(\\sigma = {sigma}\\). Find \\(P(X < {x})\\). Round your answer to four decimal places.",
@@ -119,6 +121,7 @@ def generate_right_tail_problem():
 
     return {
         "type": "right_tail",
+        "input_type": "number",
         "input_label": "Probability:",
         "placeholder": "e.g. 0.2119",
         "prompt": f"A continuous random variable \\(X\\) is normally distributed with mean \\(\\mu = {mu}\\) and standard deviation \\(\\sigma = {sigma}\\). Find \\(P(X > {x})\\). Round your answer to four decimal places.",
@@ -171,6 +174,7 @@ def generate_inverse_problem():
 
     return {
         "type": "inverse",
+        "input_type": "number",
         "input_label": "Cutoff Value (x):",
         "placeholder": "e.g. 78.4",
         "prompt": f"A continuous random variable \\(X\\) is normally distributed with mean \\(\\mu = {mu}\\) and standard deviation \\(\\sigma = {sigma}\\). Find the cutoff score \\(x\\) that separates the <strong>{direction_text}</strong> of values. Round your answer to one or two decimal places.",

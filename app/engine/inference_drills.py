@@ -342,7 +342,8 @@ def generate_test_stat_drill(kind: str = "random") -> Dict[str, Any]:
             {
                 "step_num": 1,
                 "label": "Standard Error (SE₀):",
-                "input_type": "number",
+                "input_type": "math",
+                "math_symbols": ["sqrt", "frac", "parens"],
                 "placeholder": "standard error",
                 "expected": [round(standard_error, 5)],
                 "tolerance": 0.00005,
@@ -351,7 +352,8 @@ def generate_test_stat_drill(kind: str = "random") -> Dict[str, Any]:
             {
                 "step_num": 2,
                 "label": f"Standardized Test Statistic ({statistic_label}):",
-                "input_type": "number",
+                "input_type": "math",
+                "math_symbols": ["sqrt", "frac", "parens"],
                 "placeholder": statistic_label,
                 "expected": [
                     round(statistic, 4),
@@ -563,7 +565,8 @@ def generate_standard_error_drill_proportion() -> Dict[str, Any]:
             {
                 "step_num": 1,
                 "label": "Estimated Standard Error:",
-                "input_type": "number",
+                "input_type": "math",
+                "math_symbols": ["sqrt", "frac", "parens"],
                 "placeholder": "standard error",
                 "expected": [round(standard_error, 5)],
                 "tolerance": 0.00005,
@@ -599,7 +602,8 @@ def generate_standard_error_drill_mean() -> Dict[str, Any]:
             {
                 "step_num": 1,
                 "label": "Standard Error:",
-                "input_type": "number",
+                "input_type": "math",
+                "math_symbols": ["sqrt", "frac", "parens"],
                 "placeholder": "standard error",
                 "expected": [round(standard_error, 5)],
                 "tolerance": 0.00005,
