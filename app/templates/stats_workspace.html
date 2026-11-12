@@ -4,8 +4,8 @@
         <span>📊 Stats &amp; Graphing</span>
         <div class="controls">
             <button type="button" onclick="snapStatsWindow('left')" title="Snap left">◧</button>
+            <button type="button" onclick="snapStatsWindow('bottom')" title="Snap bottom">⬓</button>
             <button type="button" onclick="snapStatsWindow('right')" title="Snap right">◨</button>
-            <button type="button" onclick="floatStatsWindow()" title="Float">⬈</button>
             <button type="button" id="btn-stats-maximize" onclick="toggleMaximizeStatsWindow()" title="Maximize / Restore">🗖</button>
             <button type="button" class="tool-popout" onclick="popOutStatsWindow()" title="Open in New Tab / Window">↗</button>
             <button type="button" onclick="closeStatsGrapherWindow()" title="Close">×</button>
@@ -16,7 +16,7 @@
         <div class="stats-tabs" id="stats-mode-tabs">
             <button type="button" data-mode="one">1-Variable Data</button>
             <button type="button" data-mode="two">2-Variable &amp; Regression</button>
-            <button type="button" data-mode="categorical">Categorical / Mosaic</button>
+            <button type="button" data-mode="categorical">Categorical</button>
         </div>
         <div class="stats-top-split">
             <div class="stats-data-column">
@@ -37,16 +37,48 @@
             <div id="stats-summary" class="stats-vertical-grid" aria-live="polite"></div>
         </div>
         <div id="stats-categorical" hidden>
-            <div class="stats-categorical-scroll"><table id="stats-categorical-table" class="stats-data-table"></table></div>
-            <div class="stats-categorical-actions">
-                <button type="button" class="btn-secondary" id="stats-add-row">+ Row</button>
-                <button type="button" class="btn-secondary" id="stats-add-col">+ Col</button>
-                <button type="button" class="btn-secondary" id="stats-clear-categorical">Clear</button>
+            <div class="stats-tabs" id="stats-cat-mode-tabs" role="group" aria-label="Categorical table mode">
+                <button type="button" data-cat-view="one">1-Variable (Counts)</button>
+                <button type="button" data-cat-view="two">2-Variable (Two-Way)</button>
             </div>
-            <div id="stats-zero-columns"></div>
+            <div id="stats-cat-one-panel" class="stats-cat-one-layout" hidden>
+                <div>
+                    <label class="stats-cat-variable-label" for="stats-cat-variable-name">Variable name:
+                        <input id="stats-cat-variable-name" type="text" value="Category">
+                    </label>
+                    <div class="stats-categorical-scroll">
+                        <table id="stats-cat-one-table" class="stats-data-table">
+                            <thead><tr><th scope="col">Category</th><th scope="col">Count</th><th scope="col" aria-label="Remove category"></th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="stats-categorical-actions">
+                        <button type="button" class="btn-secondary" id="stats-cat-add">+ Category</button>
+                        <button type="button" class="btn-secondary" id="stats-cat-clear-one">Clear</button>
+                    </div>
+                </div>
+                <div id="stats-cat-one-summary" class="stats-cat-summary" aria-live="polite"></div>
+            </div>
+            <div id="stats-cat-two-panel" hidden>
+                <div class="stats-categorical-scroll">
+                    <table id="stats-cat-two-table" class="stats-data-table"></table>
+                </div>
+                <div class="stats-categorical-actions">
+                    <button type="button" class="btn-secondary" id="stats-add-row">+ Row</button>
+                    <button type="button" class="btn-secondary" id="stats-remove-row">- Row</button>
+                    <button type="button" class="btn-secondary" id="stats-add-col">+ Col</button>
+                    <button type="button" class="btn-secondary" id="stats-remove-col">- Col</button>
+                    <button type="button" class="btn-secondary" id="stats-clear-categorical">Clear</button>
+                </div>
+            </div>
+            <div id="stats-zero-groups"></div>
         </div>
         <div id="stats-error" role="alert"></div>
         <div class="stats-tabs" id="stats-plot-tabs"></div>
+        <div id="stats-cat-chart-controls" class="stats-tabs" role="group" aria-label="Bar chart values" hidden>
+            <button type="button" data-cat-bar-mode="counts">Counts</button>
+            <button type="button" data-cat-bar-mode="percent">Percent (%)</button>
+        </div>
         <div id="stats-stem-controls" class="stats-tabs" hidden>
             <button type="button" data-stems="single">Single Stems</button>
             <button type="button" data-stems="split">Split Stems (0–4 / 5–9)</button>

@@ -5,18 +5,19 @@
         <div class="calc-header-topbar">
             <div class="calc-dock-controls">
                 <button class="calc-header-btn" onclick="setCalcDockMode('left')" title="Dock Left">◧</button>
-                <button class="calc-header-btn active" id="btn-dock-bottom" onclick="setCalcDockMode('bottom')" title="Dock Bottom">&#11027;</button>
+                <button class="calc-header-btn active" id="btn-dock-bottom" onclick="setCalcDockMode('bottom')" title="Dock Bottom">⬓</button>
                 <button class="calc-header-btn" onclick="setCalcDockMode('right')" title="Dock Right">◨</button>
-                <button class="calc-header-btn" onclick="setCalcDockMode('float')" title="Float / Undock">⬈</button>
-                <button class="calc-header-btn" id="calc-maximize-btn" onclick="toggleMaximizeCalculator()" title="Maximize / Restore">🗖</button>
-                <button class="calc-header-btn tool-popout" onclick="popOutCalculatorWindow()" title="Open in New Tab / Window">↗</button>
             </div>
             <div style="display: flex; gap: 6px; align-items: center;">
-                <button class="calc-header-btn" onclick="toggleCalculatorAngleMode()" id="calc-angle-btn">DEG</button>
-                <button class="calc-header-btn calc-header-close" onclick="closeCalculatorWindow()">×</button>
+                <button class="calc-header-btn calc-header-icon" id="calc-maximize-btn" onclick="toggleMaximizeCalculator()" title="Maximize / Restore">🗖</button>
+                <button class="calc-header-btn calc-header-icon tool-popout" onclick="popOutCalculatorWindow()" title="Open in New Tab / Window">↗</button>
+                <button class="calc-header-btn calc-header-icon calc-header-close" onclick="closeCalculatorWindow()">×</button>
             </div>
         </div>
         <div class="calc-display-section">
+            <div class="calc-display-toolbar">
+                <button class="calc-header-btn" onclick="toggleCalculatorAngleMode()" id="calc-angle-btn" title="Toggle degree/radian mode">DEG</button>
+            </div>
             <div id="calc-history-list" class="calc-history-list"></div>
             <math-field id="calc-mathfield"></math-field>
         </div>
