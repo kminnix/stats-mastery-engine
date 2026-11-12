@@ -50,6 +50,9 @@ function setCalcDockMode(mode) {
     const dock = document.getElementById('calc-dock');
     if (!dock) return;
 
+    if ((mode === 'left' || mode === 'right') && typeof window.displaceStatsDock === 'function') {
+        window.displaceStatsDock(mode);
+    }
     bringToFront(dock);
 
     // Mutual Collision Check against Tables

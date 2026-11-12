@@ -61,6 +61,7 @@ function snapWindow(side) {
     const win = getFloatingWindow();
     if (!win) return;
 
+    if (typeof window.displaceStatsDock === 'function') window.displaceStatsDock(side);
     if (win.style.display !== 'flex') {
         win.style.display = 'flex';
         renderTableA();

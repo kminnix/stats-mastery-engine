@@ -387,6 +387,13 @@
                 button.addEventListener('click', () => moveBlock(index, control.direction));
                 actions.appendChild(button);
             });
+            const duplicate = document.createElement('button');
+            duplicate.type = 'button';
+            duplicate.className = 'btn-subtle';
+            duplicate.textContent = '📋';
+            duplicate.title = 'Duplicate Block';
+            duplicate.addEventListener('click', () => duplicateBlock(block.id));
+            actions.appendChild(duplicate);
             const remove = document.createElement('button');
             remove.type = 'button';
             remove.className = 'btn-subtle';
@@ -428,6 +435,22 @@
             mode.addEventListener('change', () => updateBlockMode(block.id, mode.value));
             modeLabel.appendChild(mode);
             controls.append(countLabel, modeLabel);
+            if (block.topic.startsWith('reg_')) {
+                const notationLabel = document.createElement('label');
+                notationLabel.textContent = 'LSRL Notation: ';
+                const notation = document.createElement('select');
+                [
+                    ['', 'Use class default'],
+                    ['ab', 'ŷ = a + bx (AP standard)'],
+                    ['b0b1', 'ŷ = b₀ + b₁x (Collegiate standard)']
+                ].forEach(([value, label]) => {
+                    notation.add(new Option(label, value));
+                });
+                notation.value = block.notation_style || '';
+                notation.addEventListener('change', () => { block.notation_style = notation.value; });
+                notationLabel.appendChild(notation);
+                controls.appendChild(notationLabel);
+            }
 
             const adaptive = document.createElement('div');
             adaptive.className = 'loop-indicator';
@@ -542,6 +565,18 @@
         renderBlocksList();
     }
 
+    function duplicateBlock(blockId) {
+        const index = assessmentBlocks.findIndex(block => block.id === blockId);
+        if (index === -1) return;
+        const target = assessmentBlocks[index];
+        const duplicate = {
+            ...target,
+            id: `blk_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`
+        };
+        assessmentBlocks.splice(index + 1, 0, duplicate);
+        renderBlocksList();
+    }
+
     async function handleSession(session) {
         currentSession = session;
         currentUser = session?.user || null;
@@ -622,6 +657,7 @@
                 title: block.title,
                 count: parseInt(block.count, 10) || 1,
                 mode: block.mode,
+                ...(block.topic.startsWith('reg_') && block.notation_style ? { notation_style: block.notation_style } : {}),
                 max_attempts: parseInt(block.max_attempts, 10) || 4,
                 required_clean_passes: parseInt(block.required_clean_passes, 10) || 1
             })),
@@ -684,13 +720,40 @@
             });
         });
 
-        const params = new URLSearchParams(window.location.search);
-        if (params.get('type') === 'test_correction') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const cloneId = urlParams.get('clone_from');
+        if (cloneId) {
+            const response = await fetch(
+                `/api/teacher/assessments/${encodeURIComponent(cloneId)}/details`,
+                { headers: getAuthHeaders() }
+            );
+            if (!response.ok) {
+                const result = await response.json().catch(() => ({}));
+                throw new Error(result.detail || `Could not load assessment to duplicate (${response.status}).`);
+            }
+            const assessment = await response.json();
+            document.getElementById('assessment-title').value = `${assessment.title} (Copy)`;
+            document.getElementById('assessment-type').value = assessment.type;
+            document.getElementById('parent-test-field').style.display =
+                assessment.type === 'test_correction' ? 'block' : 'none';
+            assessmentBlocks = Array.isArray(assessment.config?.blocks)
+                ? assessment.config.blocks
+                : [];
+            const classSelect = document.getElementById('class-select');
+            if (currentClasses.some(item => String(item.id) === String(assessment.class_id))) {
+                classSelect.value = String(assessment.class_id);
+                await loadClassAssessments();
+                if (assessment.parent_assessment_id) {
+                    document.getElementById('parent-test-select').value = assessment.parent_assessment_id;
+                }
+            }
+            renderBlocksList();
+        } else if (urlParams.get('type') === 'test_correction') {
             document.getElementById('assessment-type').value = 'test_correction';
             document.getElementById('parent-test-field').style.display = 'block';
-            document.getElementById('assessment-title').value = params.get('title') || '';
-            if (params.get('parent_assessment_id')) {
-                document.getElementById('parent-test-select').value = params.get('parent_assessment_id');
+            document.getElementById('assessment-title').value = urlParams.get('title') || '';
+            if (urlParams.get('parent_assessment_id')) {
+                document.getElementById('parent-test-select').value = urlParams.get('parent_assessment_id');
             }
         }
     }

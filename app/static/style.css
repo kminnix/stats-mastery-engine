@@ -994,6 +994,67 @@ math-field::part(menu-toggle) {
     flex-wrap: wrap !important;
 }
 
+#floating-stats-window {
+    display: none;
+    position: fixed;
+    box-sizing: border-box;
+    top: 75px;
+    right: 25px;
+    width: min(620px, calc(100vw - 35px));
+    height: min(720px, calc(100vh - 90px));
+    background: #faf8f3;
+    border: 1px solid #936037;
+    border-radius: 8px;
+    box-shadow: 0 14px 35px rgba(15, 23, 42, 0.3);
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 10030;
+}
+#floating-stats-window.stats-snap-left,
+#floating-stats-window.stats-snap-right {
+    top: 0 !important;
+    bottom: 0;
+    width: min(460px, 90vw);
+    height: 100vh;
+    border-radius: 0;
+}
+#floating-stats-window.stats-snap-left { left: 0 !important; right: auto; }
+#floating-stats-window.stats-snap-right { right: 0 !important; left: auto; }
+body.stats-docked-left #page-wrapper { padding-left: calc(min(460px, 90vw) + 16px) !important; }
+body.stats-docked-right #page-wrapper { padding-right: calc(min(460px, 90vw) + 16px) !important; }
+body.stats-docked-left #calc-dock.dock-bottom { left: min(460px, 90vw) !important; width: auto !important; }
+body.stats-docked-right #calc-dock.dock-bottom { right: min(460px, 90vw) !important; width: auto !important; }
+#stats-titlebar { touch-action: none; }
+.stats-content { padding: 10px; overflow: auto; min-height: 0; }
+.stats-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.stats-tabs button {
+    border: 1px solid #936037;
+    border-radius: 5px;
+    background: #faf8f3;
+    color: #1e4d3b;
+    padding: 5px 8px;
+    cursor: pointer;
+}
+.stats-tabs button.active { background: #1e4d3b; color: #faf8f3; }
+.stats-data-wrap { max-height: 170px; overflow-y: auto; }
+.stats-data-table { width: 100%; border-collapse: collapse; }
+.stats-data-table th { color: #1e4d3b; }
+.stats-data-table td { padding: 2px 4px; }
+.stats-data-table input {
+    box-sizing: border-box;
+    width: 100%;
+    background: #faf8f3;
+    border: 1px solid #936037;
+    border-radius: 4px;
+    padding: 5px;
+}
+#stats-clear { margin: 6px 0; }
+#stats-error { color: #b91c1c; }
+#stats-summary { display: flex; flex-wrap: wrap; gap: 8px; background: #1e4d3b; color: #faf8f3; padding: 8px; border-radius: 6px; margin-bottom: 8px; }
+#stats-summary:empty { display: none; }
+#stats-plot { display: block; width: 100%; height: auto; background: #faf8f3; border: 1px solid #bca46c; }
+#stats-plot text { font-size: 13px; fill: #1e4d3b; }
+
 .math-input-wrapper {
     display: inline-flex;
     align-items: center;

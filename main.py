@@ -4,7 +4,7 @@ import string
 import traceback
 import csv
 import io
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from fastapi import FastAPI, Request, HTTPException, Header
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -38,7 +38,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "126"
+STATIC_VERSION = "129"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -124,6 +124,9 @@ class CreateClassPayload(BaseModel):
 
 class RenameClassPayload(BaseModel):
     name: str
+
+class ClassSettingsPayload(BaseModel):
+    default_notation: Literal["ab", "b0b1"]
 
 class JoinClassPayload(BaseModel):
     student_id: str
@@ -243,7 +246,7 @@ async def get_chi_problem(topic: str = "random"):
     return generate_chi_problem(topic or "random")
 
 @app.get("/api/problem/regression")
-async def get_regression_problem(topic: str = "reg_lsrl", notation_style: str = "b0b1"):
+async def get_regression_problem(topic: str = "reg_lsrl", notation_style: str = "ab"):
     return generate_regression_problem(topic or "reg_lsrl", notation_style)
 
 @app.get("/api/problem/drill")
@@ -346,6 +349,26 @@ async def rename_teacher_class(
         raise HTTPException(status_code=400, detail="Could not update section name")
     return result.data[0]
 
+@app.patch("/api/teacher/classes/{class_id}/settings")
+async def update_teacher_class_settings(
+    class_id: str,
+    payload: ClassSettingsPayload,
+    authorization: Optional[str] = Header(None)
+):
+    access = verify_teacher_access(authorization)
+    db = get_scoped_supabase(authorization)
+    verify_teacher_class_access(db, class_id, access["user"].id)
+    result = (
+        db.table("classes")
+        .update({"default_notation": payload.default_notation})
+        .eq("id", class_id)
+        .eq("teacher_id", access["user"].id)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=400, detail="Could not update class notation")
+    return {"default_notation": result.data[0]["default_notation"]}
+
 @app.post("/api/teacher/classes/{class_id}/join-code")
 async def regenerate_teacher_class_join_code(
     class_id: str,
@@ -390,7 +413,7 @@ async def get_teacher_class_tasks(
     db = get_scoped_supabase(authorization)
     classes_res = (
         db.table("classes")
-        .select("id, name")
+        .select("id, name, default_notation")
         .eq("teacher_id", teacher_id)
         .execute()
     )
@@ -401,7 +424,7 @@ async def get_teacher_class_tasks(
     if not teacher_classes:
         return {"classes": [], "tasks": []}
 
-    class_map = {item["id"]: item["name"] for item in teacher_classes}
+    class_map = {item["id"]: item for item in teacher_classes}
     target_ids = [class_id] if class_id else class_ids
     assessments_res = (
         db.table("assessments")
@@ -418,7 +441,8 @@ async def get_teacher_class_tasks(
             "title": assessment["title"],
             "type": assessment["type"],
             "class_id": assessment["class_id"],
-            "class_name": class_map.get(assessment["class_id"], "Class"),
+            "class_name": class_map[assessment["class_id"]]["name"],
+            "default_notation": class_map[assessment["class_id"]].get("default_notation"),
             "due_date": assessment["due_date"],
             "config": assessment["config"],
             "parent_assessment_id": assessment.get("parent_assessment_id"),
@@ -820,13 +844,13 @@ async def get_student_tasks(student_id: str, authorization: Optional[str] = Head
     db = get_scoped_supabase(authorization)
 
     # 1. Get the class IDs this student is enrolled in
-    enroll_res = db.table("enrollments").select("class_id, classes(name)").eq("student_id", student_id).execute()
+    enroll_res = db.table("enrollments").select("class_id, classes(name, default_notation)").eq("student_id", student_id).execute()
     enrolled_classes = enroll_res.data or []
     if not enrolled_classes:
         return []
 
     class_ids = [item["class_id"] for item in enrolled_classes]
-    class_name_map = {item["class_id"]: item.get("classes", {}).get("name", "Class") for item in enrolled_classes}
+    class_map = {item["class_id"]: item.get("classes") or {} for item in enrolled_classes}
 
     # 2. Get active assessments for these classes
     assess_res = db.table("assessments").select("*").in_("class_id", class_ids).eq("is_active", True).order("created_at", desc=True).execute()
@@ -848,7 +872,9 @@ async def get_student_tasks(student_id: str, authorization: Optional[str] = Head
             "assessment_id": a["id"],
             "title": a["title"],
             "type": a["type"],
-            "class_name": class_name_map.get(a["class_id"], "Class"),
+            "class_id": a["class_id"],
+            "class_name": class_map.get(a["class_id"], {}).get("name", "Class"),
+            "default_notation": class_map.get(a["class_id"], {}).get("default_notation"),
             "due_date": a["due_date"],
             "config": a["config"],
             "parent_assessment_id": a.get("parent_assessment_id"),

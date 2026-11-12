@@ -14,6 +14,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.js"></script>
     <script defer src="https://unpkg.com/mathlive"></script>
+    <script defer src="/static/stats_grapher.js?v={{ v }}"></script>
 
     <!-- Supabase Environment Injection -->
     <script>
@@ -163,6 +164,7 @@
                 <button class="btn-secondary" id="join-class-btn" onclick="openJoinModal()" style="display: none;">🎓 Join Class</button>
                 <button class="btn-secondary" onclick="toggleFloatingWindow()">📋 Formulas &amp; Tables</button>
                 <button class="btn-secondary" onclick="toggleCalculatorWindow()">🖩 Calculator</button>
+                <button class="btn-secondary" onclick="toggleStatsGrapherWindow()">📊 Stats &amp; Plots</button>
                 <button id="auth-btn" class="btn-secondary" onclick="toggleAuth()" style="font-size: 0.85rem;">
                     <span id="auth-user-label">Sign In</span>
                 </button>
@@ -202,6 +204,12 @@
                         <p>Browse and practice topics.</p>
                     </div>
                 </div>
+                <label for="lsrl-notation-select">LSRL notation:
+                    <select id="lsrl-notation-select" onchange="setLsrlNotationStyle(this.value)">
+                        <option value="ab">ŷ = a + bx (AP standard)</option>
+                        <option value="b0b1">ŷ = b₀ + b₁x (Collegiate standard)</option>
+                    </select>
+                </label>
                 <input type="text" id="topic-search-input" placeholder="🔍 Search topics (e.g. 'matched pairs', 'z-score', 'proportion')..." oninput="filterTopicCatalog()">
                 <div id="catalog-accordion" aria-live="polite"></div>
             </div>
@@ -447,7 +455,7 @@
             <math-field id="calc-mathfield"></math-field>
         </div>
     </div>
-    <div class="calc-tray">
+    <div class="calc-tray" id="calc-grid-keypad">
         <div id="calc-bank-main" class="calc-keypad-block calc-block-vars">
             <button class="calc-key-btn" onclick="calcInsert('x')">x</button>
             <button class="calc-key-btn" onclick="calcInsert('y')">y</button>
@@ -513,6 +521,35 @@
         </div>
     </div>
     <div id="calc-resize-grip" class="window-resize-grip" title="Drag to resize"></div>
+</div>
+
+<div id="floating-stats-window" role="region" aria-label="Stats and graphing">
+    <div id="stats-titlebar" class="window-titlebar">
+        <span>📊 Stats &amp; Graphing</span>
+        <div class="controls">
+            <button type="button" onclick="snapStatsWindow('left')" title="Snap left">◧</button>
+            <button type="button" onclick="snapStatsWindow('right')" title="Snap right">◨</button>
+            <button type="button" onclick="floatStatsWindow()" title="Float">⬈</button>
+            <button type="button" onclick="closeStatsGrapherWindow()" title="Close">×</button>
+        </div>
+    </div>
+    <div class="stats-content">
+        <div class="stats-tabs" id="stats-mode-tabs">
+            <button type="button" data-mode="one">1-Variable Data</button>
+            <button type="button" data-mode="two">2-Variable &amp; Regression</button>
+        </div>
+        <div class="stats-data-wrap">
+            <table class="stats-data-table">
+                <thead><tr><th scope="col">X</th><th id="stats-y-heading" scope="col">Y</th></tr></thead>
+                <tbody id="stats-data-rows"></tbody>
+            </table>
+        </div>
+        <button type="button" class="btn-secondary" id="stats-clear">Clear</button>
+        <div id="stats-error" role="alert"></div>
+        <div id="stats-summary" aria-live="polite"></div>
+        <div class="stats-tabs" id="stats-plot-tabs"></div>
+        <svg id="stats-plot" viewBox="0 0 640 360" role="img" aria-label="Statistical plot"></svg>
+    </div>
 </div>
 
 <!-- Class Join Modal -->

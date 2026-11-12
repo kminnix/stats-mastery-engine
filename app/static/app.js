@@ -127,8 +127,34 @@ const TOPIC_REGISTRY = [
 
 let state = {
     selectedTopic: 'random',
-    previousView: 'catalog'
+    previousView: 'catalog',
+    lsrlNotationStyle: 'ab'
 };
+
+try {
+    const savedNotation = localStorage.getItem('lsrl_notation');
+    if (savedNotation === 'ab' || savedNotation === 'b0b1') state.lsrlNotationStyle = savedNotation;
+} catch (error) {
+    console.warn('Could not load LSRL notation preference:', error);
+}
+
+function setLsrlNotationStyle(style) {
+    if (!['ab', 'b0b1'].includes(style)) return;
+    state.lsrlNotationStyle = style;
+    try {
+        localStorage.setItem('lsrl_notation', style);
+    } catch (error) {
+        console.warn('Could not save LSRL notation preference:', error);
+    }
+    window.dispatchEvent(new Event('lsrl-notation-change'));
+}
+
+function getActiveLsrlNotation() {
+    const blockNotation = activeTaskState.active && activeTaskState.currentBlock?.notation_style;
+    const classNotation = activeTaskState.active && activeTaskState.defaultNotation;
+    return blockNotation || classNotation || state.lsrlNotationStyle;
+}
+window.getActiveLsrlNotation = getActiveLsrlNotation;
 
 function getTaskTopics(task) {
     const supportedTopics = TOPIC_REGISTRY.map(topic => topic.id);
@@ -703,6 +729,7 @@ function selectTaskTopic() {
         }
         state.selectedTopic = queuedQuestion.topic;
         updateCurrentTopicName();
+        window.dispatchEvent(new Event('lsrl-notation-change'));
         return;
     }
 
@@ -838,6 +865,7 @@ async function startStudentTask(task) {
     const selectedTopic = questionQueue[0]?.topic || assignedTopic || topics[0] || 'random';
     activeTaskState = {
         active: true,
+        defaultNotation: task.default_notation,
         taskId: task.id || task.assessment_id,
         taskTitle: task.title || 'Assigned Task',
         taskType,
@@ -935,6 +963,7 @@ function exitTask() {
     state.selectedTopic = previousTopic || 'random';
     updateCurrentTopicName();
     saveState();
+    window.dispatchEvent(new Event('lsrl-notation-change'));
     const nextBtn = document.getElementById('next-btn');
     nextBtn.innerText = 'Next Problem →';
     nextBtn.onclick = loadProblem;
@@ -1043,6 +1072,7 @@ function finishStudentTask() {
         submitted: false,
         isPreview: false
     };
+    window.dispatchEvent(new Event('lsrl-notation-change'));
     const nextBtn = document.getElementById('next-btn');
     nextBtn.innerText = 'Next Problem →';
     nextBtn.onclick = loadProblem;
@@ -1257,7 +1287,10 @@ async function loadProblem(problemToRender = null) {
                 : isHypothesisTest ? '/api/problem/ht'
                     : isChiSquare ? '/api/problem/chi'
                         : isRegression ? '/api/problem/regression' : '/api/problem/ci';
-            const res = await fetch(`${endpoint}?topic=${encodeURIComponent(problemTopic)}`);
+            const notation = getActiveLsrlNotation();
+            const notationParam = isRegression ? `&notation_style=${encodeURIComponent(notation)}` : '';
+            const res = await fetch(`${endpoint}?topic=${encodeURIComponent(problemTopic)}${notationParam}`);
+            if (!res.ok) throw new Error(`Could not load problem (${res.status}).`);
             currentProblem = await res.json();
         }
         renderMultiStageUI(topic);
@@ -2011,6 +2044,8 @@ async function finalizeProblem(isSuccess, answer = null) {
 }
 
 window.addEventListener('load', async () => {
+    const notationSelect = document.getElementById('lsrl-notation-select');
+    if (notationSelect) notationSelect.value = state.lsrlNotationStyle;
     const rootView = taskId ? 'tasks' : 'catalog';
     state.previousView = rootView;
     history.replaceState({ appView: rootView, navigationRoot: true }, '', `#${rootView}`);

@@ -28,7 +28,7 @@ def _solution_paragraphs(*paragraphs: str) -> str:
     return "".join(f"<p>{paragraph}</p>" for paragraph in paragraphs)
 
 
-def generate_lsrl_equation_problem(notation_style: str = "b0b1") -> Dict[str, Any]:
+def generate_lsrl_equation_problem(notation_style: str = "ab") -> Dict[str, Any]:
     if notation_style not in {"ab", "b0b1"}:
         raise ValueError(f"Unknown LSRL notation style: {notation_style}")
     scenarios = [
@@ -140,7 +140,8 @@ def generate_lsrl_equation_problem(notation_style: str = "b0b1") -> Dict[str, An
     }
 
 
-def generate_prediction_residual_problem() -> Dict[str, Any]:
+def generate_prediction_residual_problem(notation_style: str = "ab") -> Dict[str, Any]:
+    intercept_symbol, slope_symbol = _notation_symbols(notation_style)
     scenarios = [
         ("study time (hours)", "exam score (points)", 1),
         ("car weight (1000 lb)", "fuel economy (mpg)", -1),
@@ -160,7 +161,7 @@ def generate_prediction_residual_problem() -> Dict[str, Any]:
     direction_answer = "overestimated" if residual < 0 else "underestimated"
     prompt = (
         f"The least-squares regression line for predicting {y_name} from {x_name} is "
-        f"\\(\\widehat{{\\text{{{y_variable}}}}}=b_0+b_1"
+        f"\\(\\widehat{{\\text{{{y_variable}}}}}={intercept_symbol}+{slope_symbol}"
         f"(\\text{{{x_variable}}})={intercept:.2f}"
         f"{'+' if slope >= 0 else '-'}{abs(slope):.2f}"
         f"(\\text{{{x_variable}}})\\). For the observed pair "
@@ -264,7 +265,9 @@ def _raw_data_values() -> Tuple[List[float], List[float], float]:
     return x_values, y_values, y_mean
 
 
-def generate_raw_data_regression_problem() -> Dict[str, Any]:
+def generate_raw_data_regression_problem(notation_style: str = "ab") -> Dict[str, Any]:
+    intercept_symbol, slope_symbol = _notation_symbols(notation_style)
+    intercept_placeholder, slope_placeholder = ("a", "b") if notation_style == "ab" else ("b₀", "b₁")
     scenarios = [
         ("weekly practice hours", "quiz score (points)"),
         ("car weight (1000 lb)", "fuel economy (mpg)"),
@@ -307,25 +310,25 @@ def generate_raw_data_regression_problem() -> Dict[str, Any]:
                 {
                     "id": "raw-slope",
                     "type": "number",
-                    "placeholder": "b₁",
+                    "placeholder": slope_placeholder,
                     "expected": [slope],
                     "tolerance": 0.02,
                 },
                 {
                     "id": "raw-intercept",
                     "type": "number",
-                    "placeholder": "b₀",
+                    "placeholder": intercept_placeholder,
                     "expected": [intercept],
                     "tolerance": 0.05,
                 },
             ],
             "parts": [
-                r"\(b_1=\)",
+                rf"\({slope_symbol}=\)",
                 {"component": "raw-slope"},
-                r", \(b_0=\)",
+                rf", \({intercept_symbol}=\)",
                 {"component": "raw-intercept"},
             ],
-            "hint": r"Calculate \(b_1=r\frac{s_y}{s_x}\), then \(b_0=\bar{y}-b_1\bar{x}\).",
+            "hint": rf"Calculate \({slope_symbol}=r\frac{{s_y}}{{s_x}}\), then \({intercept_symbol}=\bar{{y}}-{slope_symbol}\bar{{x}}\).",
         },
         {
             "step_num": 3,
@@ -354,15 +357,16 @@ def generate_raw_data_regression_problem() -> Dict[str, Any]:
             f"<br><br>{data_table}<br><br>Find the correlation, least-squares line, "
             f"predicted {y_name} at x = {target_x:g}, and residual for the point "
             f"({x_values[observed_index]:g}, {y_values[observed_index]:.2f}). "
-            "Use \\(\\hat{y}=a+bx\\), where a is the intercept and b is the slope."
+            rf"Use \(\hat{{y}}={intercept_symbol}+{slope_symbol}x\), where "
+            rf"\({intercept_symbol}\) is the intercept and \({slope_symbol}\) is the slope."
         ),
         "steps": steps,
         "solution": _solution_paragraphs(
             rf"From the data, \(\bar{{x}}={x_mean:.3f}\), \(s_x={x_sd:.3f}\), "
             rf"\(\bar{{y}}={y_mean:.3f}\), \(s_y={y_sd:.3f}\), and \(r={correlation:.4f}\).",
-            rf"The slope \(b=b_1\) is \(b=r\frac{{s_y}}{{s_x}}={slope:.4f}\), and the "
-            rf"intercept \(a=b_0\) is \(a=\bar{{y}}-b\bar{{x}}={intercept:.4f}\).",
-            rf"The fitted line is \(\hat{{y}}=a+bx\). At \(x={target_x:g}\), "
+            rf"The slope is \({slope_symbol}=r\frac{{s_y}}{{s_x}}={slope:.4f}\), and the "
+            rf"intercept is \({intercept_symbol}=\bar{{y}}-{slope_symbol}\bar{{x}}={intercept:.4f}\).",
+            rf"The fitted line is \(\hat{{y}}={intercept_symbol}+{slope_symbol}x\). At \(x={target_x:g}\), "
             rf"\(\hat{{y}}={predicted_target:.2f}\). "
             rf"For the identified point, \(e={y_values[observed_index]:.2f}"
             rf"-{observed_prediction:.2f}={residual:.2f}\).",
@@ -370,7 +374,8 @@ def generate_raw_data_regression_problem() -> Dict[str, Any]:
     }
 
 
-def generate_slope_confidence_interval() -> Dict[str, Any]:
+def generate_slope_confidence_interval(notation_style: str = "ab") -> Dict[str, Any]:
+    _, slope_symbol = _notation_symbols(notation_style)
     contexts = [
         ("weekly study time and exam score", "points per additional study hour"),
         ("car weight and fuel economy", "mpg per additional 1000 lb"),
@@ -390,8 +395,8 @@ def generate_slope_confidence_interval() -> Dict[str, Any]:
     upper = slope + margin_of_error
     prompt = (
         f"A regression analysis studies {context}. In a sample of \\(n={n}\\), "
-        f"the estimated slope is \\(b_1={slope:.3f}\\) {slope_units}, with "
-        f"standard error \\(SE_{{b_1}}={standard_error:.3f}\\). Construct a "
+        f"the estimated slope is \\({slope_symbol}={slope:.3f}\\) {slope_units}, with "
+        f"standard error \\(SE_{{{slope_symbol}}}={standard_error:.3f}\\). Construct a "
         f"{100 * confidence_level:g}% confidence interval for the population slope "
         "\\(\\beta_1\\)."
     )
@@ -425,7 +430,7 @@ def generate_slope_confidence_interval() -> Dict[str, Any]:
                 "placeholder": "MOE",
                 "expected": [margin_of_error],
                 "tolerance": 0.02,
-                "hint": r"Calculate \(MOE=t^*SE_{b_1}\).",
+                "hint": rf"Calculate \(MOE=t^*SE_{{{slope_symbol}}}\).",
             },
             {
                 "step_num": 4,
@@ -448,7 +453,7 @@ def generate_slope_confidence_interval() -> Dict[str, Any]:
                     },
                 ],
                 "parts": [
-                    r"\((L, U) = \left( \text{lower bound}, \text{upper bound} \right)\)",
+                    r"\((L, U) = \left( \text{lower}, \text{upper} \right)\)",
                     "<br>",
                     "Enter the interval bounds: [",
                     {"component": "slope-ci-lower"},
@@ -456,13 +461,13 @@ def generate_slope_confidence_interval() -> Dict[str, Any]:
                     {"component": "slope-ci-upper"},
                     "]",
                 ],
-                "hint": r"Calculate \(L=b_1-MOE\) and \(U=b_1+MOE\), then report \((L,U)\).",
+                "hint": rf"Calculate \(L={slope_symbol}-MOE\) and \(U={slope_symbol}+MOE\), then report \((L,U)\).",
             },
         ],
         "solution": _solution_paragraphs(
             rf"Degrees of freedom: \(df=n-2={n}-2={df}\). The critical value is "
             rf"\(t^*={critical_t:.3f}\).",
-            rf"The margin of error is \(MOE=t^*SE_{{b_1}}="
+            rf"The margin of error is \(MOE=t^*SE_{{{slope_symbol}}}="
             rf"({critical_t:.3f})({standard_error:.3f})={margin_of_error:.3f}\).",
             rf"The confidence interval is \((L,U)=("
             rf"{slope:.3f}-{margin_of_error:.3f}, "
@@ -472,7 +477,8 @@ def generate_slope_confidence_interval() -> Dict[str, Any]:
     }
 
 
-def generate_slope_significance_test() -> Dict[str, Any]:
+def generate_slope_significance_test(notation_style: str = "ab") -> Dict[str, Any]:
+    _, slope_symbol = _notation_symbols(notation_style)
     contexts = {
         ">": [
             ("work experience", "salary", "thousands of dollars per additional year"),
@@ -536,8 +542,8 @@ def generate_slope_significance_test() -> Dict[str, Any]:
             else f"Test whether there is a linear relationship between {explanatory} and {response}"
         )
         + f" at \\(\\alpha={alpha:g}\\). The estimated slope is "
-        f"\\(b_1={slope:.3f}\\) {slope_units}, with standard error "
-        f"\\(SE_{{b_1}}={standard_error:.3f}\\)."
+        f"\\({slope_symbol}={slope:.3f}\\) {slope_units}, with standard error "
+        f"\\(SE_{{{slope_symbol}}}={standard_error:.3f}\\)."
     )
     step_metadata = {
         "expected_pval": p_value,
@@ -745,11 +751,11 @@ def generate_slope_significance_test() -> Dict[str, Any]:
                 "rows": [
                     {"formula": r"\(df=n-2=\)", "component": "slope-test-df"},
                     {
-                        "formula": r"\(t=\frac{b_1}{SE_{b_1}}=\)",
+                        "formula": rf"\(t=\frac{{{slope_symbol}}}{{SE_{{{slope_symbol}}}}}=\)",
                         "component": "slope-test-statistic",
                     },
                 ],
-                "hint": r"Calculate \(df=n-2\) and \(t=\frac{b_1}{SE_{b_1}}\).",
+                "hint": rf"Calculate \(df=n-2\) and \(t=\frac{{{slope_symbol}}}{{SE_{{{slope_symbol}}}}}\).",
             },
             {
                 "step_num": 5,
@@ -877,7 +883,7 @@ def generate_slope_significance_test() -> Dict[str, Any]:
             rf"Let \(\beta_1\) be the true slope relating {explanatory} to {response}. "
             rf"State \(H_0:\beta_1=0\) and \(H_a:\beta_1{alternative_symbol}0\). "
             rf"The regression conditions are met, and \(df=n-2={n}-2={df}\).",
-            rf"The test statistic is \(t=\frac{{b_1}}{{SE_{{b_1}}}}="
+            rf"The test statistic is \(t=\frac{{{slope_symbol}}}{{SE_{{{slope_symbol}}}}}="
             rf"\frac{{{slope:.3f}}}{{{standard_error:.3f}}}={test_statistic:.3f}\). "
             + (
                 rf"The P-value is \(P(T_{{{df}}}\ge {test_statistic:.3f})={p_value:.4g}\)."
@@ -896,10 +902,19 @@ def generate_slope_significance_test() -> Dict[str, Any]:
     }
 
 
-def generate_regression_problem(topic: str, notation_style: str = "b0b1") -> Dict[str, Any]:
+def _notation_symbols(notation_style: str) -> Tuple[str, str]:
+    if notation_style == "ab":
+        return "a", "b"
+    if notation_style == "b0b1":
+        return "b_0", "b_1"
+    raise ValueError(f"Unknown LSRL notation style: {notation_style}")
+
+
+def generate_regression_problem(topic: str, notation_style: str = "ab") -> Dict[str, Any]:
     generators = {
         "reg_lsrl": generate_lsrl_equation_problem,
         "reg_pred_res": generate_prediction_residual_problem,
+        "reg_predict_residual": generate_prediction_residual_problem,
         "reg_raw_data": generate_raw_data_regression_problem,
         "reg_slope_ci": generate_slope_confidence_interval,
         "reg_slope_test": generate_slope_significance_test,
@@ -907,6 +922,4 @@ def generate_regression_problem(topic: str, notation_style: str = "b0b1") -> Dic
     generator = generators.get(topic)
     if generator is None:
         raise ValueError(f"Unknown linear-regression topic: {topic}")
-    if topic == "reg_lsrl":
-        return generate_lsrl_equation_problem(notation_style)
-    return generator()
+    return generator(notation_style)
