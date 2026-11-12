@@ -279,11 +279,14 @@ def generate_raw_data_regression_problem(notation_style: str = "ab") -> Dict[str
     x_mean, x_sd, y_mean, y_sd, correlation = _sample_statistics(x_values, y_values)
     slope = correlation * y_sd / x_sd
     intercept = y_mean - slope * x_mean
-    target_x = random.choice(x_values)
+    # Select the observed point FIRST so Steps 3 and 4 use the same (x, y)
     observed_index = random.randrange(len(x_values))
-    predicted_target = intercept + slope * target_x
-    observed_prediction = intercept + slope * x_values[observed_index]
-    residual = y_values[observed_index] - observed_prediction
+    x_obs = x_values[observed_index]
+    y_obs = y_values[observed_index]
+    # Step 3: predict at the same x-value as Step 4's observation
+    predicted_obs = intercept + slope * x_obs
+    # Step 4: residual for that same observation
+    residual = y_obs - predicted_obs
     table_rows = r" \\ ".join(
         rf"{x_value:g} & {y_value:.2f}"
         for x_value, y_value in zip(x_values, y_values)
@@ -325,28 +328,29 @@ def generate_raw_data_regression_problem(notation_style: str = "ab") -> Dict[str
             "parts": [
                 rf"\({slope_symbol}=\)",
                 {"component": "raw-slope"},
-                rf", \({intercept_symbol}=\)",
+                "<br>",
+                rf"\({intercept_symbol}=\)",
                 {"component": "raw-intercept"},
             ],
             "hint": rf"Calculate \({slope_symbol}=r\frac{{s_y}}{{s_x}}\), then \({intercept_symbol}=\bar{{y}}-{slope_symbol}\bar{{x}}\).",
         },
         {
             "step_num": 3,
-            "label": f"Prediction at x = {target_x:g}:",
+            "label": f"Prediction at x = {x_obs:g}:",
             "input_type": "number",
             "placeholder": "ŷ",
-            "expected": [predicted_target],
+            "expected": [predicted_obs],
             "tolerance": 0.05,
             "hint": r"Use your regression equation and substitute the target \(x\)-value.",
         },
         {
             "step_num": 4,
-            "label": f"Residual for the point ({x_values[observed_index]:g}, {y_values[observed_index]:.2f}):",
+            "label": f"Residual for the point ({x_obs:g}, {y_obs:.2f}):",
             "input_type": "number",
             "placeholder": "e = y − ŷ",
             "expected": [residual],
             "tolerance": 0.05,
-            "hint": r"Calculate the fitted response at this point's \(x\), then subtract: \(e=y-\hat{y}\).",
+            "hint": r"Subtract your predicted value from Step 3 from the observed y-value: \(e=y-\hat{y}\).",
         },
     ]
     return {
@@ -355,8 +359,8 @@ def generate_raw_data_regression_problem(notation_style: str = "ab") -> Dict[str
         "prompt": (
             f"Use the data on {x_name} and {y_name} to analyze the linear relationship."
             f"<br><br>{data_table}<br><br>Find the correlation, least-squares line, "
-            f"predicted {y_name} at x = {target_x:g}, and residual for the point "
-            f"({x_values[observed_index]:g}, {y_values[observed_index]:.2f}). "
+            f"predicted {y_name} at x = {x_obs:g}, and residual for the point "
+            f"({x_obs:g}, {y_obs:.2f}). "
             rf"Use \(\hat{{y}}={intercept_symbol}+{slope_symbol}x\), where "
             rf"\({intercept_symbol}\) is the intercept and \({slope_symbol}\) is the slope."
         ),
@@ -366,10 +370,10 @@ def generate_raw_data_regression_problem(notation_style: str = "ab") -> Dict[str
             rf"\(\bar{{y}}={y_mean:.3f}\), \(s_y={y_sd:.3f}\), and \(r={correlation:.4f}\).",
             rf"The slope is \({slope_symbol}=r\frac{{s_y}}{{s_x}}={slope:.4f}\), and the "
             rf"intercept is \({intercept_symbol}=\bar{{y}}-{slope_symbol}\bar{{x}}={intercept:.4f}\).",
-            rf"The fitted line is \(\hat{{y}}={intercept_symbol}+{slope_symbol}x\). At \(x={target_x:g}\), "
-            rf"\(\hat{{y}}={predicted_target:.2f}\). "
-            rf"For the identified point, \(e={y_values[observed_index]:.2f}"
-            rf"-{observed_prediction:.2f}={residual:.2f}\).",
+            rf"The fitted line is \(\hat{{y}}={intercept_symbol}+{slope_symbol}x\). At \(x={x_obs:g}\), "
+            rf"\(\hat{{y}}={predicted_obs:.2f}\). "
+            rf"For the identified point, \(e={y_obs:.2f}"
+            rf"-{predicted_obs:.2f}={residual:.2f}\).",
         ),
     }
 
