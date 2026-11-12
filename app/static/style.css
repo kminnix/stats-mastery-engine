@@ -570,15 +570,15 @@ header {
 }
 
 #floating-tables-window.is-snapped-right {
-    top: 0 !important;
-    bottom: 0 !important;
+    top: var(--dock-slot-top, 0px) !important;
+    bottom: auto !important;
     right: 0 !important;
     left: auto !important;
     width: var(--right-dock-w) !important;
     min-width: 0;
     max-width: none;
     max-height: none;
-    height: 100vh !important;
+    height: var(--dock-slot-height, 100vh) !important;
     border-radius: 0 !important;
     box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08) !important;
     border-right: none !important;
@@ -587,20 +587,38 @@ header {
 }
 
 #floating-tables-window.is-snapped-left {
-    top: 0 !important;
-    bottom: 0 !important;
+    top: var(--dock-slot-top, 0px) !important;
+    bottom: auto !important;
     left: 0 !important;
     right: auto !important;
     width: var(--left-dock-w) !important;
     min-width: 0;
     max-width: none;
     max-height: none;
-    height: 100vh !important;
+    height: var(--dock-slot-height, 100vh) !important;
     border-radius: 0 !important;
     box-shadow: 4px 0 16px rgba(0, 0, 0, 0.08) !important;
     border-left: none !important;
     border-top: none !important;
     border-bottom: none !important;
+}
+
+#floating-tables-window.is-snapped-bottom {
+    top: auto !important;
+    right: auto !important;
+    bottom: 0 !important;
+    left: var(--dock-slot-left, var(--left-dock-w)) !important;
+    width: var(--dock-slot-width, auto) !important;
+    height: var(--bottom-dock-h) !important;
+    min-width: 0;
+    min-height: 0;
+    max-width: none;
+    max-height: 85vh;
+    border-radius: 0 !important;
+    border-top: 2px solid #cbd5e1 !important;
+    border-right: none !important;
+    border-bottom: none !important;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08) !important;
 }
 
 /* Full height side tables alongside bottom calculator */
@@ -640,6 +658,8 @@ header {
     border: none;
     color: #94a3b8;
     font-size: 1.05rem;
+    font-weight: 400;
+    line-height: 1;
     cursor: pointer;
     padding: 3px 6px;
     border-radius: 4px;
@@ -704,7 +724,12 @@ header {
     border: 1px solid #cbd5e1;
     padding: 4px 6px;
     text-align: center;
+    cursor: pointer;
+    transition: background-color 0.1s ease;
 }
+.ap-table .hl-line { background-color: #dbeafe !important; color: #1e3a8a !important; }
+.ap-table .hl-header { background-color: #2563eb !important; color: #ffffff !important; font-weight: 700 !important; }
+.ap-table .hl-cell { background-color: #fde047 !important; color: #0f172a !important; font-weight: 700 !important; outline: 2px solid #ca8a04; }
 .ap-table th {
     background-color: #f1f5f9;
     position: sticky;
@@ -749,6 +774,15 @@ header {
     width: 6px;
     cursor: col-resize;
 }
+#floating-tables-window.is-snapped-bottom #tables-dock-resizer {
+    display: block;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    cursor: row-resize;
+}
+#floating-tables-window.is-snapped-bottom #window-resize-grip { display: none; }
 .window-resize-grip {
     position: absolute;
     right: 0;
@@ -764,6 +798,7 @@ header {
 /* DOCKED & FLOATING CALCULATOR                              */
 /* ========================================================= */
 #calc-dock {
+    --calc-dock-h: 330px;
     position: fixed;
     background: #163a2c !important;
     border-color: #2c5d4b !important;
@@ -772,7 +807,7 @@ header {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: space-between;
     overflow: hidden;
     box-sizing: border-box;
 }
@@ -780,29 +815,29 @@ header {
 /* Bottom Dock */
 #calc-dock.dock-bottom {
     bottom: 0 !important;
-    left: var(--left-dock-w) !important;
-    right: var(--right-dock-w) !important;
+    left: var(--dock-slot-left, var(--left-dock-w)) !important;
+    right: auto !important;
     top: auto !important;
-    height: var(--bottom-dock-h) !important;
-    min-height: 0 !important;
-    max-height: 85vh !important;
-    width: auto !important;
+    height: var(--calc-dock-h, 330px) !important;
+    min-height: 320px !important;
+    max-height: 520px !important;
+    width: var(--dock-slot-width, auto) !important;
     background: #163a2c !important;
     border-top: 2px solid #2c5d4b !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
-    justify-content: flex-start !important;
+    justify-content: space-between !important;
     border-radius: 0;
 }
 /* Left Dock */
 #calc-dock.dock-left {
-    top: 0 !important;
-    bottom: 0 !important;
+    top: var(--dock-slot-top, 0px) !important;
+    bottom: auto !important;
     left: 0 !important;
     right: auto !important;
     width: var(--left-dock-w) !important;
-    height: 100vh !important;
+    height: var(--dock-slot-height, 100vh) !important;
     border-right: 2px solid #2c5d4b !important;
     background: #163a2c !important;
     border-radius: 0;
@@ -810,12 +845,12 @@ header {
 
 /* Right Dock */
 #calc-dock.dock-right {
-    top: 0 !important;
-    bottom: 0 !important;
+    top: var(--dock-slot-top, 0px) !important;
+    bottom: auto !important;
     right: 0 !important;
     left: auto !important;
     width: var(--right-dock-w) !important;
-    height: 100vh !important;
+    height: var(--dock-slot-height, 100vh) !important;
     border-left: 2px solid #2c5d4b !important;
     background: #163a2c !important;
     border-radius: 0;
@@ -902,6 +937,7 @@ body.calculator-standalone #calc-dock-resizer,
     gap: 4px;
     flex: 1 1 auto !important;
     min-height: 0 !important;
+    overflow: hidden !important;
     background: transparent !important;
     border: none !important;
 }
@@ -912,6 +948,7 @@ body.calculator-standalone #calc-dock-resizer,
     width: 100% !important;
     margin-bottom: 4px !important;
     flex: 0 0 auto !important;
+    cursor: move;
 }
 .calc-dock-controls {
     display: flex;
@@ -926,6 +963,12 @@ body.calculator-standalone #calc-dock-resizer,
     border-radius: 4px;
     padding: 3px 6px;
     cursor: pointer;
+}
+.calc-dock-controls .calc-header-btn,
+.calc-header-icon {
+    font-size: 1.05rem;
+    font-weight: 400;
+    line-height: 1;
 }
 .calc-header-btn:hover { background: #f4f7f4; }
 .calc-header-btn.active {
@@ -952,9 +995,17 @@ body.calculator-standalone #calc-dock-resizer,
     padding: 0 !important;
     margin: 0 !important;
 }
+.calc-display-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    flex: 0 0 auto;
+}
+.calc-display-toolbar .calc-header-btn {
+    font-weight: 600;
+}
 .calc-history-list {
     width: 100% !important;
-    min-height: 36px !important;
+    min-height: 28px !important;
     max-height: none !important;
     flex: 1 1 auto !important;
     overflow-y: auto !important;
@@ -990,10 +1041,11 @@ body.calculator-standalone #calc-dock-resizer,
 #calc-mathfield {
     display: block !important;
     width: 100% !important;
-    height: auto !important;
+    height: 44px !important;
     min-height: 44px !important;
-    max-height: 150px !important;
-    flex: 0 0 auto !important;
+    max-height: 44px !important;
+    flex: 0 0 44px !important;
+    margin-bottom: 4px !important;
     background: #faf8f3 !important;
     color: #1a2421 !important;
     font-size: 1.3rem !important;
@@ -1006,6 +1058,7 @@ body.calculator-standalone #calc-dock-resizer,
     overflow-y: auto !important;
     overflow-x: auto !important;
     position: relative !important;
+    z-index: 2 !important;
 }
 input[type=number]::-webkit-inner-spin-button,
 input[type=number]::-webkit-outer-spin-button {
@@ -1036,12 +1089,14 @@ math-field::part(menu-toggle) {
 .calc-tray {
     width: 100% !important;
     max-width: 760px !important;
-    margin: 4px auto 8px auto !important;
+    margin: 2px auto 8px auto !important;
     display: grid !important;
     grid-template-columns: minmax(0, 4fr) minmax(0, 4fr) minmax(0, 2fr);
     gap: 6px !important;
     background: #1e4d3b !important;
     flex: 0 0 auto !important;
+    position: relative !important;
+    z-index: 1 !important;
 }
 
 #floating-stats-window {
@@ -1065,13 +1120,26 @@ math-field::part(menu-toggle) {
 }
 #floating-stats-window.stats-snap-left,
 #floating-stats-window.stats-snap-right {
-    top: 0 !important;
-    bottom: 0;
-    height: 100vh;
+    top: var(--dock-slot-top, 0px) !important;
+    bottom: auto !important;
+    height: var(--dock-slot-height, 100vh) !important;
     border-radius: 0;
 }
-#floating-stats-window.stats-snap-left { left: 0 !important; right: auto; width: var(--left-dock-w) !important; }
-#floating-stats-window.stats-snap-right { right: 0 !important; left: auto; width: var(--right-dock-w) !important; }
+#floating-stats-window.stats-snap-bottom {
+    top: auto !important;
+    right: auto !important;
+    bottom: 0 !important;
+    left: var(--dock-slot-left, var(--left-dock-w)) !important;
+    width: var(--dock-slot-width, auto) !important;
+    height: var(--bottom-dock-h) !important;
+    min-height: 0;
+    max-width: none;
+    max-height: 85vh;
+    border-radius: 0;
+    border-top: 2px solid #936037;
+}
+#floating-stats-window.stats-snap-left { left: 0 !important; right: auto !important; width: var(--left-dock-w) !important; }
+#floating-stats-window.stats-snap-right { right: 0 !important; left: auto !important; width: var(--right-dock-w) !important; }
 #floating-stats-window.is-maximized,
 body.stats-standalone #floating-stats-window {
     position: fixed;
@@ -1093,6 +1161,10 @@ body.stats-standalone #stats-resize-grip,
 #floating-stats-window.stats-snap-right #stats-dock-resizer {
     display: block; top: 0; bottom: 0; width: 6px; cursor: col-resize; touch-action: none;
 }
+#floating-stats-window.stats-snap-bottom #stats-dock-resizer {
+    display: block; top: 0; left: 0; right: 0; height: 6px; cursor: row-resize; touch-action: none;
+}
+#floating-stats-window.stats-snap-bottom #stats-resize-grip { display: none; }
 #floating-stats-window.stats-snap-left #stats-dock-resizer { right: 0; }
 #floating-stats-window.stats-snap-right #stats-dock-resizer { left: 0; }
 #floating-stats-window.stats-snap-left #stats-resize-grip,
@@ -1143,10 +1215,24 @@ body.stats-standalone #stats-resize-grip,
 .stats-data-table input.stats-var-name:hover,
 .stats-data-table input.stats-var-name:focus { border-color: #936037; outline: none; }
 .stats-categorical-scroll { max-height: 165px; overflow: auto; }
-#stats-categorical-table { table-layout: fixed; min-width: max(100%, 300px); }
-#stats-categorical-table th, #stats-categorical-table td { min-width: 90px; width: 110px; padding: 2px; }
+#stats-cat-two-table { table-layout: fixed; min-width: max(100%, 300px); }
+#stats-cat-two-table th, #stats-cat-two-table td { min-width: 90px; width: 110px; padding: 2px; }
+#stats-cat-one-table th, #stats-cat-one-table td { min-width: 90px; padding: 2px 4px; }
+#stats-cat-one-table th:nth-child(3), #stats-cat-one-table td:nth-child(3) { min-width: 30px; width: 30px; padding: 0; text-align: center; }
+.stats-cat-remove-row { border: 0; background: transparent; color: #64748b; font-size: 1rem; line-height: 1; cursor: pointer; padding: 4px; }
+.stats-cat-remove-row:hover:not(:disabled) { color: #b91c1c; }
+.stats-cat-remove-row:disabled, .stats-categorical-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+.stats-cat-one-layout { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr); gap: 10px; align-items: start; }
+@container (max-width: 480px) {
+    .stats-cat-one-layout { grid-template-columns: minmax(0, 1fr); }
+}
+.stats-cat-variable-label { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; font-size: 0.8rem; color: #1e4d3b; font-weight: 600; }
+.stats-cat-variable-label input { min-width: 0; width: 120px; }
+.stats-cat-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 8px; }
+.stats-cat-frequency-list { grid-column: 1 / -1; display: grid; gap: 3px; margin-top: 4px; font-size: 0.78rem; color: #1e293b; }
+.stats-cat-frequency-list > div { display: flex; justify-content: space-between; gap: 8px; padding: 3px 7px; background: #f1f5f9; border-radius: 4px; }
 .stats-categorical-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
-#stats-zero-columns { color: #475569; font-size: 0.75rem; }
+#stats-zero-groups { color: #475569; font-size: 0.75rem; }
 .stats-stemplot {
     flex: 1 0 200px;
     min-height: 200px;

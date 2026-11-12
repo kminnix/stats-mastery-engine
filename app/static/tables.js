@@ -2,6 +2,92 @@
 let isMaximized = false;
 let currentTablesDock = '';
 let savedFloatingRect = { left: 'auto', top: '75px', right: '25px', width: '600px', height: '520px' };
+const crosshairListeners = new WeakSet();
+const crosshairSelections = new WeakMap();
+
+function clearTableCrosshairs(table) {
+    table.querySelectorAll('th, td').forEach(cell => {
+        cell.classList.remove('hl-line', 'hl-header', 'hl-cell');
+    });
+    crosshairSelections.set(table, { selectedRowIdx: null, selectedColIdx: null });
+}
+
+function applyTableHighlights(table, selectedRowIdx, selectedColIdx) {
+    table.querySelectorAll('th, td').forEach(cell => {
+        cell.classList.remove('hl-line', 'hl-header', 'hl-cell');
+    });
+
+    const body = table.tBodies[0];
+    if (selectedRowIdx !== null) {
+        const row = body?.rows[selectedRowIdx];
+        if (row) {
+            Array.from(row.cells).forEach(cell => cell.classList.add('hl-line'));
+            row.cells[0]?.classList.add('hl-header');
+        }
+    }
+
+    if (selectedColIdx !== null) {
+        const headerRows = table.tHead?.rows;
+        headerRows?.[0]?.cells[selectedColIdx]?.classList.add('hl-header');
+        if (headerRows?.[1] && selectedColIdx > 0) {
+            headerRows[1].cells[selectedColIdx - 1]?.classList.add('hl-header');
+        }
+        Array.from(body?.rows || []).forEach(row => {
+            row.cells[selectedColIdx]?.classList.add('hl-line');
+        });
+    }
+
+    if (selectedRowIdx !== null && selectedColIdx !== null) {
+        const intersection = body?.rows[selectedRowIdx]?.cells[selectedColIdx];
+        intersection?.classList.remove('hl-line');
+        intersection?.classList.add('hl-cell');
+    }
+}
+
+function attachTableCrosshairs() {
+    document.querySelectorAll('#tab-table-a .ap-table, #tab-table-b .ap-table, #tab-table-c .ap-table')
+        .forEach(table => {
+            if (crosshairListeners.has(table)) return;
+            crosshairListeners.add(table);
+            crosshairSelections.set(table, { selectedRowIdx: null, selectedColIdx: null });
+            table.addEventListener('click', event => {
+                const cell = event.target.closest('td, th');
+                if (!cell || cell.closest('table') !== table) return;
+
+                const row = cell.parentElement;
+                const selection = crosshairSelections.get(table)
+                    || { selectedRowIdx: null, selectedColIdx: null };
+                let { selectedRowIdx, selectedColIdx } = selection;
+
+                if (cell.tagName === 'TD' && row.parentElement.tagName === 'TBODY') {
+                    const rowIdx = Array.prototype.indexOf.call(table.tBodies[0].rows, row);
+                    const colIdx = cell.cellIndex;
+                    if (colIdx === 0) {
+                        selectedRowIdx = selectedRowIdx === rowIdx ? null : rowIdx;
+                    } else if (selectedRowIdx === rowIdx && selectedColIdx === colIdx) {
+                        selectedRowIdx = null;
+                        selectedColIdx = null;
+                    } else {
+                        selectedRowIdx = rowIdx;
+                        selectedColIdx = colIdx;
+                    }
+                } else if (cell.tagName === 'TH' && row.parentElement.tagName === 'THEAD') {
+                    const colIdx = row.sectionRowIndex === 0 ? cell.cellIndex : cell.cellIndex + 1;
+                    if (colIdx <= 0) return;
+                    selectedColIdx = selectedColIdx === colIdx ? null : colIdx;
+                } else if (cell.tagName === 'TH' && row.parentElement.tagName === 'TBODY'
+                    && cell.cellIndex === 0) {
+                    const rowIdx = Array.prototype.indexOf.call(table.tBodies[0].rows, row);
+                    selectedRowIdx = selectedRowIdx === rowIdx ? null : rowIdx;
+                } else {
+                    return;
+                }
+
+                crosshairSelections.set(table, { selectedRowIdx, selectedColIdx });
+                applyTableHighlights(table, selectedRowIdx, selectedColIdx);
+            });
+        });
+}
 
 function getFloatingWindow() {
     return document.getElementById('floating-tables-window');
@@ -44,8 +130,8 @@ function closeFloatingWindow() {
     if (!win) return;
     win.style.display = 'none';
     window.dockManager.release('tables');
-    document.body.classList.remove('snap-mode-right', 'snap-mode-left');
-    win.classList.remove('is-snapped-right', 'is-snapped-left', 'is-maximized');
+    document.body.classList.remove('snap-mode-right', 'snap-mode-left', 'snap-mode-bottom');
+    win.classList.remove('is-snapped-right', 'is-snapped-left', 'is-snapped-bottom', 'is-maximized');
     isSnapped = false;
     isMaximized = false;
     currentTablesDock = '';
@@ -72,8 +158,8 @@ function applyTablesDock(side) {
     const win = getFloatingWindow();
     if (!win) return;
     clearWindowInlineStyles(win);
-    win.classList.remove('is-snapped-right', 'is-snapped-left', 'is-maximized');
-    document.body.classList.remove('snap-mode-right', 'snap-mode-left');
+    win.classList.remove('is-snapped-right', 'is-snapped-left', 'is-snapped-bottom', 'is-maximized');
+    document.body.classList.remove('snap-mode-right', 'snap-mode-left', 'snap-mode-bottom');
     if (side !== 'float') {
         win.classList.add(`is-snapped-${side}`);
         document.body.classList.add(`snap-mode-${side}`);
@@ -89,6 +175,11 @@ function applyTablesDock(side) {
 
 }
 window.dockManager.register('tables', applyTablesDock);
+function floatTablesWindow() {
+    window.dockManager.set('tables', 'float');
+}
+window.floatTablesWindow = floatTablesWindow;
+
 function snapWindow(side) {
     const win = getFloatingWindow();
     if (!win) return;
@@ -119,8 +210,8 @@ function toggleMaximizeWindow() {
         }
         clearWindowInlineStyles(win);
         window.dockManager.release('tables');
-        document.body.classList.remove('snap-mode-right', 'snap-mode-left');
-        win.classList.remove('is-snapped-right', 'is-snapped-left');
+        document.body.classList.remove('snap-mode-right', 'snap-mode-left', 'snap-mode-bottom');
+        win.classList.remove('is-snapped-right', 'is-snapped-left', 'is-snapped-bottom');
         win.classList.add('is-maximized');
         isMaximized = true;
         isSnapped = false;
@@ -143,6 +234,7 @@ function toggleMaximizeWindow() {
         win.style.width = savedFloatingRect.width || '600px';
         win.style.height = savedFloatingRect.height || '520px';
     }
+    window.dockManager.reflow();
 }
 window.toggleMaximizeWindow = toggleMaximizeWindow;
 
@@ -151,8 +243,8 @@ function unsnapToFloating(clientX, clientY) {
     if (!win) return;
 
     window.dockManager.release('tables');
-    win.classList.remove('is-snapped-right', 'is-snapped-left', 'is-maximized');
-    document.body.classList.remove('snap-mode-right', 'snap-mode-left');
+    win.classList.remove('is-snapped-right', 'is-snapped-left', 'is-snapped-bottom', 'is-maximized');
+    document.body.classList.remove('snap-mode-right', 'snap-mode-left', 'snap-mode-bottom');
     isSnapped = false;
     isMaximized = false;
     currentTablesDock = '';
@@ -188,6 +280,7 @@ function switchTab(tabId) {
     if (activeBtn) activeBtn.classList.add('active');
 
     if (tabId === 'tab-table-a') renderTableA();
+    attachTableCrosshairs();
 
     if (window.renderMathInElement && activePane) {
         renderMathInElement(activePane, {
@@ -220,6 +313,7 @@ function renderTableA() {
     const mode = modeSelect ? modeSelect.value : 'positive';
     const tableEl = document.getElementById('table-a-content');
     if (!tableEl) return;
+    clearTableCrosshairs(tableEl);
 
     const cols = [0.00, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09];
     let html = '<thead><tr><th>z</th>';
@@ -249,6 +343,7 @@ function renderTableA() {
     }
     html += '</tbody>';
     tableEl.innerHTML = html;
+    attachTableCrosshairs();
 
     const tablePane = tableEl.closest('.tab-pane');
     if (window.renderMathInElement && tablePane) {
@@ -265,6 +360,7 @@ function renderTableA() {
 window.renderTableA = renderTableA;
 
 window.addEventListener('DOMContentLoaded', () => {
+    attachTableCrosshairs();
     const win = getFloatingWindow();
     const titlebar = document.getElementById('window-titlebar');
     const grip = document.getElementById('window-resize-grip');
@@ -286,7 +382,7 @@ window.addEventListener('DOMContentLoaded', () => {
     let startX, startY, startLeft, startTop;
 
     titlebar.addEventListener('mousedown', (e) => {
-        if (e.target.tagName.toLowerCase() === 'button') return;
+        if (e.target.closest('button')) return;
         if (isSnapped || isMaximized) unsnapToFloating(e.clientX, e.clientY);
 
         isDragging = true;
@@ -317,20 +413,25 @@ window.addEventListener('DOMContentLoaded', () => {
     let dockResizeSide = '';
     let startDockW = 0;
     let startDockX = 0;
+    let startDockH = 0;
+    let startDockY = 0;
 
     if (dockResizer) {
         dockResizer.addEventListener('mousedown', (e) => {
             const isRight = win.classList.contains('is-snapped-right');
             const isLeft = win.classList.contains('is-snapped-left');
-            if (!isRight && !isLeft) return;
+            const isBottom = win.classList.contains('is-snapped-bottom');
+            if (!isRight && !isLeft && !isBottom) return;
 
             const rect = win.getBoundingClientRect();
             isTablesDockResizing = true;
-            dockResizeSide = isRight ? 'right' : 'left';
+            dockResizeSide = isBottom ? 'bottom' : isRight ? 'right' : 'left';
             startDockX = e.clientX;
             startDockW = rect.width;
+            startDockY = e.clientY;
+            startDockH = rect.height;
             document.body.style.userSelect = 'none';
-            document.body.style.cursor = 'col-resize';
+            document.body.style.cursor = isBottom ? 'row-resize' : 'col-resize';
             e.stopPropagation();
             e.preventDefault();
         });
@@ -344,6 +445,8 @@ window.addEventListener('DOMContentLoaded', () => {
         } else if (dockResizeSide === 'left') {
             const dw = e.clientX - startDockX;
             window.dockManager.resize('tables', startDockW + dw);
+        } else if (dockResizeSide === 'bottom') {
+            window.dockManager.resize('tables', startDockH + startDockY - e.clientY);
         }
     });
 

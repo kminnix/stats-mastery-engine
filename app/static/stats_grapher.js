@@ -4,13 +4,30 @@
         plot: { one: 'histogram', two: 'scatterplot', categorical: 'mosaic' },
         rows: { one: [['']], two: [['', '']] },
         stems: 'single',
-        categories: { rows: ['Group A', 'Group B'], columns: ['Yes', 'No'], counts: [['', ''], ['', '']] },
+        categories: {
+            orientation: 'response-rows',
+            view: 'one',
+            variableName: 'Category',
+            one: {
+                categories: ['Category A', 'Category B', 'Category C'],
+                counts: ['', '', '']
+            },
+            rows: ['Yes', 'No'],
+            columns: ['Group A', 'Group B'],
+            counts: [['', ''], ['', '']],
+            barMode: 'counts'
+        },
         dock: null
     };
     const plots = {
         one: [['histogram', 'Histogram'], ['dotplot', 'Dotplot'], ['boxplot', 'Boxplot'], ['stemplot', 'Stemplot']],
         two: [['scatterplot', 'Scatterplot'], ['residual', 'Residual Plot'], ['residual-dotplot', 'Residual Dotplot']],
-        categorical: []
+        categorical: [
+            ['bar', 'Bar Chart'],
+            ['segmented', 'Segmented Bar'],
+            ['mosaic', 'Mosaic Plot'],
+            ['pie', 'Pie Chart']
+        ]
     };
     const ns = 'http://www.w3.org/2000/svg';
     const colors = { green: '#1E4D3B', brown: '#936037', cream: '#FAF8F3' };
@@ -68,16 +85,41 @@
             && Array.isArray(categories.columns) && categories.columns.length > 0
             && categories.columns.every(value => typeof value === 'string')
             && Array.isArray(categories.counts) && categories.counts.length === categories.rows.length
-            && validRows(categories.counts, categories.columns.length);
+            && validRows(categories.counts, categories.columns.length)
+            && (!categories.one || (
+                Array.isArray(categories.one.categories) && categories.one.categories.length > 0
+                && categories.one.categories.every(value => typeof value === 'string')
+                && Array.isArray(categories.one.counts)
+                && categories.one.counts.length === categories.one.categories.length
+                && categories.one.counts.every(value => typeof value === 'string')
+            ));
         if (!payload || !validRows(payload.rows?.one, 1) || !validRows(payload.rows?.two, 2)
             || !validCategories || !payload.names || !nameIds.every(id => typeof payload.names[id] === 'string')) {
             storageError('Saved Stats & Graphing data has an invalid format and was not loaded.', new Error('Invalid saved state'));
             return;
         }
         state.rows = payload.rows;
-        state.categories = categories;
+        state.categories = {
+            ...categories,
+            orientation: 'response-rows',
+            view: categories.view === 'one' ? 'one' : 'two',
+            variableName: typeof categories.variableName === 'string'
+                ? categories.variableName : 'Category',
+            one: categories.one || {
+                categories: ['Category A', 'Category B', 'Category C'],
+                counts: ['', '', '']
+            },
+            barMode: categories.barMode === 'percent' ? 'percent' : 'counts'
+        };
+        if (categories.orientation !== 'response-rows') {
+            state.categories.rows = categories.columns;
+            state.categories.columns = categories.rows;
+            state.categories.counts = categories.columns.map((_, column) =>
+                categories.rows.map((__, row) => categories.counts[row][column])
+            );
+        }
         if (Object.hasOwn(plots, payload.mode)) state.mode = payload.mode;
-        for (const mode of ['one', 'two']) {
+        for (const mode of ['one', 'two', 'categorical']) {
             if (plots[mode].some(([id]) => id === payload.plot?.[mode])) state.plot[mode] = payload.plot[mode];
         }
         if (payload.stems === 'split') state.stems = 'split';
@@ -309,129 +351,451 @@
 
     function renderCategories() {
         const data = state.categories;
-        const table = element('stats-categorical-table');
-        table.replaceChildren();
-        const head = document.createElement('thead');
-        const header = document.createElement('tr');
-        header.appendChild(document.createElement('th'));
-        const makeInput = (value, label, onInput) => {
+        const oneVariable = data.view === 'one';
+        element('stats-remove-row').disabled = data.rows.length <= 2;
+        element('stats-remove-col').disabled = data.columns.length <= 2;
+        element('stats-cat-one-panel').hidden = !oneVariable;
+        element('stats-cat-two-panel').hidden = oneVariable;
+        element('stats-cat-mode-tabs').querySelectorAll('button').forEach(button => {
+            button.classList.toggle('active', button.dataset.catView === data.view);
+        });
+
+        const makeInput = (value, label, onInput, numeric = false) => {
             const input = document.createElement('input');
             input.type = 'text';
             input.value = value;
+            if (numeric) input.inputMode = 'numeric';
             input.setAttribute('aria-label', label);
             input.addEventListener('input', () => { onInput(input.value); update(); });
             return input;
         };
+
+        if (oneVariable) {
+            element('stats-cat-variable-name').value = data.variableName;
+            const body = element('stats-cat-one-table').tBodies[0];
+            body.replaceChildren();
+            data.one.categories.forEach((name, index) => {
+                const row = body.insertRow();
+                const categoryCell = row.insertCell();
+                categoryCell.appendChild(makeInput(
+                    name,
+                    `Category ${index + 1} name`,
+                    value => { data.one.categories[index] = value; }
+                ));
+                const countCell = row.insertCell();
+                countCell.appendChild(makeInput(
+                    data.one.counts[index],
+                    `Count for category ${index + 1}`,
+                    value => { data.one.counts[index] = value; },
+                    true
+                ));
+                const actionCell = row.insertCell();
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'stats-cat-remove-row';
+                remove.textContent = '×';
+                remove.title = `Remove ${name || `category ${index + 1}`}`;
+                remove.setAttribute('aria-label', `Remove category ${index + 1}`);
+                remove.dataset.removeCategory = String(index);
+                remove.disabled = data.one.categories.length <= 2;
+                actionCell.appendChild(remove);
+            });
+            return;
+        }
+
+        const table = element('stats-cat-two-table');
+        table.replaceChildren();
+        const head = table.createTHead();
+        const header = head.insertRow();
+        const responseHeading = document.createElement('th');
+        responseHeading.scope = 'col';
+        responseHeading.textContent = 'Response';
+        header.appendChild(responseHeading);
         data.columns.forEach((name, col) => {
             const cell = document.createElement('th');
             cell.scope = 'col';
-            const input = makeInput(name, `Column ${col + 1} category`, value => { data.columns[col] = value; });
+            const input = makeInput(name, `Group ${col + 1} name`, value => { data.columns[col] = value; });
             input.className = 'stats-var-name';
             cell.appendChild(input);
             header.appendChild(cell);
         });
-        head.appendChild(header);
-        table.appendChild(head);
-        const body = document.createElement('tbody');
-        data.rows.forEach((name, row) => {
-            const tr = document.createElement('tr');
+        const body = table.createTBody();
+        data.rows.forEach((name, rowIndex) => {
+            const row = body.insertRow();
             const heading = document.createElement('th');
             heading.scope = 'row';
-            const input = makeInput(name, `Row ${row + 1} category`, value => { data.rows[row] = value; });
+            const input = makeInput(name, `Response ${rowIndex + 1} name`, value => { data.rows[rowIndex] = value; });
             input.className = 'stats-var-name';
             heading.appendChild(input);
-            tr.appendChild(heading);
-            data.columns.forEach((_, col) => {
+            row.appendChild(heading);
+            data.columns.forEach((_, colIndex) => {
                 const cell = document.createElement('td');
-                const count = makeInput(data.counts[row][col], `Count row ${row + 1} column ${col + 1}`, value => { data.counts[row][col] = value; });
-                count.inputMode = 'numeric';
+                const count = makeInput(
+                    data.counts[rowIndex][colIndex],
+                    `Count for response ${rowIndex + 1}, group ${colIndex + 1}`,
+                    value => { data.counts[rowIndex][colIndex] = value; },
+                    true
+                );
                 cell.appendChild(count);
-                tr.appendChild(cell);
+                row.appendChild(cell);
             });
-            body.appendChild(tr);
         });
-        table.appendChild(body);
     }
 
-    function drawMosaic() {
+    function categoricalCounts() {
         const data = state.categories;
-        const zeroColumns = element('stats-zero-columns');
-        zeroColumns.textContent = '';
-        const counts = data.counts.map(row => row.map(value => value.trim() === '' ? 0 : Number(value)));
-        if (data.counts.some((row, i) => row.some((value, j) =>
-            value.trim() !== '' && (!/^\d+$/.test(value.trim()) || !Number.isSafeInteger(counts[i][j]))))) {
+        const oneVariable = data.view === 'one';
+        const source = oneVariable ? data.one.counts : data.counts;
+        const counts = source.map(value => {
+            const values = Array.isArray(value) ? value : [value];
+            return values.map(raw => {
+                const text = raw.trim();
+                if (!text) return 0;
+                if (!/^\d+$/.test(text)) return null;
+                const count = Number(text);
+                return Number.isSafeInteger(count) ? count : null;
+            });
+        });
+        if (counts.some(row => row.some(count => count === null))) {
             element('stats-error').textContent = 'Counts must be non-negative whole numbers.';
-            return;
+            return null;
         }
-        const totals = data.columns.map((_, col) => counts.reduce((sum, row) => sum + row[col], 0));
-        const emptyNames = data.columns.filter((_, col) => totals[col] === 0)
-            .map(name => name.trim() || 'Unnamed column');
-        if (emptyNames.length) zeroColumns.textContent = `Zero-total columns (no plot width): ${emptyNames.join(', ')}`;
-        const grandTotal = totals.reduce((sum, value) => sum + value, 0);
-        if (!Number.isSafeInteger(grandTotal)) {
+        const values = oneVariable ? counts.map(row => row[0]) : counts;
+        const total = oneVariable
+            ? values.reduce((sum, count) => sum + count, 0)
+            : data.columns.reduce((sum, _, col) =>
+                sum + counts.reduce((columnSum, row) => columnSum + row[col], 0), 0);
+        if (!Number.isSafeInteger(total)) {
             element('stats-error').textContent = 'The total count is too large.';
+            return null;
+        }
+        const groupTotals = oneVariable ? [] : data.columns.map((_, col) =>
+            counts.reduce((sum, row) => sum + row[col], 0)
+        );
+        if (groupTotals.some(groupTotal => !Number.isSafeInteger(groupTotal))) {
+            element('stats-error').textContent = 'The total count is too large.';
+            return null;
+        }
+        return {
+            oneVariable,
+            labels: oneVariable ? data.one.categories : data.rows,
+            counts: oneVariable ? values : counts,
+            groupNames: oneVariable ? [] : data.columns,
+            groupTotals,
+            total
+        };
+    }
+
+    const categoryColors = ['#1E4D3B', '#936037', '#E5B842', '#4A7C59', '#447C8A', '#8A5E78', '#B66B3D'];
+    const categoryColor = index => categoryColors[index % categoryColors.length];
+    const shortCategory = (name, limit = 12) => {
+        const value = name.trim() || 'Unnamed';
+        return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
+    };
+
+    function addSvgTitle(node, text) {
+        const title = document.createElementNS(ns, 'title');
+        title.textContent = text;
+        node.appendChild(title);
+    }
+
+    function drawCategoricalLegend(labels, y = 350) {
+        let x = 65;
+        let rowY = y;
+        labels.forEach((label, index) => {
+            const width = 24 + Math.min(label.length, 22) * 6.5;
+            if (x + width > 620) {
+                x = 65;
+                rowY += 18;
+            }
+            svg('rect', { x, y: rowY - 10, width: 12, height: 12, fill: categoryColor(index) });
+            const text = svg('text', { x: x + 17, y: rowY }, shortCategory(label, 22));
+            addSvgTitle(text, label);
+            x += width;
+        });
+        if (labels.length) {
+            element('stats-plot').setAttribute('viewBox', `0 0 640 ${Math.max(360, rowY + 12)}`);
+        }
+    }
+
+    function drawCategoricalYAxis(maxValue, label) {
+        const scaleInfo = computeNiceScale(0, Math.max(1, maxValue));
+        const top = 45;
+        const bottom = 300;
+        const yAt = value => bottom - value / scaleInfo.max * (bottom - top);
+        svg('line', { x1: 65, y1: bottom, x2: 620, y2: bottom, stroke: colors.green });
+        svg('line', { x1: 65, y1: bottom, x2: 65, y2: top, stroke: colors.green });
+        scaleInfo.ticks.forEach(value => {
+            const y = yAt(value);
+            svg('line', { x1: 60, x2: 620, y1: y, y2: y, stroke: '#d8e1da' });
+            svg('text', { x: 55, y: y + 4, 'text-anchor': 'end' }, format(value));
+        });
+        svg('text', { x: 14, y: 170, transform: 'rotate(-90 14 170)', 'text-anchor': 'middle' }, label);
+        return { yAt, bottom };
+    }
+
+    function renderCategoricalSummary(data) {
+        const output = element('stats-cat-one-summary');
+        output.replaceChildren();
+        if (!data.oneVariable) return;
+        const makeSummary = (label, value) => {
+            const item = document.createElement('div');
+            item.className = 'stats-card';
+            const caption = document.createElement('span');
+            caption.className = 'stats-card-label';
+            caption.textContent = label;
+            const result = document.createElement('strong');
+            result.textContent = value;
+            item.append(caption, result);
+            output.appendChild(item);
+        };
+        const maxCount = Math.max(...data.counts);
+        const mode = data.total && maxCount
+            ? data.labels.filter((_, index) => data.counts[index] === maxCount)
+                .map(name => name.trim() || 'Unnamed category').join(', ')
+            : '—';
+        makeSummary('Total n', String(data.total));
+        makeSummary('Mode', mode);
+        const breakdown = document.createElement('div');
+        breakdown.className = 'stats-cat-frequency-list';
+        data.labels.forEach((name, index) => {
+            const item = document.createElement('div');
+            const frequency = data.counts[index];
+            const relative = data.total ? `${format(100 * frequency / data.total)}%` : '—';
+            item.textContent = `${name.trim() || `Category ${index + 1}`}: ${frequency} (${relative})`;
+            breakdown.appendChild(item);
+        });
+        output.appendChild(breakdown);
+    }
+
+    function drawCategoricalBars(data) {
+        const percentMode = state.categories.barMode === 'percent';
+        const oneVariable = data.oneVariable;
+        const countValues = oneVariable
+            ? data.counts
+            : data.counts.flatMap(row => row);
+        const maxValue = percentMode ? 100 : Math.max(1, ...countValues);
+        const { yAt, bottom } = drawCategoricalYAxis(maxValue, percentMode ? 'Percent (%)' : 'Count');
+        const slot = 545 / data.labels.length;
+        if (oneVariable) {
+            data.labels.forEach((name, index) => {
+                const value = percentMode
+                    ? (data.total ? 100 * data.counts[index] / data.total : 0)
+                    : data.counts[index];
+                const width = Math.min(60, slot * 0.66);
+                const x = 65 + slot * (index + 0.5) - width / 2;
+                const rect = svg('rect', {
+                    x, y: yAt(value), width, height: bottom - yAt(value),
+                    fill: categoryColor(index), stroke: colors.cream
+                });
+                addSvgTitle(rect, `${name}: ${data.counts[index]} (${data.total ? format(100 * data.counts[index] / data.total) : 0}%)`);
+                const text = svg('text', { x: 65 + slot * (index + 0.5), y: 324, 'text-anchor': 'middle' }, shortCategory(name));
+                addSvgTitle(text, name);
+            });
             return;
         }
-        if (!grandTotal) {
-            element('stats-error').textContent = 'Enter at least one positive count to display the mosaic plot.';
-            return;
-        }
-        const palette = ['#1E4D3B', '#936037', '#E5B842', '#4A7C59'];
-        const fills = data.rows.map((_, row) => {
-            const base = palette[row % palette.length];
-            if (row < palette.length) return base;
-            const pattern = svg('pattern', { id: `mosaic-pattern-${row}`, patternUnits: 'userSpaceOnUse', width: 8, height: 8 });
-            const background = document.createElementNS(ns, 'rect');
-            background.setAttribute('width', '8');
-            background.setAttribute('height', '8');
-            background.setAttribute('fill', base);
-            const stripe = document.createElementNS(ns, 'path');
-            stripe.setAttribute('d', row % 8 < 4 ? 'M0 0 L8 8 M-4 4 L4 12 M4 -4 L12 4' : 'M8 0 L0 8 M4 -4 L-4 4 M12 4 L4 12');
-            stripe.setAttribute('stroke', row % 4 === 2 ? '#1E4D3B' : '#FAF8F3');
-            stripe.setAttribute('stroke-width', String(1 + Math.floor(row / 8)));
-            pattern.append(background, stripe);
-            return `url(#mosaic-pattern-${row})`;
+
+        const groupCount = data.groupNames.length;
+        data.labels.forEach((response, row) => {
+            const clusterWidth = Math.min(slot * 0.84, 100);
+            const barWidth = clusterWidth / Math.max(1, groupCount);
+            const startX = 65 + slot * (row + 0.5) - clusterWidth / 2;
+            data.groupNames.forEach((group, col) => {
+                const count = data.counts[row][col];
+                const value = percentMode
+                    ? (data.groupTotals[col] ? 100 * count / data.groupTotals[col] : 0)
+                    : count;
+                const rect = svg('rect', {
+                    x: startX + col * barWidth, y: yAt(value),
+                    width: Math.max(1, barWidth - 2), height: bottom - yAt(value),
+                    fill: categoryColor(col), stroke: colors.cream
+                });
+                addSvgTitle(rect, `${group} — ${response}: ${count} (${data.groupTotals[col] ? format(100 * count / data.groupTotals[col]) : 0}%)`);
+            });
+            const text = svg('text', { x: 65 + slot * (row + 0.5), y: 324, 'text-anchor': 'middle' }, shortCategory(response));
+            addSvgTitle(text, response);
         });
-        const legendRows = Math.ceil(data.rows.length / 3);
-        const top = 25 + legendRows * 22;
-        const bottom = top + 230;
-        element('stats-plot').setAttribute('viewBox', `0 0 640 ${bottom + 55}`);
-        const short = (text, limit) => text.length > limit ? `${text.slice(0, Math.max(0, limit - 1))}…` : text;
-        data.rows.forEach((name, row) => {
-            const x = 20 + (row % 3) * 205, y = 16 + Math.floor(row / 3) * 22;
-            svg('rect', { x, y: y - 10, width: 12, height: 12, fill: fills[row] });
-            const label = svg('text', { x: x + 17, y }, short(name.trim() || `Group ${row + 1}`, 22));
-            const title = document.createElementNS(ns, 'title');
-            title.textContent = name;
-            label.appendChild(title);
-        });
-        const nonzeroColumns = totals.filter(total => total > 0).length;
-        const gap = Math.min(3, 540 / Math.max(1, nonzeroColumns - 1));
-        const width = Math.max(0, 540 - gap * Math.max(0, nonzeroColumns - 1));
-        let left = 60;
-        totals.forEach((total, col) => {
-            if (!total) return;
-            const columnWidth = width * total / grandTotal;
+        drawCategoricalLegend(data.groupNames);
+    }
+
+    function drawSegmentedBars(data) {
+        const bottom = 300;
+        const top = 65;
+        const height = bottom - top;
+        const barCount = data.oneVariable ? 1 : data.groupNames.length;
+        const barWidth = data.oneVariable ? 420 : Math.min(100, 430 / Math.max(1, barCount));
+        const startX = data.oneVariable ? 110 : 65;
+
+        Array.from({ length: barCount }, (_, barIndex) => {
+            const x = data.oneVariable
+                ? startX
+                : 65 + 545 / barCount * (barIndex + 0.5) - barWidth / 2;
             let y = bottom;
-            counts.forEach((row, index) => {
-                const height = 230 * row[col] / total;
-                y -= height;
-                if (!height) return;
-                const rect = svg('rect', { x: left, y, width: columnWidth, height, fill: fills[index], stroke: colors.cream });
-                const title = document.createElementNS(ns, 'title');
-                title.textContent = `${data.rows[index] || `Group ${index + 1}`}: ${row[col]} (${format(100 * row[col] / total)}%)`;
-                rect.appendChild(title);
-                const text = `${row[col]} (${format(100 * row[col] / total)}%)`;
-                if (height >= 20 && columnWidth >= text.length * 7 + 4) {
-                    svg('text', { x: left + columnWidth / 2, y: y + height / 2 + 4, 'text-anchor': 'middle', class: index % 4 === 2 ? 'mosaic-dark-label' : 'mosaic-light-label' }, text);
+            if (data.oneVariable) {
+                data.labels.forEach((name, index) => {
+                    const count = data.counts[index];
+                    const segmentHeight = data.total ? height * count / data.total : 0;
+                    y -= segmentHeight;
+                    if (!segmentHeight) return;
+                    const rect = svg('rect', { x, y, width: barWidth, height: segmentHeight,
+                        fill: categoryColor(index), stroke: colors.cream });
+                    const percentage = 100 * count / data.total;
+                    addSvgTitle(rect, `${name}: ${count} (${format(percentage)}%)`);
+                    if (segmentHeight >= 24) {
+                        svg('text', { x: x + barWidth / 2, y: y + segmentHeight / 2 + 4,
+                            'text-anchor': 'middle', class: index % 3 === 2 ? 'mosaic-dark-label' : 'mosaic-light-label' },
+                        `${format(percentage)}%`);
+                    }
+                });
+            } else {
+                data.labels.forEach((response, row) => {
+                    const count = data.counts[row][barIndex];
+                    const groupTotal = data.groupTotals[barIndex];
+                    const segmentHeight = groupTotal ? height * count / groupTotal : 0;
+                    y -= segmentHeight;
+                    if (!segmentHeight) return;
+                    const rect = svg('rect', { x, y, width: barWidth, height: segmentHeight,
+                        fill: categoryColor(row), stroke: colors.cream });
+                    const percentage = 100 * count / groupTotal;
+                    addSvgTitle(rect, `${data.groupNames[barIndex]} — ${response}: ${count} (${format(percentage)}%)`);
+                    if (segmentHeight >= 24) {
+                        svg('text', { x: x + barWidth / 2, y: y + segmentHeight / 2 + 4,
+                            'text-anchor': 'middle', class: row % 3 === 2 ? 'mosaic-dark-label' : 'mosaic-light-label' },
+                        `${format(percentage)}%`);
+                    }
+                });
+                const label = svg('text', { x: x + barWidth / 2, y: bottom + 20, 'text-anchor': 'middle' },
+                    shortCategory(data.groupNames[barIndex]));
+                addSvgTitle(label, data.groupNames[barIndex]);
+            }
+        });
+        drawCategoricalLegend(data.labels);
+    }
+
+    function drawCategoricalMosaic(data) {
+        const top = 55;
+        const bottom = 300;
+        const height = bottom - top;
+        if (data.oneVariable) {
+            let x = 60;
+            const width = 550;
+            data.labels.forEach((name, index) => {
+                const count = data.counts[index];
+                const segmentWidth = width * count / data.total;
+                if (!segmentWidth) return;
+                const rect = svg('rect', { x, y: top, width: segmentWidth, height,
+                    fill: categoryColor(index), stroke: colors.cream });
+                const percentage = 100 * count / data.total;
+                addSvgTitle(rect, `${name}: ${count} (${format(percentage)}%)`);
+                if (segmentWidth >= 48) {
+                    svg('text', { x: x + segmentWidth / 2, y: top + height / 2,
+                        'text-anchor': 'middle', class: index % 3 === 2 ? 'mosaic-dark-label' : 'mosaic-light-label' },
+                    `${shortCategory(name, 10)} ${format(percentage)}%`);
+                }
+                x += segmentWidth;
+            });
+            return;
+        }
+
+        const nonzeroGroups = data.groupTotals.filter(total => total > 0).length;
+        const gap = Math.min(4, 540 / Math.max(1, nonzeroGroups - 1));
+        const availableWidth = 540 - gap * Math.max(0, nonzeroGroups - 1);
+        let x = 60;
+        data.groupTotals.forEach((groupTotal, col) => {
+            if (!groupTotal) return;
+            const columnWidth = availableWidth * groupTotal / data.total;
+            let y = bottom;
+            data.labels.forEach((response, row) => {
+                const count = data.counts[row][col];
+                const segmentHeight = height * count / groupTotal;
+                y -= segmentHeight;
+                if (!segmentHeight) return;
+                const rect = svg('rect', { x, y, width: columnWidth, height: segmentHeight,
+                    fill: categoryColor(row), stroke: colors.cream });
+                const percentage = 100 * count / groupTotal;
+                addSvgTitle(rect, `${data.groupNames[col]} — ${response}: ${count} (${format(percentage)}%)`);
+                const text = `${format(percentage)}%`;
+                if (segmentHeight >= 22 && columnWidth >= text.length * 7 + 4) {
+                    svg('text', { x: x + columnWidth / 2, y: y + segmentHeight / 2 + 4,
+                        'text-anchor': 'middle', class: row % 3 === 2 ? 'mosaic-dark-label' : 'mosaic-light-label' }, text);
                 }
             });
-            const label = svg('text', { x: left + columnWidth / 2, y: bottom + 20, 'text-anchor': 'middle' }, short(data.columns[col].trim() || `Column ${col + 1}`, Math.max(1, Math.floor(columnWidth / 7))));
-            const title = document.createElementNS(ns, 'title');
-            title.textContent = data.columns[col];
-            label.appendChild(title);
-            left += columnWidth + gap;
+            const label = svg('text', { x: x + columnWidth / 2, y: bottom + 20, 'text-anchor': 'middle' },
+                shortCategory(data.groupNames[col], Math.max(1, Math.floor(columnWidth / 7))));
+            addSvgTitle(label, data.groupNames[col]);
+            x += columnWidth + gap;
         });
+        drawCategoricalLegend(data.labels);
+    }
+
+    function drawCategoricalPie(data) {
+        const counts = data.oneVariable
+            ? data.counts
+            : data.labels.map((_, row) =>
+                data.counts[row].reduce((sum, count) => sum + count, 0)
+            );
+        const labels = data.labels;
+        const cx = 180, cy = 175, radius = 125;
+        let angle = -Math.PI / 2;
+        const positive = counts.map((count, index) => ({ count, index })).filter(item => item.count > 0);
+        if (positive.length === 1) {
+            svg('circle', { cx, cy, r: radius, fill: categoryColor(positive[0].index), stroke: colors.cream });
+            addSvgTitle(element('stats-plot').lastChild, `${labels[positive[0].index]}: 100%`);
+        } else {
+            positive.forEach(({ count, index }) => {
+                const nextAngle = angle + 2 * Math.PI * count / data.total;
+                const startX = cx + radius * Math.cos(angle);
+                const startY = cy + radius * Math.sin(angle);
+                const endX = cx + radius * Math.cos(nextAngle);
+                const endY = cy + radius * Math.sin(nextAngle);
+                const largeArc = nextAngle - angle > Math.PI ? 1 : 0;
+                const path = svg('path', {
+                    d: `M ${cx} ${cy} L ${startX} ${startY} A ${radius} ${radius} 0 ${largeArc} 1 ${endX} ${endY} Z`,
+                    fill: categoryColor(index),
+                    stroke: colors.cream
+                });
+                addSvgTitle(path, `${labels[index]}: ${count} (${format(100 * count / data.total)}%)`);
+                const middle = (angle + nextAngle) / 2;
+                if (nextAngle - angle >= 0.28) {
+                    svg('text', { x: cx + radius * 0.65 * Math.cos(middle),
+                        y: cy + radius * 0.65 * Math.sin(middle) + 4,
+                        'text-anchor': 'middle', class: index % 3 === 2 ? 'mosaic-dark-label' : 'mosaic-light-label' },
+                    `${format(100 * count / data.total)}%`);
+                }
+                angle = nextAngle;
+            });
+        }
+        labels.forEach((name, index) => {
+            const y = 60 + index * 24;
+            svg('rect', { x: 360, y: y - 10, width: 14, height: 14, fill: categoryColor(index) });
+            const count = counts[index];
+            const text = svg('text', { x: 382, y }, `${shortCategory(name, 24)}: ${count} (${format(100 * count / data.total)}%)`);
+            addSvgTitle(text, `${name}: ${count} (${format(100 * count / data.total)}%)`);
+        });
+        element('stats-plot').setAttribute('viewBox', `0 0 640 ${Math.max(360, 75 + labels.length * 24)}`);
+    }
+
+    function updateCategorical() {
+        const zeroGroups = element('stats-zero-groups');
+        zeroGroups.textContent = '';
+        const data = categoricalCounts();
+        if (!data) {
+            element('stats-cat-one-summary').replaceChildren();
+            return;
+        }
+        renderCategoricalSummary(data);
+        if (!data.total) {
+            element('stats-error').textContent = 'Enter at least one positive count to display a chart.';
+            return;
+        }
+        if (!data.oneVariable) {
+            const emptyGroups = data.groupNames.filter((_, index) => data.groupTotals[index] === 0);
+            if (emptyGroups.length) zeroGroups.textContent = `Zero-total groups (no plot width): ${emptyGroups.join(', ')}`;
+        }
+        if (state.plot.categorical === 'bar') drawCategoricalBars(data);
+        else if (state.plot.categorical === 'segmented') drawSegmentedBars(data);
+        else if (state.plot.categorical === 'pie') drawCategoricalPie(data);
+        else drawCategoricalMosaic(data);
     }
 
     function drawOne(info) {
@@ -512,8 +876,13 @@
         output.replaceChildren();
         const error = element('stats-error');
         error.textContent = '';
+        const categoryControls = element('stats-cat-chart-controls');
+        categoryControls.hidden = state.mode !== 'categorical' || state.plot.categorical !== 'bar';
+        categoryControls.querySelectorAll('button').forEach(button => {
+            button.classList.toggle('active', button.dataset.catBarMode === state.categories.barMode);
+        });
         if (state.mode === 'categorical') {
-            drawMosaic();
+            updateCategorical();
             return;
         }
         const data = [];
@@ -590,12 +959,13 @@
         maximizedFrom = null;
         win.classList.remove('is-maximized');
         element('btn-stats-maximize').textContent = '🗖';
-        win.classList.remove('stats-snap-left', 'stats-snap-right');
-        document.body.classList.remove('stats-docked-left', 'stats-docked-right');
+        win.classList.remove('stats-snap-left', 'stats-snap-right', 'stats-snap-bottom');
+        document.body.classList.remove('stats-docked-left', 'stats-docked-right', 'stats-docked-bottom');
         state.dock = mode === 'float' ? null : mode;
         win.style.left = '';
         win.style.right = '';
         win.style.top = '';
+        win.style.bottom = '';
         win.style.width = '';
         win.style.height = '';
         if (state.dock) {
@@ -677,47 +1047,128 @@
         element('stats-stem-controls').querySelector(`[data-stems="${state.stems}"]`).classList.add('active');
         element('stats-add-row').addEventListener('click', () => {
             const data = state.categories;
-            data.rows.push(`Group ${data.rows.length + 1}`);
+            data.rows.push(`Response ${data.rows.length + 1}`);
             data.counts.push(data.columns.map(() => ''));
             renderCategories();
             update();
         });
+        element('stats-remove-row').addEventListener('click', () => {
+            const data = state.categories;
+            if (data.rows.length <= 2) return;
+            data.rows.pop();
+            data.counts.pop();
+            renderCategories();
+            update();
+            saveStatsState();
+        });
         element('stats-add-col').addEventListener('click', () => {
             const data = state.categories;
-            data.columns.push(`Column ${data.columns.length + 1}`);
+            data.columns.push(`Group ${data.columns.length + 1}`);
             data.counts.forEach(row => row.push(''));
             renderCategories();
             update();
+        });
+        element('stats-remove-col').addEventListener('click', () => {
+            const data = state.categories;
+            if (data.columns.length <= 2) return;
+            data.columns.pop();
+            data.counts.forEach(row => row.pop());
+            renderCategories();
+            update();
+            saveStatsState();
         });
         element('stats-clear-categorical').addEventListener('click', () => {
             state.categories.counts = state.categories.rows.map(() => state.categories.columns.map(() => ''));
             renderCategories();
             update();
         });
+        element('stats-cat-mode-tabs').addEventListener('click', event => {
+            const view = event.target.dataset.catView;
+            if (view !== 'one' && view !== 'two') return;
+            state.categories.view = view;
+            renderCategories();
+            update();
+            saveStatsState();
+        });
+        element('stats-cat-add').addEventListener('click', () => {
+            const data = state.categories.one;
+            data.categories.push(`Category ${data.categories.length + 1}`);
+            data.counts.push('');
+            renderCategories();
+            update();
+        });
+        element('stats-cat-one-table').addEventListener('click', event => {
+            const button = event.target.closest('button[data-remove-category]');
+            if (!button) return;
+            const data = state.categories.one;
+            const index = Number(button.dataset.removeCategory);
+            if (data.categories.length <= 2 || !Number.isInteger(index)
+                || index < 0 || index >= data.categories.length) return;
+            data.categories.splice(index, 1);
+            data.counts.splice(index, 1);
+            renderCategories();
+            update();
+            saveStatsState();
+        });
+        element('stats-cat-clear-one').addEventListener('click', () => {
+            state.categories.one.counts = state.categories.one.categories.map(() => '');
+            renderCategories();
+            update();
+        });
+        element('stats-cat-variable-name').addEventListener('input', event => {
+            state.categories.variableName = event.target.value;
+            update();
+        });
+        element('stats-cat-chart-controls').addEventListener('click', event => {
+            const mode = event.target.dataset.catBarMode;
+            if (mode !== 'counts' && mode !== 'percent') return;
+            state.categories.barMode = mode;
+            element('stats-cat-chart-controls').querySelectorAll('button').forEach(button => {
+                button.classList.toggle('active', button.dataset.catBarMode === mode);
+            });
+            update();
+            saveStatsState();
+        });
         const workspace = element('floating-stats-window');
         workspace.addEventListener('input', saveStatsState);
         workspace.addEventListener('click', event => {
-            if (event.target.closest('#stats-mode-tabs, #stats-stem-controls, #stats-clear, #stats-add-row, #stats-add-col, #stats-clear-categorical')) {
+            if (event.target.closest('#stats-mode-tabs, #stats-stem-controls, #stats-clear, #stats-add-row, #stats-remove-row, #stats-add-col, #stats-remove-col, #stats-clear-categorical, #stats-cat-mode-tabs, #stats-cat-chart-controls, #stats-cat-add, #stats-cat-one-table, #stats-cat-clear-one')) {
                 saveStatsState();
             }
         });
         const titlebar = element('stats-titlebar');
         titlebar.addEventListener('pointerdown', event => {
-            if (event.target.closest('button') || maximizedFrom || document.body.classList.contains('stats-standalone')) return;
+            if (event.target.closest('button') || document.body.classList.contains('stats-standalone')) return;
             const win = element('floating-stats-window');
             const rect = win.getBoundingClientRect();
-            window.dockManager.release('stats');
-            applyDock('float');
-            win.style.left = `${rect.left}px`;
-            win.style.top = `${rect.top}px`;
-            win.style.right = 'auto';
-            const offsetX = event.clientX - rect.left, offsetY = event.clientY - rect.top;
+            const wasMaximized = Boolean(maximizedFrom);
+            const needsDetach = Boolean(state.dock || wasMaximized);
+            let offsetX = event.clientX - rect.left;
+            let offsetY = event.clientY - rect.top;
+            if (needsDetach) {
+                offsetX = wasMaximized ? 120 : Math.min(240, Math.max(0, offsetX));
+                offsetY = wasMaximized ? 16 : Math.min(24, Math.max(0, offsetY));
+            }
+            let dragging = false;
             titlebar.setPointerCapture(event.pointerId);
             const move = moveEvent => {
+                if (!dragging) {
+                    if (Math.hypot(moveEvent.clientX - event.clientX, moveEvent.clientY - event.clientY) < 3) return;
+                    dragging = true;
+                    document.body.style.userSelect = 'none';
+                    if (needsDetach) {
+                        window.dockManager.release('stats');
+                        applyDock('float');
+                    }
+                    win.style.right = 'auto';
+                }
                 win.style.left = `${Math.max(0, Math.min(window.innerWidth - 80, moveEvent.clientX - offsetX))}px`;
                 win.style.top = `${Math.max(0, Math.min(window.innerHeight - 40, moveEvent.clientY - offsetY))}px`;
             };
-            const stop = () => { titlebar.removeEventListener('pointermove', move); };
+            const stop = () => {
+                titlebar.removeEventListener('pointermove', move);
+                document.body.style.userSelect = '';
+            };
             titlebar.addEventListener('pointermove', move);
             titlebar.addEventListener('pointerup', stop, { once: true });
             titlebar.addEventListener('pointercancel', stop, { once: true });
@@ -727,10 +1178,20 @@
             if (!state.dock) return;
             event.preventDefault();
             const side = state.dock;
-            const start = event.clientX;
-            const width = element('floating-stats-window').getBoundingClientRect().width;
+            const rect = element('floating-stats-window').getBoundingClientRect();
+            const start = side === 'bottom' ? event.clientY : event.clientX;
+            const dimension = side === 'bottom' ? rect.height : rect.width;
             resizer.setPointerCapture(event.pointerId);
-            const move = e => window.dockManager.resize('stats', width + (side === 'left' ? e.clientX - start : start - e.clientX));
+            const move = e => {
+                if (side === 'bottom') {
+                    window.dockManager.resize('stats', dimension + start - e.clientY);
+                } else {
+                    window.dockManager.resize(
+                        'stats',
+                        dimension + (side === 'left' ? e.clientX - start : start - e.clientX)
+                    );
+                }
+            };
             const stop = () => resizer.removeEventListener('pointermove', move);
             resizer.addEventListener('pointermove', move);
             resizer.addEventListener('pointerup', stop, { once: true });

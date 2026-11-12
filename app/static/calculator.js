@@ -76,6 +76,10 @@ function setCalcDockMode(mode) {
     if (!dock) return;
     bringToFront(dock);
     window.dockManager.set('calc', mode);
+    if (mode === 'bottom') {
+        window.dockManager.reflow();
+        if (dock.offsetHeight) window.dockManager.resize('calc', dock.offsetHeight);
+    }
     const mf = getMathField();
     if (mf) mf.focus();
 }
@@ -445,7 +449,7 @@ function calcEvaluate() {
 window.addEventListener('DOMContentLoaded', () => {
     suppressMathLiveIcons();
     const dock = document.getElementById('calc-dock');
-    const titlebar = document.getElementById('calc-titlebar');
+    const titlebar = dock?.querySelector('.calc-header-topbar');
     const grip = document.getElementById('calc-resize-grip');
     const dockResizer = document.getElementById('calc-dock-resizer');
     const mf = getMathField();
@@ -486,15 +490,30 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (titlebar) {
         titlebar.addEventListener('mousedown', (e) => {
-            if (currentDockMode !== 'float' || calcMaximizedFrom) return;
             if (e.target.closest('button') || e.target.closest('math-field') || e.target.closest('.calc-history-list')) return;
+            if (document.body.classList.contains('calculator-standalone')) return;
 
+            if (currentDockMode !== 'float' || calcMaximizedFrom) {
+                window.dockManager.set('calc', 'float');
+                dock.classList.remove('calc-maximized');
+                calcMaximizedFrom = null;
+                document.getElementById('calc-maximize-btn').textContent = '🗖';
+                dock.style.width = '480px';
+                dock.style.height = '340px';
+                startLeft = Math.max(0, e.clientX - 240);
+                startTop = Math.max(0, e.clientY - 16);
+                dock.style.left = `${startLeft}px`;
+                dock.style.top = `${startTop}px`;
+                dock.style.right = 'auto';
+                dock.style.bottom = 'auto';
+            } else {
+                const rect = dock.getBoundingClientRect();
+                startLeft = rect.left;
+                startTop = rect.top;
+            }
             isDragging = true;
             startX = e.clientX;
             startY = e.clientY;
-            const rect = dock.getBoundingClientRect();
-            startLeft = rect.left;
-            startTop = rect.top;
             dock.style.right = 'auto';
             document.body.style.userSelect = 'none';
         });
