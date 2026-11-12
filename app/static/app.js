@@ -156,6 +156,23 @@ function getActiveLsrlNotation() {
 }
 window.getActiveLsrlNotation = getActiveLsrlNotation;
 
+function applyStudentToolPermissions(policy = {}) {
+    const tools = [
+        ['allow_calc', 'tool-calc-button', 'calc-dock', window.closeCalculatorWindow],
+        ['allow_stats_tool', 'tool-stats-button', 'floating-stats-window', window.closeStatsGrapherWindow],
+        ['allow_tables', 'tool-tables-button', 'floating-tables-window', window.closeFloatingWindow]
+    ];
+    tools.forEach(([key, buttonId, windowId, close]) => {
+        const allowed = policy[key] !== false;
+        const button = document.getElementById(buttonId);
+        const tool = document.getElementById(windowId);
+        if (button) button.hidden = !allowed;
+        if (!allowed && tool && getComputedStyle(tool).display !== 'none' && typeof close === 'function') close();
+    });
+    document.querySelectorAll('.tool-popout').forEach(button => { button.hidden = policy.allow_popouts === false; });
+}
+window.applyStudentToolPermissions = applyStudentToolPermissions;
+
 function getTaskTopics(task) {
     const supportedTopics = TOPIC_REGISTRY.map(topic => topic.id);
     const configuredTopics = Array.isArray(task.config?.topics) ? task.config.topics : [];
@@ -261,7 +278,13 @@ function getActivePracticeView() {
 }
 
 function switchPracticeView(targetView, skipHistoryPush = false) {
-    if (activeTaskState.active && targetView === 'catalog') return;
+    if (activeTaskState.active && activeTaskState.taskType === 'test' && !activeTaskState.examCompleted && targetView !== 'practice') {
+        alert(targetView === 'catalog'
+            ? 'Skill Directory and worked examples are locked while a test is in progress.'
+            : 'Exit or complete the test before returning to assigned tasks.');
+        return;
+    }
+    if (activeTaskState.active && targetView === 'catalog' && !activeTaskState.examCompleted) return;
     const views = {
         practice: document.getElementById('practice-view'),
         tasks: document.getElementById('tasks-view'),
@@ -303,7 +326,7 @@ function handleBackNavigation() {
     const tasksView = document.getElementById('tasks-view');
     if (practiceView && practiceView.style.display !== 'none') {
         if (activeTaskState.active) {
-            exitTask();
+            exitActiveTask();
             return;
         }
         const dest = state.previousView === 'tasks' ? 'tasks' : 'catalog';
@@ -353,7 +376,20 @@ function startPracticingTopic(topicId, title) {
 function updateTaskRunnerUI() {
     const banner = document.getElementById('task-runner-banner');
     const topicsButton = document.getElementById('nav-topics-btn');
-    if (topicsButton) topicsButton.disabled = activeTaskState.active;
+    const tasksButton = document.getElementById('nav-tasks-btn');
+    const examLocked = activeTaskState.active && activeTaskState.taskType === 'test' && !activeTaskState.examCompleted;
+    if (topicsButton) {
+        topicsButton.disabled = activeTaskState.active && !activeTaskState.examCompleted;
+        topicsButton.title = examLocked
+            ? 'Skill Directory is locked during an active test'
+            : 'Browse the topic library';
+    }
+    if (tasksButton) {
+        tasksButton.disabled = examLocked;
+        tasksButton.title = examLocked ? 'Assigned Tasks are locked during an active test' : '';
+    }
+    const exitButton = document.getElementById('btn-exit-task');
+    if (exitButton) exitButton.textContent = examLocked ? '← Exit Test' : '← Exit Task';
 
     if (!activeTaskState.active) {
         if (banner) banner.style.display = 'none';
@@ -374,6 +410,7 @@ function updateTaskRunnerUI() {
         const badges = [];
         if (activeTaskState.taskType === 'test') {
             badges.push('<span class="badge" style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a;">📝 Exam Mode (Formula Hints &amp; Step Solutions Suppressed)</span>');
+            badges.push('<span class="badge">Exiting saves a draft only in this browser on this device.</span>');
         }
         if (activeTaskState.blockMode === 'scaffold') {
             badges.push(`<span class="badge" style="background: #e0f2fe; color: #0369a1;">🎓 Scaffolded (${activeTaskState.allowHints ? 'Guided: Hints ON' : 'Independent: Hints OFF'})</span>`);
@@ -621,11 +658,16 @@ async function loadTaskQuestion(targetIndex) {
     updateTaskRunnerUI();
     renderTaskNavigationChips();
     const cachedQuestion = activeTaskState.questionsState[targetIndex - 1];
-    if (cachedQuestion?.problem) {
-        currentProblem = cachedQuestion.problem;
-        await loadProblem(currentProblem);
-    } else {
-        await loadProblem();
+    activeTaskState.isLoadingQuestion = true;
+    try {
+        if (cachedQuestion?.problem) {
+            currentProblem = cachedQuestion.problem;
+            await loadProblem(currentProblem);
+        } else {
+            await loadProblem();
+        }
+    } finally {
+        activeTaskState.isLoadingQuestion = false;
     }
 }
 
@@ -763,6 +805,9 @@ async function startAssignedTask(assignedTaskId) {
 }
 
 async function startStudentTask(task) {
+    if (activeTaskState.active && activeTaskState.taskType === 'test' && !activeTaskState.examCompleted) {
+        throw new Error('Exit or complete the active test before starting another task.');
+    }
     const topics = getTaskTopics(task);
     const configuredCount = parseInt(task.question_count || task.config?.total_count || task.config?.count, 10);
     const taskType = task.task_type === 'test' || task.type === 'test'
@@ -863,6 +908,7 @@ async function startStudentTask(task) {
         }
     }
     const selectedTopic = questionQueue[0]?.topic || assignedTopic || topics[0] || 'random';
+    const previousTaskState = activeTaskState;
     activeTaskState = {
         active: true,
         defaultNotation: task.default_notation,
@@ -909,6 +955,29 @@ async function startStudentTask(task) {
     };
     activeTaskState.questionsState = new Array(activeTaskState.totalQuestions).fill(null);
     activeTaskState.masteryAttemptsByBlock = {};
+    try {
+        if (isTest && task.status !== 'submitted' && task.status !== 'completed') {
+            const key = incompleteTestStorageKey(activeTaskState);
+            const stored = localStorage.getItem(key);
+            if (stored) {
+                const saved = JSON.parse(stored);
+                if (!saved || saved.taskType !== 'test' || String(saved.taskId) !== String(activeTaskState.taskId) ||
+                    !Array.isArray(saved.questionQueue) || !Array.isArray(saved.questionsState) ||
+                    !Array.isArray(saved.responses) || !Array.isArray(saved.blocks) || !Array.isArray(saved.blockStates) ||
+                    !Number.isInteger(saved.currentIndex) || saved.currentIndex < 1 || saved.currentIndex > saved.questionQueue.length) {
+                    throw new Error('Invalid incomplete test data');
+                }
+                activeTaskState = { ...saved, active: true, isSubmitting: false, isVerifying: false, examCompleted: false,
+                    defaultNotation: task.default_notation, isPreview: task.status === 'preview' };
+            }
+        }
+    } catch (error) {
+        activeTaskState = previousTaskState;
+        console.error('Could not read incomplete test:', error);
+        throw new Error('The saved incomplete test could not be read on this device. Contact your teacher before continuing.');
+    }
+    applyStudentToolPermissions({ ...(task.tool_policy || {}), ...(task.config?.tool_policy || {}) });
+    updateTaskRunnerUI();
 
     document.getElementById('task-completion-modal').style.display = 'none';
     document.getElementById('completion-subtitle').textContent = activeTaskState.isPreview
@@ -918,7 +987,7 @@ async function startStudentTask(task) {
     const navBar = document.getElementById('task-nav-bar');
     if (navBar) navBar.style.display = 'flex';
     renderTaskNavigationChips();
-    await loadTaskQuestion(1);
+    await loadTaskQuestion(activeTaskState.currentIndex);
 }
 window.startStudentTask = startStudentTask;
 
@@ -927,14 +996,40 @@ function launchTask(assignedTaskId) {
 }
 window.launchTask = launchTask;
 
-function exitTask() {
-    if (!activeTaskState.active || !confirm('Exit task? Progress may not be saved')) return;
+function incompleteTestStorageKey(taskState) {
+    if (!currentUser?.id || !taskState.taskId) {
+        throw new Error('A signed-in user and test ID are required to save an incomplete test.');
+    }
+    return `qederam_incomplete_test:${encodeURIComponent(currentUser.id)}:${encodeURIComponent(taskState.taskId)}:${taskState.isPreview ? 'preview' : 'student'}`;
+}
+
+function exitActiveTask() {
+    if (!activeTaskState.active || activeTaskState.isSubmitting || activeTaskState.isVerifying) return;
+    if (activeTaskState.isLoadingQuestion) {
+        alert('Please wait for the question to finish loading before exiting.');
+        return;
+    }
+    const isTest = activeTaskState.taskType === 'test' && !activeTaskState.examCompleted;
+    const message = isTest
+        ? 'Are you sure you want to exit this test? Your current answers will be saved as an incomplete session, and you will leave Exam Mode.'
+        : 'Exit this assignment and return to your task list?';
+    if (!confirm(message)) return;
+    if (isTest) {
+        try {
+            captureTaskQuestionState();
+            localStorage.setItem(incompleteTestStorageKey(activeTaskState), JSON.stringify(activeTaskState));
+        } catch (error) {
+            console.error('Could not save incomplete test:', error);
+            alert('Could not save your incomplete test on this device. You are still in Exam Mode.');
+            return;
+        }
+    }
     const previousTopic = activeTaskState.previousTopic;
     activeTaskState = {
         active: false,
         taskId: null,
         taskTitle: '',
-        taskType: 'assignment',
+        taskType: null,
         totalQuestions: 5,
         currentIndex: 1,
         correctCount: 0,
@@ -961,6 +1056,7 @@ function exitTask() {
         isPreview: false
     };
     state.selectedTopic = previousTopic || 'random';
+    applyStudentToolPermissions();
     updateCurrentTopicName();
     saveState();
     window.dispatchEvent(new Event('lsrl-notation-change'));
@@ -971,9 +1067,9 @@ function exitTask() {
     renderTaskNavigationChips();
     document.getElementById('task-completion-modal').style.display = 'none';
     removeTaskIdFromUrl();
-    switchPracticeView(state.previousView === 'catalog' ? 'catalog' : 'tasks', true);
+    switchPracticeView('tasks');
 }
-window.exitTask = exitTask;
+window.exitActiveTask = exitActiveTask;
 
 async function loadNextTaskQuestion() {
     if (!activeTaskState.active || activeTaskState.currentIndex > activeTaskState.totalQuestions) return;
@@ -1036,6 +1132,17 @@ async function completeStudentTask() {
     document.getElementById('completion-percent').textContent = `(${score}%)`;
     document.getElementById('completion-icon').textContent = score >= 70 ? '🎉' : '📝';
     document.getElementById('task-completion-modal').style.display = 'flex';
+    if (activeTaskState.taskType === 'test') {
+        activeTaskState.examCompleted = true;
+        updateTaskRunnerUI();
+        if (activeTaskState.submitted || activeTaskState.isPreview) {
+            try {
+                localStorage.removeItem(incompleteTestStorageKey(activeTaskState));
+            } catch (error) {
+                console.error('Could not remove the saved incomplete test:', error);
+            }
+        }
+    }
 }
 
 function finishStudentTask() {
@@ -1072,6 +1179,7 @@ function finishStudentTask() {
         submitted: false,
         isPreview: false
     };
+    applyStudentToolPermissions();
     window.dispatchEvent(new Event('lsrl-notation-change'));
     const nextBtn = document.getElementById('next-btn');
     nextBtn.innerText = 'Next Problem →';
@@ -2052,8 +2160,6 @@ window.addEventListener('load', async () => {
     history.pushState({ appView: rootView, navigationRoot: true }, '', `#${rootView}`);
 
     await initAuth();
-    const exitTaskButton = document.getElementById('btn-exit-task');
-    if (exitTaskButton) exitTaskButton.addEventListener('click', handleBackNavigation);
     const finishTaskButton = document.getElementById('btn-finish-task');
     if (finishTaskButton) finishTaskButton.addEventListener('click', finishStudentTask);
     if (taskId) {

@@ -1,7 +1,7 @@
 ﻿let lastAnswer = 0;
 let isDegreeMode = true;
 let currentDockMode = 'bottom';
-let isResolvingCalcCollision = false;
+let calcMaximizedFrom = null;
 
 const calcHistory = [];
 let historyIndex = -1;
@@ -46,34 +46,11 @@ function updateBodyDockGutters(mode) {
     if (mode === 'right') document.body.classList.add('calc-docked-right');
 }
 
-function setCalcDockMode(mode) {
+function applyCalcDockMode(mode) {
     const dock = document.getElementById('calc-dock');
     if (!dock) return;
-
-    if ((mode === 'left' || mode === 'right') && typeof window.displaceStatsDock === 'function') {
-        window.displaceStatsDock(mode);
-    }
-    bringToFront(dock);
-
-    // Mutual Collision Check against Tables
-    if (!isResolvingCalcCollision) {
-        isResolvingCalcCollision = true;
-        const tablesWin = document.getElementById('floating-tables-window');
-        const isTablesOpen = tablesWin && (tablesWin.style.display === 'flex' || getComputedStyle(tablesWin).display === 'flex');
-
-        if (isTablesOpen) {
-            const isTablesRight = document.body.classList.contains('snap-mode-right') || (tablesWin && tablesWin.classList.contains('is-snapped-right'));
-            const isTablesLeft = document.body.classList.contains('snap-mode-left') || (tablesWin && tablesWin.classList.contains('is-snapped-left'));
-
-            if (mode === 'right' && isTablesRight) {
-                if (typeof window.snapWindow === 'function') window.snapWindow('left');
-            } else if (mode === 'left' && isTablesLeft) {
-                if (typeof window.snapWindow === 'function') window.snapWindow('right');
-            }
-        }
-        isResolvingCalcCollision = false;
-    }
-
+    calcMaximizedFrom = null;
+    document.getElementById('calc-maximize-btn').textContent = '🗖';
     currentDockMode = mode;
     dock.className = `dock-${mode}`;
     updateBodyDockGutters(mode);
@@ -92,11 +69,13 @@ function setCalcDockMode(mode) {
     dock.style.width = '';
     dock.style.height = '';
 
-    if (mode === 'bottom') {
-        const savedH = getComputedStyle(document.documentElement).getPropertyValue('--calc-dock-h').trim() || '320px';
-        dock.style.height = savedH;
-    }
-
+}
+window.dockManager.register('calc', applyCalcDockMode);
+function setCalcDockMode(mode) {
+    const dock = document.getElementById('calc-dock');
+    if (!dock) return;
+    bringToFront(dock);
+    window.dockManager.set('calc', mode);
     const mf = getMathField();
     if (mf) mf.focus();
 }
@@ -111,10 +90,6 @@ function toggleCalculatorWindow() {
         bringToFront(dock);
         setCalcDockMode(currentDockMode || 'bottom');
         suppressMathLiveIcons();
-        if ((currentDockMode || 'bottom') === 'bottom') {
-            const dockHeight = getComputedStyle(document.documentElement).getPropertyValue('--calc-dock-h').trim() || '320px';
-            dock.style.height = dockHeight;
-        }
         const mf = getMathField();
         if (mf) setTimeout(() => mf.focus(), 60);
     }
@@ -123,8 +98,52 @@ function toggleCalculatorWindow() {
 function closeCalculatorWindow() {
     const dock = document.getElementById('calc-dock');
     dock.style.setProperty('display', 'none', 'important');
+    window.dockManager.release('calc');
+    calcMaximizedFrom = null;
+    dock.classList.remove('calc-maximized');
+    document.getElementById('calc-maximize-btn').textContent = '🗖';
     document.body.classList.remove('calc-docked-bottom', 'calc-docked-left', 'calc-docked-right');
 }
+
+function toggleMaximizeCalculator() {
+    const dock = document.getElementById('calc-dock');
+    if (calcMaximizedFrom) {
+        const saved = calcMaximizedFrom;
+        window.dockManager.set('calc', saved.mode);
+        if (saved.mode === 'float') Object.assign(dock.style, saved.styles);
+    } else {
+        const styles = {};
+        ['top', 'left', 'right', 'bottom', 'width', 'height'].forEach(key => { styles[key] = dock.style[key]; });
+        const saved = { mode: currentDockMode, styles };
+        window.dockManager.release('calc');
+        applyCalcDockMode('float');
+        calcMaximizedFrom = saved;
+        dock.classList.add('calc-maximized');
+        document.getElementById('calc-maximize-btn').textContent = '🗗';
+    }
+}
+window.toggleMaximizeCalculator = toggleMaximizeCalculator;
+
+function popOutCalculatorWindow() {
+    const mf = getMathField();
+    try {
+        localStorage.setItem('qederam_calculator_state', JSON.stringify({
+            latex: mf.getValue(), history: calcHistory, lastAnswer, isDegreeMode
+        }));
+    } catch (error) {
+        console.error('Could not save calculator state:', error);
+        alert('Could not save calculator data for the pop-out.');
+        return;
+    }
+    const popup = window.open('/calculator-tool', '_blank');
+    if (!popup) {
+        alert('The calculator pop-out was blocked. Allow pop-ups and try again.');
+        return;
+    }
+    popup.opener = null;
+    closeCalculatorWindow();
+}
+window.popOutCalculatorWindow = popOutCalculatorWindow;
 
 function toggleKeypadBank(bank) {
     const mainBank = document.getElementById('calc-bank-main');
@@ -355,7 +374,7 @@ function addHistoryEntry(latex, result) {
     const exprChip = document.createElement('span');
     exprChip.className = 'calc-history-chip calc-chip-expr';
     exprChip.title = 'Click to insert equation at cursor';
-    exprChip.innerHTML = `\\(${latex}\\)`;
+    exprChip.textContent = `\\(${latex}\\)`;
     exprChip.onclick = (e) => {
         e.stopPropagation();
         calcInsert(latex);
@@ -367,7 +386,7 @@ function addHistoryEntry(latex, result) {
     const resChip = document.createElement('span');
     resChip.className = 'calc-history-chip calc-chip-res';
     resChip.title = 'Click to insert answer at cursor';
-    resChip.innerHTML = `\\(${result}\\)`;
+    resChip.textContent = `\\(${result}\\)`;
     resChip.onclick = (e) => {
         e.stopPropagation();
         calcInsert(result.toString());
@@ -430,6 +449,33 @@ window.addEventListener('DOMContentLoaded', () => {
     const grip = document.getElementById('calc-resize-grip');
     const dockResizer = document.getElementById('calc-dock-resizer');
     const mf = getMathField();
+    if (document.body.classList.contains('calculator-standalone')) {
+        dock.style.setProperty('display', 'flex', 'important');
+        customElements.whenDefined('math-field').then(() => {
+            let saved;
+            try {
+                const raw = localStorage.getItem('qederam_calculator_state');
+                if (!raw) return;
+                saved = JSON.parse(raw);
+            } catch (error) {
+                console.error('Could not read calculator state:', error);
+                alert('Could not read the saved calculator data.');
+                return;
+            }
+            if (typeof saved?.latex !== 'string' || !Array.isArray(saved.history)
+                || !saved.history.every(entry => typeof entry.latex === 'string' && ['number', 'string'].includes(typeof entry.result))
+                || typeof saved.isDegreeMode !== 'boolean') {
+                console.error('Invalid saved calculator state');
+                alert('Saved calculator data is invalid.');
+                return;
+            }
+            saved.history.forEach(entry => addHistoryEntry(entry.latex, entry.result));
+            lastAnswer = saved.lastAnswer;
+            isDegreeMode = saved.isDegreeMode;
+            document.getElementById('calc-angle-btn').textContent = isDegreeMode ? 'DEG' : 'RAD';
+            mf.setValue(saved.latex);
+        });
+    }
 
     if (dock) {
         dock.addEventListener('mousedown', () => bringToFront(dock));
@@ -440,7 +486,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (titlebar) {
         titlebar.addEventListener('mousedown', (e) => {
-            if (currentDockMode !== 'float') return;
+            if (currentDockMode !== 'float' || calcMaximizedFrom) return;
             if (e.target.closest('button') || e.target.closest('math-field') || e.target.closest('.calc-history-list')) return;
 
             isDragging = true;
@@ -474,7 +520,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
         grip.addEventListener('mousedown', (e) => {
             e.stopPropagation();
-            if (currentDockMode !== 'float') return;
+            if (currentDockMode !== 'float' || calcMaximizedFrom) return;
 
             isFloatResizing = true;
             startFX = e.clientX;
@@ -524,19 +570,13 @@ window.addEventListener('DOMContentLoaded', () => {
 
         if (dockResizeMode === 'bottom') {
             const dh = startCoord - e.clientY;
-            const newH = Math.max(270, Math.min(window.innerHeight * 0.85, startDim + dh));
-            dock.style.height = `${newH}px`;
-            document.documentElement.style.setProperty('--calc-dock-h', `${newH}px`);
+            window.dockManager.resize('calc', startDim + dh);
         } else if (dockResizeMode === 'right') {
             const dw = startCoord - e.clientX;
-            const newW = Math.max(320, Math.min(window.innerWidth * 0.7, startDim + dw));
-            dock.style.width = `${newW}px`;
-            document.documentElement.style.setProperty('--calc-dock-w', `${newW}px`);
+            window.dockManager.resize('calc', startDim + dw);
         } else if (dockResizeMode === 'left') {
             const dw = e.clientX - startCoord;
-            const newW = Math.max(320, Math.min(window.innerWidth * 0.7, startDim + dw));
-            dock.style.width = `${newW}px`;
-            document.documentElement.style.setProperty('--calc-dock-w', `${newW}px`);
+            window.dockManager.resize('calc', startDim + dw);
         }
     });
 

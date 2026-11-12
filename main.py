@@ -38,7 +38,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "129"
+STATIC_VERSION = "135"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -125,8 +125,15 @@ class CreateClassPayload(BaseModel):
 class RenameClassPayload(BaseModel):
     name: str
 
+class ToolPolicy(BaseModel):
+    allow_calc: bool = True
+    allow_stats_tool: bool = True
+    allow_tables: bool = True
+    allow_popouts: bool = True
+
 class ClassSettingsPayload(BaseModel):
-    default_notation: Literal["ab", "b0b1"]
+    default_notation: Optional[Literal["ab", "b0b1"]] = None
+    tool_policy: Optional[ToolPolicy] = None
 
 class JoinClassPayload(BaseModel):
     student_id: str
@@ -176,6 +183,22 @@ async def serve_student_practice(request: Request):
             "static_version": STATIC_VERSION
         }
     )
+
+@app.get("/stats-tool", response_class=HTMLResponse)
+async def serve_stats_tool(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="stats_tool.html",
+        context={"v": STATIC_VERSION}
+    )
+
+@app.get("/tables-tool", response_class=HTMLResponse)
+async def serve_tables_tool(request: Request):
+    return templates.TemplateResponse(request=request, name="tables_tool.html", context={"v": STATIC_VERSION})
+
+@app.get("/calculator-tool", response_class=HTMLResponse)
+async def serve_calculator_tool(request: Request):
+    return templates.TemplateResponse(request=request, name="calculator_tool.html", context={"v": STATIC_VERSION})
 
 @app.get("/teacher", response_class=HTMLResponse)
 async def serve_teacher_dashboard(request: Request):
@@ -358,16 +381,23 @@ async def update_teacher_class_settings(
     access = verify_teacher_access(authorization)
     db = get_scoped_supabase(authorization)
     verify_teacher_class_access(db, class_id, access["user"].id)
+    updates = {}
+    if payload.default_notation is not None:
+        updates["default_notation"] = payload.default_notation
+    if payload.tool_policy is not None:
+        updates["tool_policy"] = payload.tool_policy.model_dump()
+    if not updates:
+        raise HTTPException(status_code=400, detail="No class settings provided")
     result = (
         db.table("classes")
-        .update({"default_notation": payload.default_notation})
+        .update(updates)
         .eq("id", class_id)
         .eq("teacher_id", access["user"].id)
         .execute()
     )
     if not result.data:
-        raise HTTPException(status_code=400, detail="Could not update class notation")
-    return {"default_notation": result.data[0]["default_notation"]}
+        raise HTTPException(status_code=400, detail="Could not update class settings")
+    return result.data[0]
 
 @app.post("/api/teacher/classes/{class_id}/join-code")
 async def regenerate_teacher_class_join_code(
@@ -413,7 +443,7 @@ async def get_teacher_class_tasks(
     db = get_scoped_supabase(authorization)
     classes_res = (
         db.table("classes")
-        .select("id, name, default_notation")
+        .select("id, name, default_notation, tool_policy")
         .eq("teacher_id", teacher_id)
         .execute()
     )
@@ -443,6 +473,7 @@ async def get_teacher_class_tasks(
             "class_id": assessment["class_id"],
             "class_name": class_map[assessment["class_id"]]["name"],
             "default_notation": class_map[assessment["class_id"]].get("default_notation"),
+            "tool_policy": class_map[assessment["class_id"]].get("tool_policy"),
             "due_date": assessment["due_date"],
             "config": assessment["config"],
             "parent_assessment_id": assessment.get("parent_assessment_id"),
@@ -844,7 +875,7 @@ async def get_student_tasks(student_id: str, authorization: Optional[str] = Head
     db = get_scoped_supabase(authorization)
 
     # 1. Get the class IDs this student is enrolled in
-    enroll_res = db.table("enrollments").select("class_id, classes(name, default_notation)").eq("student_id", student_id).execute()
+    enroll_res = db.table("enrollments").select("class_id, classes(name, default_notation, tool_policy)").eq("student_id", student_id).execute()
     enrolled_classes = enroll_res.data or []
     if not enrolled_classes:
         return []
@@ -875,6 +906,7 @@ async def get_student_tasks(student_id: str, authorization: Optional[str] = Head
             "class_id": a["class_id"],
             "class_name": class_map.get(a["class_id"], {}).get("name", "Class"),
             "default_notation": class_map.get(a["class_id"], {}).get("default_notation"),
+            "tool_policy": class_map.get(a["class_id"], {}).get("tool_policy"),
             "due_date": a["due_date"],
             "config": a["config"],
             "parent_assessment_id": a.get("parent_assessment_id"),

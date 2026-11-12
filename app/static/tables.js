@@ -1,7 +1,6 @@
 ﻿let isSnapped = false;
 let isMaximized = false;
 let currentTablesDock = '';
-let isResolvingTableCollision = false;
 let savedFloatingRect = { left: 'auto', top: '75px', right: '25px', width: '600px', height: '520px' };
 
 function getFloatingWindow() {
@@ -44,6 +43,7 @@ function closeFloatingWindow() {
     const win = getFloatingWindow();
     if (!win) return;
     win.style.display = 'none';
+    window.dockManager.release('tables');
     document.body.classList.remove('snap-mode-right', 'snap-mode-left');
     win.classList.remove('is-snapped-right', 'is-snapped-left', 'is-maximized');
     isSnapped = false;
@@ -57,31 +57,29 @@ function closeFloatingWindow() {
 }
 window.closeFloatingWindow = closeFloatingWindow;
 
-function snapWindow(side) {
+function popOutTablesWindow() {
+    const popup = window.open('/tables-tool', '_blank');
+    if (!popup) {
+        alert('The tables pop-out was blocked. Allow pop-ups and try again.');
+        return;
+    }
+    popup.opener = null;
+    closeFloatingWindow();
+}
+window.popOutTablesWindow = popOutTablesWindow;
+
+function applyTablesDock(side) {
     const win = getFloatingWindow();
     if (!win) return;
-
-    if (typeof window.displaceStatsDock === 'function') window.displaceStatsDock(side);
-    if (win.style.display !== 'flex') {
-        win.style.display = 'flex';
-        renderTableA();
-    }
-
     clearWindowInlineStyles(win);
     win.classList.remove('is-snapped-right', 'is-snapped-left', 'is-maximized');
     document.body.classList.remove('snap-mode-right', 'snap-mode-left');
-
-    if (side === 'right') {
-        win.classList.add('is-snapped-right');
-        document.body.classList.add('snap-mode-right');
-        currentTablesDock = 'right';
-    } else {
-        win.classList.add('is-snapped-left');
-        document.body.classList.add('snap-mode-left');
-        currentTablesDock = 'left';
+    if (side !== 'float') {
+        win.classList.add(`is-snapped-${side}`);
+        document.body.classList.add(`snap-mode-${side}`);
     }
-
-    isSnapped = true;
+    currentTablesDock = side === 'float' ? '' : side;
+    isSnapped = side !== 'float';
     isMaximized = false;
     const maxBtn = document.getElementById('btn-maximize-restore');
     if (maxBtn) {
@@ -89,18 +87,16 @@ function snapWindow(side) {
         maxBtn.title = 'Full Screen / Maximize';
     }
 
-    // Bidirectional exclusion: Move Calculator if currently occupying this side
-    if (!isResolvingTableCollision) {
-        isResolvingTableCollision = true;
-        const calcDock = document.getElementById('calc-dock');
-        const isCalcActive = calcDock && (calcDock.style.display === 'flex' || getComputedStyle(calcDock).display === 'flex');
-        const isCalcOnTarget = document.body.classList.contains(side === 'right' ? 'calc-docked-right' : 'calc-docked-left');
-
-        if (isCalcActive && isCalcOnTarget && typeof window.setCalcDockMode === 'function') {
-            window.setCalcDockMode(side === 'right' ? 'left' : 'right');
-        }
-        isResolvingTableCollision = false;
+}
+window.dockManager.register('tables', applyTablesDock);
+function snapWindow(side) {
+    const win = getFloatingWindow();
+    if (!win) return;
+    if (win.style.display !== 'flex') {
+        win.style.display = 'flex';
+        renderTableA();
     }
+    window.dockManager.set('tables', side);
 }
 window.snapWindow = snapWindow;
 window.getTablesDockMode = () => currentTablesDock;
@@ -122,6 +118,7 @@ function toggleMaximizeWindow() {
             };
         }
         clearWindowInlineStyles(win);
+        window.dockManager.release('tables');
         document.body.classList.remove('snap-mode-right', 'snap-mode-left');
         win.classList.remove('is-snapped-right', 'is-snapped-left');
         win.classList.add('is-maximized');
@@ -153,6 +150,7 @@ function unsnapToFloating(clientX, clientY) {
     const win = getFloatingWindow();
     if (!win) return;
 
+    window.dockManager.release('tables');
     win.classList.remove('is-snapped-right', 'is-snapped-left', 'is-maximized');
     document.body.classList.remove('snap-mode-right', 'snap-mode-left');
     isSnapped = false;
@@ -272,6 +270,17 @@ window.addEventListener('DOMContentLoaded', () => {
     const grip = document.getElementById('window-resize-grip');
     const dockResizer = document.getElementById('tables-dock-resizer');
     if (!win || !titlebar) return;
+    if (document.body.classList.contains('tables-standalone')) {
+        win.style.display = 'flex';
+        renderTableA();
+        if (window.renderMathInElement) {
+            renderMathInElement(win, { delimiters: [
+                { left: '$$', right: '$$', display: true },
+                { left: '$', right: '$', display: false },
+                { left: '\\(', right: '\\)', display: false }
+            ], throwOnError: false });
+        }
+    }
 
     let isDragging = false;
     let startX, startY, startLeft, startTop;
@@ -331,12 +340,10 @@ window.addEventListener('DOMContentLoaded', () => {
         if (!isTablesDockResizing) return;
         if (dockResizeSide === 'right') {
             const dw = startDockX - e.clientX;
-            const newW = Math.max(320, Math.min(window.innerWidth * 0.7, startDockW + dw));
-            document.documentElement.style.setProperty('--tables-dock-w', `${newW}px`);
+            window.dockManager.resize('tables', startDockW + dw);
         } else if (dockResizeSide === 'left') {
             const dw = e.clientX - startDockX;
-            const newW = Math.max(320, Math.min(window.innerWidth * 0.7, startDockW + dw));
-            document.documentElement.style.setProperty('--tables-dock-w', `${newW}px`);
+            window.dockManager.resize('tables', startDockW + dw);
         }
     });
 

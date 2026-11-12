@@ -422,6 +422,12 @@
                 <option value="ab">ŷ = a + bx (AP Standard)</option>
                 <option value="b0b1">ŷ = b₀ + b₁x (Collegiate Standard)</option>
             </select>
+            <span id="class-tool-policy" style="display:flex; flex-wrap:wrap; gap:8px; font-size:0.8rem;">
+                <label><input type="checkbox" data-tool="allow_calc" onchange="updateClassToolPolicy(this)" disabled> Calculator</label>
+                <label><input type="checkbox" data-tool="allow_stats_tool" onchange="updateClassToolPolicy(this)" disabled> Stats &amp; Plots</label>
+                <label><input type="checkbox" data-tool="allow_tables" onchange="updateClassToolPolicy(this)" disabled> Tables &amp; Formulas</label>
+                <label><input type="checkbox" data-tool="allow_popouts" onchange="updateClassToolPolicy(this)" disabled> Allow Pop-Out Windows</label>
+            </span>
 
             <button class="btn-secondary" onclick="promptCreateClass()" style="margin-left: auto; padding: 8px 14px;">+ Create New Class</button>
         </div>
@@ -1050,6 +1056,9 @@
         }
     }
 
+    const pendingNotationSaves = new Set();
+    const pendingToolPolicySaves = new Set();
+
     function onClassSelected() {
         const select = document.getElementById('class-select');
         const codeContainer = document.getElementById('active-code-container');
@@ -1057,8 +1066,12 @@
         const classId = select.value;
         const notationSelect = document.getElementById('class-notation-select');
         const selectedClass = currentClasses.find(item => String(item.id) === classId);
-        notationSelect.disabled = !selectedClass;
+        notationSelect.disabled = !selectedClass || pendingNotationSaves.has(String(classId));
         notationSelect.value = selectedClass?.default_notation || 'ab';
+        document.querySelectorAll('#class-tool-policy input').forEach(input => {
+            input.disabled = !selectedClass || pendingToolPolicySaves.has(String(classId));
+            input.checked = selectedClass?.tool_policy?.[input.dataset.tool] !== false;
+        });
 
         if (teacherCache.classId !== classId) {
             teacherCache.classId = classId;
@@ -1093,6 +1106,7 @@
         if (!activeClass) return;
         const select = document.getElementById('class-notation-select');
         const previous = activeClass.default_notation || 'ab';
+        pendingNotationSaves.add(String(activeClass.id));
         select.disabled = true;
         try {
             const response = await fetch(`/api/teacher/classes/${encodeURIComponent(activeClass.id)}/settings`, {
@@ -1103,11 +1117,44 @@
             const result = await response.json();
             if (!response.ok) throw new Error(result.detail || 'Could not save class notation.');
             activeClass.default_notation = result.default_notation;
+            if (getActiveClass()?.id === activeClass.id) select.value = result.default_notation;
         } catch (error) {
             if (getActiveClass()?.id === activeClass.id) select.value = previous;
             alert(error.message || 'Could not save class notation.');
         } finally {
-            select.disabled = !getActiveClass();
+            pendingNotationSaves.delete(String(activeClass.id));
+            const currentClass = getActiveClass();
+            select.disabled = !currentClass || pendingNotationSaves.has(String(currentClass.id));
+        }
+    }
+
+    async function updateClassToolPolicy(changed) {
+        const activeClass = getActiveClass();
+        if (!activeClass) return;
+        const controls = [...document.querySelectorAll('#class-tool-policy input')];
+        const previous = activeClass.tool_policy || {};
+        const policy = Object.fromEntries(controls.map(input => [input.dataset.tool, input.checked]));
+        pendingToolPolicySaves.add(String(activeClass.id));
+        controls.forEach(input => { input.disabled = true; });
+        try {
+            const response = await fetch(`/api/teacher/classes/${encodeURIComponent(activeClass.id)}/settings`, {
+                method: 'PATCH', headers: getAuthHeaders(), body: JSON.stringify({ tool_policy: policy })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.detail || 'Could not save tool permissions.');
+            activeClass.tool_policy = result.tool_policy;
+            if (getActiveClass()?.id === activeClass.id) {
+                controls.forEach(input => { input.checked = result.tool_policy?.[input.dataset.tool] !== false; });
+            }
+        } catch (error) {
+            if (getActiveClass()?.id === activeClass.id) changed.checked = previous[changed.dataset.tool] !== false;
+            alert(error.message || 'Could not save tool permissions.');
+        } finally {
+            pendingToolPolicySaves.delete(String(activeClass.id));
+            const currentClass = getActiveClass();
+            controls.forEach(input => {
+                input.disabled = !currentClass || pendingToolPolicySaves.has(String(currentClass.id));
+            });
         }
     }
 

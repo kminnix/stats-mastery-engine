@@ -1,0 +1,58 @@
+<div id="floating-stats-window" role="region" aria-label="Stats and graphing">
+    <div id="stats-dock-resizer" class="dock-edge-resizer" title="Drag to resize"></div>
+    <div id="stats-titlebar" class="window-titlebar">
+        <span>📊 Stats &amp; Graphing</span>
+        <div class="controls">
+            <button type="button" onclick="snapStatsWindow('left')" title="Snap left">◧</button>
+            <button type="button" onclick="snapStatsWindow('right')" title="Snap right">◨</button>
+            <button type="button" onclick="floatStatsWindow()" title="Float">⬈</button>
+            <button type="button" id="btn-stats-maximize" onclick="toggleMaximizeStatsWindow()" title="Maximize / Restore">🗖</button>
+            <button type="button" class="tool-popout" onclick="popOutStatsWindow()" title="Open in New Tab / Window">↗</button>
+            <button type="button" onclick="closeStatsGrapherWindow()" title="Close">×</button>
+        </div>
+    </div>
+    <div class="stats-content">
+        <div id="stats-storage-error" role="alert" hidden></div>
+        <div class="stats-tabs" id="stats-mode-tabs">
+            <button type="button" data-mode="one">1-Variable Data</button>
+            <button type="button" data-mode="two">2-Variable &amp; Regression</button>
+            <button type="button" data-mode="categorical">Categorical / Mosaic</button>
+        </div>
+        <div class="stats-top-split">
+            <div class="stats-data-column">
+                <div class="stats-data-wrap">
+                    <table class="stats-data-table">
+                        <thead><tr>
+                            <th scope="col">
+                                <input id="stats-var-x-1var" class="stats-var-name" type="text" value="X" aria-label="One-variable X name">
+                                <input id="stats-var-x-2var" class="stats-var-name" type="text" value="X" aria-label="Two-variable X name" hidden>
+                            </th>
+                            <th id="stats-y-heading" scope="col"><input id="stats-var-y-2var" class="stats-var-name" type="text" value="Y" aria-label="Two-variable Y name"></th>
+                        </tr></thead>
+                        <tbody id="stats-data-rows"></tbody>
+                    </table>
+                </div>
+                <button type="button" class="btn-secondary" id="stats-clear">Clear</button>
+            </div>
+            <div id="stats-summary" class="stats-vertical-grid" aria-live="polite"></div>
+        </div>
+        <div id="stats-categorical" hidden>
+            <div class="stats-categorical-scroll"><table id="stats-categorical-table" class="stats-data-table"></table></div>
+            <div class="stats-categorical-actions">
+                <button type="button" class="btn-secondary" id="stats-add-row">+ Row</button>
+                <button type="button" class="btn-secondary" id="stats-add-col">+ Col</button>
+                <button type="button" class="btn-secondary" id="stats-clear-categorical">Clear</button>
+            </div>
+            <div id="stats-zero-columns"></div>
+        </div>
+        <div id="stats-error" role="alert"></div>
+        <div class="stats-tabs" id="stats-plot-tabs"></div>
+        <div id="stats-stem-controls" class="stats-tabs" hidden>
+            <button type="button" data-stems="single">Single Stems</button>
+            <button type="button" data-stems="split">Split Stems (0–4 / 5–9)</button>
+        </div>
+        <div id="stats-stemplot" class="stats-stemplot" hidden></div>
+        <svg id="stats-plot" viewBox="0 0 640 360" role="img" aria-label="Statistical plot"></svg>
+    </div>
+    <div id="stats-resize-grip" class="window-resize-grip" title="Drag to resize"></div>
+</div>
