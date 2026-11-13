@@ -19,6 +19,7 @@ from app.engine.hypothesis_testing import generate_ht_problem
 from app.engine.chi_square import generate_chi_problem
 from app.engine.linear_regression import generate_regression_problem
 from app.engine.probability_sampling import generate_prob_sampling_problem
+from app.engine.foundations import generate_foundations_problem
 from app.engine.input_types import tag_problem_input_types
 from app.engine.inference_drills import (
     generate_condition_check_mean,
@@ -40,7 +41,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "149"
+STATIC_VERSION = "150"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -277,6 +278,13 @@ async def get_regression_problem(topic: str = "reg_lsrl", notation: str = "ab"):
 @app.get("/api/problem/prob_sampling")
 async def get_prob_sampling_problem(topic: str):
     return tag_problem_input_types(generate_prob_sampling_problem(topic))
+
+@app.get("/api/problem/foundations")
+async def get_foundations_problem(topic: str):
+    try:
+        return tag_problem_input_types(generate_foundations_problem(topic))
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 @app.get("/api/problem/drill")
 async def get_inference_drill(topic: str):

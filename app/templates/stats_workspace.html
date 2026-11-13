@@ -17,7 +17,40 @@
             <button type="button" data-mode="one">1-Variable Data</button>
             <button type="button" data-mode="two">2-Variable &amp; Regression</button>
             <button type="button" data-mode="categorical">Categorical</button>
+            <button type="button" data-mode="inference">Inference</button>
         </div>
+        <section id="stats-panel-inference" hidden>
+            <label for="inf-procedure">Procedure</label>
+            <select id="inf-procedure">
+                <optgroup label="Confidence Intervals">
+                    <option value="1prop_z_int">1-Prop z-Interval</option>
+                    <option value="2prop_z_int">2-Prop z-Interval</option>
+                    <option value="1samp_t_int">1-Sample t-Interval</option>
+                    <option value="2samp_t_int">2-Sample t-Interval</option>
+                    <option value="linreg_t_int">LinReg t-Interval (Slope)</option>
+                </optgroup>
+                <optgroup label="Hypothesis Tests">
+                    <option value="1prop_z_test">1-Prop z-Test</option>
+                    <option value="2prop_z_test">2-Prop z-Test</option>
+                    <option value="1samp_t_test">1-Sample t-Test</option>
+                    <option value="2samp_t_test">2-Sample t-Test</option>
+                    <option value="chisq_gof">χ² Goodness-of-Fit Test</option>
+                    <option value="chisq_ind">χ² Test for Independence</option>
+                    <option value="chisq_hom">χ² Test for Homogeneity</option>
+                    <option value="linreg_t_test">LinReg t-Test (Slope)</option>
+                </optgroup>
+                <optgroup label="Distributions">
+                    <option value="dist_normal">Normal (normalcdf / invNorm)</option>
+                    <option value="dist_t">t-Distribution (tcdf / invT)</option>
+                    <option value="dist_binom">Binomial (binompdf / binomcdf)</option>
+                    <option value="dist_geom">Geometric (geometpdf / geometcdf)</option>
+                </optgroup>
+            </select>
+            <div id="inf-inputs-container"></div>
+            <button type="button" class="btn-secondary" id="inf-calculate">Calculate</button>
+            <div id="inf-error" role="alert"></div>
+            <div id="inf-results-container" aria-live="polite"></div>
+        </section>
         <div class="stats-top-split">
             <div class="stats-data-column">
                 <div class="stats-data-wrap">

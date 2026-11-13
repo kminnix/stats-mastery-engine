@@ -98,6 +98,9 @@ const TOPIC_REGISTRY = [
     { id: 'left_tail', title: 'Left Tail Cumulative Area', topic: 'Normal Distributions', notation: 'P(X < b)' },
     { id: 'right_tail', title: 'Right Tail Cumulative Area', topic: 'Normal Distributions', notation: 'P(X > a)' },
     { id: 'inverse', title: 'Inverse Cutoffs & Percentiles', topic: 'Normal Distributions', notation: 'x = μ + zσ' },
+    { id: 'eda_summary', title: '1-Variable Summary Stats, IQR & Outliers', topic: 'Exploring Data & Probability Rules', notation: 'Q₁, Q₃, IQR' },
+    { id: 'rv_transform_combine', title: 'Transforming & Combining Random Variables', topic: 'Exploring Data & Probability Rules', notation: 'μ, σ' },
+    { id: 'prob_twoway', title: 'Two-Way Tables, Conditional Probability & Independence', topic: 'Exploring Data & Probability Rules', notation: 'P(A | B)' },
     { id: 'prob_discrete_rv', title: 'Discrete Random Variables (E(X) & SD)', topic: 'Random Variables & Probability Distributions', notation: 'E(X), σ_X' },
     { id: 'prob_binom_geom', title: 'Binomial & Geometric Distributions', topic: 'Random Variables & Probability Distributions', notation: 'Binom(n, p), Geom(p)' },
     { id: 'sampling_dist', title: 'Sampling Distributions for x̄ and p̂', topic: 'Sampling Distributions (CLT)', notation: 'x̄, p̂' },
@@ -1521,7 +1524,8 @@ async function loadProblem(problemToRender = null) {
     isMultiStage = topic.startsWith('ci_') || topic.startsWith('ht_') || topic.startsWith('chi_') ||
         topic.startsWith('reg_') ||
         topic.startsWith('cond_') || topic.startsWith('drill_') ||
-        topic.startsWith('prob_') || topic.startsWith('sampling_');
+        topic.startsWith('prob_') || topic.startsWith('sampling_') ||
+        topic.startsWith('eda_') || topic === 'rv_transform_combine';
     currentProblem = problemToRender;
 
     if (isMultiStage) {
@@ -1534,12 +1538,14 @@ async function loadProblem(problemToRender = null) {
             const isChiSquare = topic.startsWith('chi_');
             const isRegression = topic.startsWith('reg_');
             const isInferenceDrill = topic.startsWith('cond_') || topic.startsWith('drill_');
+            const isFoundations = topic.startsWith('eda_') || topic === 'rv_transform_combine' || topic === 'prob_twoway';
             const isProbSampling = topic.startsWith('prob_') || topic.startsWith('sampling_');
             const problemTopic = isHypothesisTest || isChiSquare || isRegression
-                || isProbSampling ? topic
+                || isProbSampling || isFoundations ? topic
                 : topic.replace('ci_', '');
             const endpoint = isInferenceDrill
                 ? '/api/problem/drill'
+                : isFoundations ? '/api/problem/foundations'
                 : isHypothesisTest ? '/api/problem/ht'
                     : isChiSquare ? '/api/problem/chi'
                         : isRegression ? '/api/problem/regression'

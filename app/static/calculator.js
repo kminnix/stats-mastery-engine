@@ -453,6 +453,50 @@ window.addEventListener('DOMContentLoaded', () => {
     const grip = document.getElementById('calc-resize-grip');
     const dockResizer = document.getElementById('calc-dock-resizer');
     const mf = getMathField();
+    const displayResizer = document.getElementById('calc-display-resizer');
+    if (displayResizer && mf && dock) {
+        let drag = null;
+        displayResizer.addEventListener('pointerdown', event => {
+            if (event.button !== 0) return;
+            const history = document.getElementById('calc-history-list');
+            drag = {
+                y: event.clientY,
+                height: parseFloat(getComputedStyle(mf).minHeight),
+                dockHeight: dock.getBoundingClientRect().height,
+                available: Math.max(0, history.getBoundingClientRect().height - 28)
+            };
+            displayResizer.setPointerCapture(event.pointerId);
+            event.preventDefault();
+        });
+        displayResizer.addEventListener('pointermove', event => {
+            if (!drag) return;
+            const height = Math.max(44, Math.min(220, drag.height + drag.y - event.clientY));
+            mf.style.setProperty('min-height', `${height}px`, 'important');
+            const extra = Math.max(0, height - drag.height - drag.available);
+            if (!calcMaximizedFrom && !document.body.classList.contains('calculator-standalone')) {
+                if (currentDockMode === 'bottom') {
+                    window.dockManager.resize('calc', drag.dockHeight + extra);
+                } else if (currentDockMode === 'float') {
+                    dock.style.height = `${Math.min(window.innerHeight, drag.dockHeight + extra)}px`;
+                }
+            }
+        });
+        const endDisplayResize = () => { drag = null; };
+        displayResizer.addEventListener('pointerup', endDisplayResize);
+        displayResizer.addEventListener('pointercancel', endDisplayResize);
+        displayResizer.addEventListener('lostpointercapture', endDisplayResize);
+        const header = dock.querySelector('.calc-header');
+        new ResizeObserver(() => {
+            if (!header || !dock.offsetHeight || calcMaximizedFrom || document.body.classList.contains('calculator-standalone')) return;
+            const overflow = header.scrollHeight - header.clientHeight;
+            if (overflow <= 1) return;
+            if (currentDockMode === 'bottom' && dock.offsetHeight < 520) {
+                window.dockManager.resize('calc', dock.offsetHeight + overflow);
+            } else if (currentDockMode === 'float' && dock.offsetHeight < window.innerHeight) {
+                dock.style.height = `${Math.min(window.innerHeight, dock.offsetHeight + overflow)}px`;
+            }
+        }).observe(mf);
+    }
     if (document.body.classList.contains('calculator-standalone')) {
         dock.style.setProperty('display', 'flex', 'important');
         customElements.whenDefined('math-field').then(() => {

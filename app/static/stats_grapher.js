@@ -118,7 +118,7 @@
                 categories.rows.map((__, row) => categories.counts[row][column])
             );
         }
-        if (Object.hasOwn(plots, payload.mode)) state.mode = payload.mode;
+        if (Object.hasOwn(plots, payload.mode) || payload.mode === 'inference') state.mode = payload.mode;
         for (const mode of ['one', 'two', 'categorical']) {
             if (plots[mode].some(([id]) => id === payload.plot?.[mode])) state.plot[mode] = payload.plot[mode];
         }
@@ -199,8 +199,11 @@
     function setMode(mode) {
         state.mode = mode;
         const categorical = mode === 'categorical';
+        const inference = mode === 'inference';
+        element('stats-panel-inference').hidden = !inference;
+        if (inference) element('inf-results-container').replaceChildren();
         element('stats-categorical').hidden = !categorical;
-        document.querySelector('.stats-top-split').hidden = categorical;
+        document.querySelector('.stats-top-split').hidden = categorical || inference;
         element('stats-var-x-1var').hidden = mode !== 'one';
         element('stats-var-x-2var').hidden = mode !== 'two';
         element('stats-mode-tabs').querySelectorAll('button').forEach(button => {
@@ -208,7 +211,7 @@
         });
         const tabs = element('stats-plot-tabs');
         tabs.replaceChildren();
-        plots[mode].forEach(([id, label]) => {
+        (plots[mode] || []).forEach(([id, label]) => {
             const button = document.createElement('button');
             button.type = 'button';
             button.textContent = label;
@@ -221,8 +224,597 @@
             tabs.appendChild(button);
         });
         if (categorical) renderCategories();
-        else renderRows();
+        else if (!inference) renderRows();
         update();
+    }
+
+    const inference = {
+        source: 'stats',
+        groups: ['Group 1', 'Group 2'],
+        gof: [['', ''], ['', ''], ['', '']],
+        categories: ['Category 1', 'Category 2', 'Category 3'],
+        table: [['', ''], ['', '']],
+        rows: ['Row 1', 'Row 2'],
+        columns: ['Column 1', 'Column 2'],
+        corners: { chisq_ind: 'Variable', chisq_hom: 'Group / Response' }
+    };
+
+    function logGamma(z) {
+        const c = [676.5203681218851, -1259.1392167224028, 771.3234287776531,
+            -176.6150291621406, 12.507343278686905, -0.13857109526572012,
+            9.984369578019572e-6, 1.5056327351493116e-7];
+        if (z < 0.5) return Math.log(Math.PI) - Math.log(Math.sin(Math.PI * z)) - logGamma(1 - z);
+        z -= 1;
+        let x = 0.9999999999998099;
+        c.forEach((value, i) => { x += value / (z + i + 1); });
+        const t = z + c.length - 0.5;
+        return 0.5 * Math.log(2 * Math.PI) + (z + 0.5) * Math.log(t) - t + Math.log(x);
+    }
+
+    function betaFraction(a, b, x) {
+        const tiny = 1e-300;
+        let c = 1, d = 1 - (a + b) * x / (a + 1);
+        if (Math.abs(d) < tiny) d = tiny;
+        d = 1 / d;
+        let h = d;
+        for (let m = 1; m <= 10000; m++) {
+            const m2 = 2 * m;
+            let aa = m * (b - m) * x / ((a + m2 - 1) * (a + m2));
+            d = 1 + aa * d; if (Math.abs(d) < tiny) d = tiny;
+            c = 1 + aa / c; if (Math.abs(c) < tiny) c = tiny;
+            d = 1 / d; h *= d * c;
+            aa = -(a + m) * (a + b + m) * x / ((a + m2) * (a + m2 + 1));
+            d = 1 + aa * d; if (Math.abs(d) < tiny) d = tiny;
+            c = 1 + aa / c; if (Math.abs(c) < tiny) c = tiny;
+            d = 1 / d;
+            const delta = d * c;
+            h *= delta;
+            if (Math.abs(delta - 1) < 1e-14) return h;
+        }
+        throw new Error('The beta function did not converge.');
+    }
+
+    function betaCDF(x, a, b) {
+        if (x <= 0) return 0;
+        if (x >= 1) return 1;
+        const factor = Math.exp(logGamma(a + b) - logGamma(a) - logGamma(b)
+            + a * Math.log(x) + b * Math.log1p(-x));
+        return x < (a + 1) / (a + b + 2)
+            ? factor * betaFraction(a, b, x) / a
+            : 1 - factor * betaFraction(b, a, 1 - x) / b;
+    }
+
+    function gammaUpper(a, x) {
+        if (x <= 0) return 1;
+        if (x === Infinity) return 0;
+        const factor = Math.exp(-x + a * Math.log(x) - logGamma(a));
+        if (x < a + 1) {
+            let term = 1 / a, sum = term;
+            for (let i = 1; i <= 10000; i++) {
+                term *= x / (a + i);
+                sum += term;
+                if (Math.abs(term) < Math.abs(sum) * 1e-14) return Math.max(0, 1 - sum * factor);
+            }
+        } else {
+            const tiny = 1e-300;
+            let b = x + 1 - a, c = 1 / tiny, d = 1 / b, h = d;
+            for (let i = 1; i <= 10000; i++) {
+                const an = -i * (i - a);
+                b += 2;
+                d = an * d + b; if (Math.abs(d) < tiny) d = tiny;
+                c = b + an / c; if (Math.abs(c) < tiny) c = tiny;
+                d = 1 / d;
+                const delta = d * c;
+                h *= delta;
+                if (Math.abs(delta - 1) < 1e-14) return Math.min(1, factor * h);
+            }
+        }
+        throw new Error('The gamma function did not converge.');
+    }
+
+    function normalCDF(x) {
+        if (x === 0) return 0.5;
+        const tail = gammaUpper(0.5, x * x / 2) / 2;
+        return x < 0 ? tail : 1 - tail;
+    }
+
+    function tCDF(x, df) {
+        if (x === 0) return 0.5;
+        const tail = betaCDF(df / (df + x * x), df / 2, 0.5) / 2;
+        return x < 0 ? tail : 1 - tail;
+    }
+
+    function inverseCDF(p, cdf) {
+        if (p === 0) return -Infinity;
+        if (p === 1) return Infinity;
+        if (p > 0.5) return -inverseCDF(1 - p, cdf);
+        let low = -1, high = 1;
+        while (cdf(low) > p && low > -1e15) low *= 2;
+        while (cdf(high) < p && high < 1e15) high *= 2;
+        if (cdf(low) > p || cdf(high) < p) throw new Error('Quantile is outside the supported numeric range.');
+        for (let i = 0; i < 160; i++) {
+            const mid = (low + high) / 2;
+            if (cdf(mid) < p) low = mid; else high = mid;
+        }
+        return (low + high) / 2;
+    }
+
+    function infNumber(value) {
+        if (value === Infinity) return '∞';
+        if (value === -Infinity) return '−∞';
+        return Number.isFinite(value) ? Number(value.toPrecision(9)).toString() : 'undefined';
+    }
+
+    function infField(id, label, value = '') {
+        return `<label for="inf-${id}">${label}<input id="inf-${id}" type="number" step="any" value="${value}"></label>`;
+    }
+
+    function infEscape(value) {
+        return String(value).replace(/[&<>"']/g, char =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+    }
+
+    function infSelect(id, label, options) {
+        return `<label for="inf-${id}">${label}<select id="inf-${id}">${options.map(([value, name]) =>
+            `<option value="${value}">${name}</option>`).join('')}</select></label>`;
+    }
+
+    function renderInference() {
+        const procedure = element('inf-procedure').value;
+        const container = element('inf-inputs-container');
+        const mean = procedure.includes('samp_t');
+        const regression = procedure.startsWith('linreg');
+        const two = procedure.startsWith('2');
+        const interval = procedure.endsWith('_int');
+        const test = procedure.endsWith('_test');
+        const groupFields = two
+            ? `<div class="inf-fields inf-group-labels">${inference.groups.map((name, i) =>
+                `<label>Group ${i + 1} Label<input id="inf-group${i + 1}" type="text" value="${infEscape(name)}"></label>`).join('')}</div>`
+            : '';
+        const groupHeader = index => `<strong class="inf-group-header" data-group="${index}">${infEscape(inference.groups[index])}</strong>`;
+        let fields = '';
+        if (mean || regression) {
+            fields += infSelect('source', 'Input source', [['stats', 'Stats'], ['data', 'Data']]);
+            if (inference.source === 'stats') {
+                if (regression) fields += infField('b', 'Slope b') + infField('se', 'SE of slope') + infField('n', 'n');
+                else {
+                    fields += (two ? groupHeader(0) : '') + infField('mean1', two ? 'x̄₁' : 'x̄') + infField('sd1', two ? 's₁' : 's') + infField('n1', two ? 'n₁' : 'n');
+                    if (two) fields += groupHeader(1) + infField('mean2', 'x̄₂') + infField('sd2', 's₂') + infField('n2', 'n₂');
+                }
+            }
+            if (mean && two) fields += infSelect('pooled', 'Pooled', [['no', 'No (Welch)'], ['yes', 'Yes']]);
+        } else if (procedure.includes('prop')) {
+            fields += (two ? groupHeader(0) : '') + infField('x1', two ? 'x₁' : 'x') + infField('n1', two ? 'n₁' : 'n');
+            if (two) fields += groupHeader(1) + infField('x2', 'x₂') + infField('n2', 'n₂');
+            if (test && !two) fields += infField('null', 'p₀', '0.5');
+        }
+        if (interval) fields += infField('level', 'C-Level', '0.95');
+        if (test) {
+            if (mean && !two) fields += infField('null', 'μ₀', '0');
+            fields += infSelect('alternative', 'Hₐ', [['ne', '≠'], ['lt', '<'], ['gt', '>']]);
+        }
+        if (procedure.startsWith('dist_')) {
+            const continuous = procedure === 'dist_normal' || procedure === 'dist_t';
+            fields += infSelect('operation', 'Operation', continuous
+                ? [['cdf', 'CDF (between bounds)'], ['inverse', 'Inverse (left area)']]
+                : [['pmf', 'PMF (exactly x)'], ['cdf', 'CDF (at most x)']]);
+            if (procedure === 'dist_normal') fields += infField('mean', 'Mean μ', '0') + infField('sd', 'Standard deviation σ', '1');
+            if (procedure === 'dist_t') fields += infField('df', 'df', '10');
+            if (procedure === 'dist_binom') fields += infField('n', 'Trials n', '10');
+            if (!continuous) fields += infField('p', 'Success probability p', '0.5') + infField('x', 'x', '0');
+            else fields += '<div id="inf-dist-bounds"></div>';
+        }
+        if (procedure === 'chisq_gof') {
+            fields += infSelect('expected-mode', 'Expected values', [['counts', 'Expected counts'], ['proportions', 'Expected proportions']]);
+        }
+        container.innerHTML = `${groupFields}<div class="inf-fields">${fields}</div><div id="inf-data-summary"></div><div id="inf-table"></div>`;
+        if (two) {
+            inference.groups.forEach((_, i) => {
+                element(`inf-group${i + 1}`).addEventListener('input', event => {
+                    inference.groups[i] = event.target.value;
+                    container.querySelectorAll(`.inf-group-header[data-group="${i}"]`).forEach(node => { node.textContent = event.target.value; });
+                    element('inf-results-container').querySelectorAll(`[data-result-group="${i}"]`).forEach(node => {
+                        node.textContent = `${node.dataset.symbol} (${event.target.value})`;
+                    });
+                    refreshInferenceData();
+                });
+            });
+        }
+        if (test && (two || regression)) {
+            const note = document.createElement('div');
+            note.textContent = regression ? 'H₀: slope = 0' : procedure.includes('prop') ? 'H₀: p₁ − p₂ = 0' : 'H₀: μ₁ − μ₂ = 0';
+            container.appendChild(note);
+        }
+        if (mean || regression) {
+            element('inf-source').value = inference.source;
+            element('inf-source').addEventListener('change', event => {
+                inference.source = event.target.value;
+                renderInference();
+            });
+        }
+        if (procedure.startsWith('dist_') && (procedure === 'dist_normal' || procedure === 'dist_t')) {
+            const renderBounds = () => {
+                element('inf-dist-bounds').innerHTML = element('inf-operation').value === 'cdf'
+                    ? infField('lower', 'Lower bound (blank = −∞)') + infField('upper', 'Upper bound (blank = ∞)')
+                    : infField('area', 'Left-tail area', '0.95');
+            };
+            element('inf-operation').addEventListener('change', renderBounds);
+            renderBounds();
+        }
+        if (procedure.startsWith('chisq_')) renderInferenceTable();
+        refreshInferenceData();
+        element('inf-error').textContent = '';
+        element('inf-results-container').replaceChildren();
+    }
+
+    function renderInferenceTable() {
+        const procedure = element('inf-procedure').value;
+        const gof = procedure === 'chisq_gof';
+        const data = gof ? inference.gof : inference.table;
+        const container = element('inf-table');
+        const heading = gof ? '<th>Category</th><th>Observed</th><th>Expected / proportion</th>'
+            : `<th><input type="text" class="inf-corner" aria-label="Row Var / Col Var"></th>${data[0].map((_, i) =>
+                `<th><input type="text" class="inf-column-name" aria-label="Column ${i + 1} label"></th>`).join('')}`;
+        container.innerHTML = `<div class="inf-table-wrap"><table class="inf-table"><thead><tr>${heading}</tr></thead><tbody>${
+            data.map((row, r) => `<tr><th><input type="text" class="inf-row-name" aria-label="${gof ? 'Category' : 'Row'} ${r + 1} label"></th>${row.map((value, c) =>
+                `<td><input type="number" step="any" aria-label="${gof ? (c ? 'Expected' : 'Observed') : `Row ${r + 1} column ${c + 1}`}"></td>`).join('')}</tr>`).join('')
+        }</tbody></table></div><div class="inf-actions"></div><div id="inf-expected-preview"></div>`;
+        const updateLabels = () => {
+            previewExpected();
+            const results = element('inf-results-container');
+            results.querySelectorAll('[data-matrix-row]').forEach(node => {
+                const index = Number(node.dataset.matrixRow);
+                node.textContent = gof ? inference.categories[index] : inference.rows[index];
+            });
+            results.querySelectorAll('[data-matrix-col]').forEach(node => {
+                node.textContent = inference.columns[Number(node.dataset.matrixCol)];
+            });
+            results.querySelectorAll('[data-matrix-corner]').forEach(node => { node.textContent = inference.corners[procedure]; });
+        };
+        if (!gof) {
+            const corner = container.querySelector('.inf-corner');
+            corner.value = inference.corners[procedure];
+            corner.addEventListener('input', () => { inference.corners[procedure] = corner.value; updateLabels(); });
+            container.querySelectorAll('.inf-column-name').forEach((input, i) => {
+                input.value = inference.columns[i];
+                input.addEventListener('input', () => { inference.columns[i] = input.value; updateLabels(); });
+            });
+        }
+        container.querySelectorAll('tbody tr').forEach((row, r) => {
+            const name = row.querySelector('.inf-row-name');
+            name.value = gof ? inference.categories[r] : inference.rows[r];
+            name.addEventListener('input', () => {
+                (gof ? inference.categories : inference.rows)[r] = name.value;
+                updateLabels();
+            });
+            row.querySelectorAll('td input').forEach((input, c) => {
+                input.value = data[r][c];
+                input.addEventListener('input', () => {
+                    data[r][c] = input.value;
+                    element('inf-results-container').replaceChildren();
+                    element('inf-error').textContent = '';
+                    previewExpected();
+                });
+            });
+        });
+        const actions = container.querySelector('.inf-actions');
+        const addButton = (text, action) => {
+            const button = document.createElement('button');
+            button.type = 'button'; button.className = 'btn-secondary'; button.textContent = text;
+            button.addEventListener('click', () => { action(); renderInferenceTable(); element('inf-results-container').replaceChildren(); });
+            actions.appendChild(button);
+        };
+        if (gof) {
+            addButton('+ Category', () => { data.push(['', '']); inference.categories.push(`Category ${data.length}`); });
+            addButton('- Category', () => { if (data.length > 2) { data.pop(); inference.categories.pop(); } });
+        } else {
+            addButton('+ Row', () => { data.push(data[0].map(() => '')); inference.rows.push(`Row ${data.length}`); });
+            addButton('- Row', () => { if (data.length > 2) { data.pop(); inference.rows.pop(); } });
+            addButton('+ Col', () => { data.forEach(row => row.push('')); inference.columns.push(`Column ${data[0].length}`); });
+            addButton('- Col', () => { if (data[0].length > 2) { data.forEach(row => row.pop()); inference.columns.pop(); } });
+        }
+        previewExpected();
+    }
+
+    function contingencyExpected(data) {
+        const rows = data.map(row => row.reduce((a, b) => a + b, 0));
+        const columns = data[0].map((_, c) => data.reduce((sum, row) => sum + row[c], 0));
+        const total = rows.reduce((a, b) => a + b, 0);
+        if (total <= 0 || rows.some(x => x <= 0) || columns.some(x => x <= 0)) throw new Error('Every row and column must have a positive total.');
+        return rows.map(row => columns.map(col => row * col / total));
+    }
+
+    function previewExpected() {
+        const target = element('inf-expected-preview');
+        if (!target || !['chisq_ind', 'chisq_hom'].includes(element('inf-procedure').value)) return;
+        const data = inference.table;
+        if (data.some(row => row.some(v => !numberPattern.test(v.trim()) || !Number.isFinite(Number(v)) || Number(v) < 0))) {
+            target.textContent = 'Enter nonnegative observed counts to see expected counts.';
+            return;
+        }
+        const numbers = data.map(row => row.map(Number));
+        const rows = numbers.map(row => row.reduce((a, b) => a + b, 0));
+        const columns = numbers[0].map((_, c) => numbers.reduce((sum, row) => sum + row[c], 0));
+        const total = rows.reduce((a, b) => a + b, 0);
+        if (!total || rows.some(x => !x) || columns.some(x => !x)) {
+            target.textContent = 'Every row and column needs a positive total for expected counts.';
+            return;
+        }
+        target.innerHTML = `<strong>Expected counts</strong>${infMatrix(contingencyExpected(numbers), false)}`;
+    }
+
+    function infMatrix(matrix, gof) {
+        const rows = gof ? matrix[0].map(value => [value]) : matrix;
+        const rowNames = gof ? inference.categories : inference.rows;
+        const headings = gof ? '<th>Count</th>' : inference.columns.map((name, i) =>
+            `<th data-matrix-col="${i}">${infEscape(name)}</th>`).join('');
+        const corner = gof ? 'Category' : infEscape(inference.corners[element('inf-procedure').value]);
+        const cornerAttr = gof ? '' : ' data-matrix-corner';
+        return `<div class="inf-table-wrap"><table class="inf-table"><thead><tr><th${cornerAttr}>${corner}</th>${headings}</tr></thead><tbody>${rows.map((row, i) =>
+            `<tr><th data-matrix-row="${i}">${infEscape(rowNames[i])}</th>${row.map(value => `<td>${infNumber(value)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    }
+
+    function inferenceData(mode, paired) {
+        const values = state.rows[mode];
+        if (paired) {
+            const pairs = [];
+            for (const row of values) {
+                const cells = row.map(v => v.trim());
+                if (cells.every(v => !v)) continue;
+                if (cells.some(v => !numberPattern.test(v) || !Number.isFinite(Number(v)))) throw new Error('Enter a finite X and Y in every populated regression row.');
+                pairs.push(cells.map(Number));
+            }
+            return pairs;
+        }
+        return Array.from({ length: mode === 'one' ? 1 : 2 }, (_, column) => {
+            const result = [];
+            for (const row of values) {
+                const value = row[column].trim();
+                if (!value) continue;
+                if (!numberPattern.test(value) || !Number.isFinite(Number(value))) throw new Error('Data columns must contain finite numbers.');
+                result.push(Number(value));
+            }
+            return result;
+        });
+    }
+
+    function refreshInferenceData() {
+        const target = element('inf-data-summary');
+        if (!target || inference.source !== 'data') return;
+        const procedure = element('inf-procedure').value;
+        if (!procedure.includes('samp_t') && !procedure.startsWith('linreg')) return;
+        try {
+            const regression = procedure.startsWith('linreg');
+            const mode = procedure.startsWith('1samp') ? 'one' : 'two';
+            const data = inferenceData(mode, regression);
+            const columns = regression ? [data.map(row => row[0]), data.map(row => row[1])] : data;
+            const text = columns.map((values, i) => {
+                const label = !regression && mode === 'two' ? `${inference.groups[i]} (${i ? 'Y' : 'X'})` : (i ? 'Y' : 'X');
+                if (!values.length) return `${label}: no data`;
+                const s = summary(values);
+                return `${label}: n = ${s.n}, x̄ = ${infNumber(s.mean)}, s = ${s.sd === null ? '—' : infNumber(s.sd)}`;
+            });
+            target.textContent = `${regression ? 'Paired 2-variable data' : mode === 'two' ? 'Independent samples from 2-variable X and Y' : '1-variable X'} — ${text.join('; ')}`;
+        } catch (error) {
+            target.textContent = error.message;
+        }
+    }
+
+    function infValue(id, label, options = {}) {
+        const input = element(`inf-${id}`);
+        const raw = input.value.trim();
+        if (!raw && options.blank !== undefined) return options.blank;
+        if (!raw || !numberPattern.test(raw) || !Number.isFinite(Number(raw))) throw new Error(`Enter a finite number for ${label}.`);
+        const value = Number(raw);
+        if (options.integer && !Number.isSafeInteger(value)) throw new Error(`${label} must be a whole number.`);
+        if (options.min !== undefined && value < options.min) throw new Error(`${label} must be at least ${options.min}.`);
+        if (options.max !== undefined && value > options.max) throw new Error(`${label} must be at most ${options.max}.`);
+        if (options.positive && value <= 0) throw new Error(`${label} must be positive.`);
+        if (options.unit && (value <= 0 || value >= 1)) throw new Error(`${label} must be between 0 and 1, exclusive.`);
+        return value;
+    }
+
+    function infSample(index) {
+        const mean = infValue(`mean${index}`, `x̄${index}`);
+        const sd = infValue(`sd${index}`, `s${index}`, { min: 0 });
+        const n = infValue(`n${index}`, `n${index}`, { integer: true, min: 2 });
+        return { mean, sd, n };
+    }
+
+    function infSamples(two) {
+        if (inference.source === 'stats') return two ? [infSample(1), infSample(2)] : [infSample(1)];
+        return inferenceData(two ? 'two' : 'one', false).map(values => {
+            if (values.length < 2) throw new Error('Each sample needs at least two data values.');
+            return summary(values);
+        });
+    }
+
+    function infRegression() {
+        if (inference.source === 'stats') return {
+            b: infValue('b', 'slope b'), se: infValue('se', 'SE of slope', { min: 0 }),
+            n: infValue('n', 'n', { integer: true, min: 3 })
+        };
+        const pairs = inferenceData('two', true);
+        if (pairs.length < 3) throw new Error('Regression needs at least three paired observations.');
+        const x = summary(pairs.map(row => row[0])), y = summary(pairs.map(row => row[1]));
+        if (!(x.ss > 0) || !Number.isFinite(x.ss) || !Number.isFinite(y.ss)) throw new Error('Regression requires varying X and finite statistics.');
+        const b = pairs.reduce((sum, [a, v]) => sum + (a - x.mean) * (v - y.mean), 0) / x.ss;
+        const residual = pairs.reduce((sum, [a, v]) => sum + (v - y.mean - b * (a - x.mean)) ** 2, 0);
+        const se = Math.sqrt(residual / (pairs.length - 2) / x.ss);
+        if (!Number.isFinite(b) || !Number.isFinite(se)) throw new Error('Regression statistics overflowed.');
+        return { b, se, n: pairs.length };
+    }
+
+    function infTail(stat, cdf, alternative) {
+        if (alternative === 'lt') return cdf(stat);
+        if (alternative === 'gt') return cdf(-stat);
+        return Math.min(1, 2 * cdf(-Math.abs(stat)));
+    }
+
+    function calculateInference() {
+        const procedure = element('inf-procedure').value;
+        const interval = procedure.endsWith('_int');
+        const entries = [];
+        let details = '';
+        let heading = '';
+        const add = (name, value, group = null) => entries.push([name, value, group]);
+        if (procedure.includes('prop') || procedure.includes('samp_t') || procedure.startsWith('linreg')) {
+            const two = procedure.startsWith('2');
+            let estimate, se, df, nullValue = 0, cdf = normalCDF;
+            if (procedure.includes('prop')) {
+                const sample = i => {
+                    const n = infValue(`n${i}`, `n${i}`, { integer: true, min: 1 });
+                    const x = infValue(`x${i}`, `x${i}`, { integer: true, min: 0, max: n });
+                    return { x, n, p: x / n };
+                };
+                const a = sample(1), b = two ? sample(2) : null;
+                estimate = a.p - (b ? b.p : 0);
+                add('p̂', a.p, two ? 0 : null);
+                if (b) add('p̂', b.p, 1);
+                if (interval) se = Math.sqrt(a.p * (1 - a.p) / a.n + (b ? b.p * (1 - b.p) / b.n : 0));
+                else if (b) {
+                    const pooled = (a.x + b.x) / (a.n + b.n);
+                    add('Pooled p̂c', pooled);
+                    se = Math.sqrt(pooled * (1 - pooled) * (1 / a.n + 1 / b.n));
+                } else {
+                    nullValue = infValue('null', 'p₀', { unit: true });
+                    se = Math.sqrt(nullValue * (1 - nullValue) / a.n);
+                }
+            } else if (procedure.startsWith('linreg')) {
+                const reg = infRegression();
+                estimate = reg.b; se = reg.se; df = reg.n - 2;
+                add('Slope b', estimate);
+            } else {
+                const samples = infSamples(two), a = samples[0], b = samples[1];
+                estimate = a.mean - (b ? b.mean : 0);
+                add('x̄', a.mean, two ? 0 : null);
+                if (b) add('x̄', b.mean, 1);
+                if (!two) {
+                    se = a.sd / Math.sqrt(a.n); df = a.n - 1;
+                    if (!interval) nullValue = infValue('null', 'μ₀');
+                } else if (element('inf-pooled').value === 'yes') {
+                    df = a.n + b.n - 2;
+                    const variance = ((a.n - 1) * a.sd ** 2 + (b.n - 1) * b.sd ** 2) / df;
+                    se = Math.sqrt(variance * (1 / a.n + 1 / b.n));
+                } else {
+                    const v1 = a.sd ** 2 / a.n, v2 = b.sd ** 2 / b.n;
+                    se = Math.sqrt(v1 + v2);
+                    df = (v1 + v2) ** 2 / (v1 ** 2 / (a.n - 1) + v2 ** 2 / (b.n - 1));
+                }
+            }
+            if (!Number.isFinite(estimate) || !Number.isFinite(se) || (df !== undefined && (!Number.isFinite(df) || df <= 0))) throw new Error('These inputs do not produce finite inference statistics.');
+            if (df !== undefined) cdf = value => tCDF(value, df);
+            if (interval) {
+                const level = infValue('level', 'C-Level', { unit: true });
+                const margin = -inverseCDF((1 - level) / 2, cdf) * se;
+                add('Interval', `(${infNumber(estimate - margin)}, ${infNumber(estimate + margin)})`);
+                add('Point estimate', estimate); add('Margin of error (E)', margin);
+            } else {
+                if (!(se > 0)) throw new Error('The standard error must be positive for a hypothesis test.');
+                const statistic = (estimate - nullValue) / se;
+                add(df === undefined ? 'z' : 't', statistic);
+                add('P-value', infTail(statistic, cdf, element('inf-alternative').value));
+            }
+            add(!interval && procedure.includes('prop') ? 'Standard error (SE₀)' : 'Standard error (SE)', se);
+            if (df !== undefined) add('df', df);
+        } else if (procedure.startsWith('chisq_')) {
+            const gof = procedure === 'chisq_gof';
+            const raw = gof ? inference.gof : inference.table;
+            const data = raw.map(row => row.map(value => {
+                if (!numberPattern.test(value.trim()) || !Number.isFinite(Number(value)) || Number(value) < 0) throw new Error('Enter nonnegative finite counts or proportions in every table cell.');
+                return Number(value);
+            }));
+            let observed, expected, df;
+            if (gof) {
+                observed = [data.map(row => row[0])];
+                const given = data.map(row => row[1]);
+                const total = observed[0].reduce((a, b) => a + b, 0);
+                if (element('inf-expected-mode').value === 'proportions') {
+                    if (Math.abs(given.reduce((a, b) => a + b, 0) - 1) > 1e-8) throw new Error('Expected proportions must sum to 1.');
+                    expected = [given.map(value => value * total)];
+                } else {
+                    expected = [given];
+                    const expectedTotal = given.reduce((a, b) => a + b, 0);
+                    if (Math.abs(expectedTotal - total) > 1e-8 * Math.max(1, total)) throw new Error('Expected and observed counts must have the same total.');
+                }
+                df = data.length - 1;
+            } else {
+                observed = data; expected = contingencyExpected(data);
+                df = (data.length - 1) * (data[0].length - 1);
+            }
+            if (expected.some(row => row.some(value => !(value > 0) || !Number.isFinite(value)))) throw new Error('All expected counts must be positive and finite.');
+            const contributions = observed.map((row, r) => row.map((value, c) => (value - expected[r][c]) ** 2 / expected[r][c]));
+            const chi = contributions.flat().reduce((a, b) => a + b, 0);
+            if (!Number.isFinite(chi)) throw new Error('Chi-square statistic overflowed.');
+            add('χ²', chi); add('P-value', gammaUpper(df / 2, chi / 2)); add('df', df);
+            if (!gof) heading = procedure === 'chisq_ind'
+                ? 'Test for Independence: H₀: Variables are independent'
+                : 'Test for Homogeneity: H₀: Distributions are identical across groups';
+            details = `<details><summary>Expected counts and contributions</summary><strong>Expected counts</strong>${infMatrix(expected, gof)}<strong>(O − E)² / E</strong>${infMatrix(contributions, gof)}</details>`;
+        } else {
+            const operation = element('inf-operation').value;
+            let result;
+            if (procedure === 'dist_normal' || procedure === 'dist_t') {
+                const normal = procedure === 'dist_normal';
+                const mean = normal ? infValue('mean', 'mean') : 0;
+                const sd = normal ? infValue('sd', 'standard deviation', { positive: true }) : 1;
+                const df = normal ? null : infValue('df', 'df', { positive: true });
+                const cdf = normal ? normalCDF : value => tCDF(value, df);
+                if (operation === 'inverse') {
+                    const area = infValue('area', 'left-tail area', { min: 0, max: 1 });
+                    result = mean + sd * inverseCDF(area, cdf);
+                } else {
+                    const lower = infValue('lower', 'lower bound', { blank: -Infinity });
+                    const upper = infValue('upper', 'upper bound', { blank: Infinity });
+                    if (lower > upper) throw new Error('Lower bound must not exceed upper bound.');
+                    const lo = (lower - mean) / sd, hi = (upper - mean) / sd;
+                    result = lo > 0 ? cdf(-lo) - cdf(-hi) : cdf(hi) - cdf(lo);
+                }
+            } else {
+                const p = infValue('p', 'p', { min: 0, max: 1 });
+                const x = infValue('x', 'x', { integer: true });
+                if (procedure === 'dist_binom') {
+                    const n = infValue('n', 'n', { integer: true, min: 0 });
+                    if (operation === 'cdf') result = x < 0 ? 0 : x >= n ? 1 : p === 0 ? 1 : p === 1 ? 0 : betaCDF(1 - p, n - x, x + 1);
+                    else if (x < 0 || x > n) result = 0;
+                    else if (p === 0) result = x === 0 ? 1 : 0;
+                    else if (p === 1) result = x === n ? 1 : 0;
+                    else result = Math.exp(logGamma(n + 1) - logGamma(x + 1) - logGamma(n - x + 1) + x * Math.log(p) + (n - x) * Math.log1p(-p));
+                } else {
+                    if (p === 0) throw new Error('Geometric p must be greater than 0.');
+                    if (x < 1) result = 0;
+                    else if (p === 1) result = operation === 'cdf' || x === 1 ? 1 : 0;
+                    else result = operation === 'cdf' ? -Math.expm1(x * Math.log1p(-p)) : Math.exp((x - 1) * Math.log1p(-p)) * p;
+                }
+            }
+            if (Number.isNaN(result) || (operation !== 'inverse' && !Number.isFinite(result))) throw new Error('The result is outside the supported numeric range.');
+            add(operation === 'inverse' ? 'Quantile' : 'Probability', result);
+        }
+        const output = element('inf-results-container');
+        output.innerHTML = `${heading ? `<h3>${heading}</h3>` : ''}<div class="inf-results">${entries.map(([label, value, group]) => {
+            const groupAttr = group === null ? '' : ` data-result-group="${group}" data-symbol="${infEscape(label)}"`;
+            const caption = group === null ? label : `${label} (${inference.groups[group]})`;
+            return `<div class="stats-card"><span class="stats-card-label"${groupAttr}>${infEscape(caption)}</span><strong>${infEscape(typeof value === 'number' ? infNumber(value) : value)}</strong></div>`;
+        }).join('')}</div>${details}`;
+    }
+
+    function initInference() {
+        element('inf-procedure').addEventListener('change', renderInference);
+        element('inf-inputs-container').addEventListener('input', event => {
+            if (event.target.matches('#inf-group1, #inf-group2, .inf-row-name, .inf-column-name, .inf-corner')) return;
+            element('inf-error').textContent = '';
+            element('inf-results-container').replaceChildren();
+        });
+        element('inf-calculate').addEventListener('click', () => {
+            element('inf-error').textContent = '';
+            element('inf-results-container').replaceChildren();
+            try {
+                calculateInference();
+            } catch (error) {
+                element('inf-error').textContent = error.message;
+            }
+        });
+        renderInference();
     }
 
     function computeNiceScale(rawMin, rawMax, targetTicks = 6) {
@@ -870,7 +1462,7 @@
         const stemActive = state.mode === 'one' && state.plot.one === 'stemplot';
         element('stats-stem-controls').hidden = !stemActive;
         element('stats-stemplot').hidden = !stemActive;
-        plot.hidden = stemActive;
+        plot.toggleAttribute('hidden', stemActive || state.mode === 'inference');
         element('stats-stemplot').replaceChildren();
         const output = element('stats-summary');
         output.replaceChildren();
@@ -881,6 +1473,10 @@
         categoryControls.querySelectorAll('button').forEach(button => {
             button.classList.toggle('active', button.dataset.catBarMode === state.categories.barMode);
         });
+        if (state.mode === 'inference') {
+            refreshInferenceData();
+            return;
+        }
         if (state.mode === 'categorical') {
             updateCategorical();
             return;
@@ -1026,8 +1622,9 @@
         hydrateStatsState();
         element('stats-mode-tabs').addEventListener('click', event => {
             const mode = event.target.dataset.mode;
-            if (plots[mode]) setMode(mode);
+            if (plots[mode] || mode === 'inference') setMode(mode);
         });
+        initInference();
         element('stats-clear').addEventListener('click', () => {
             state.rows[state.mode] = Array.from({ length: 6 }, () => state.mode === 'one' ? [''] : ['', '']);
             setMode(state.mode);
