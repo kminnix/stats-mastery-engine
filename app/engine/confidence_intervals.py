@@ -1,6 +1,7 @@
 ﻿import random
 import math
 from scipy.stats import norm, t
+from .inference_conditions import add_inference_conditions
 
 def generate_mean_t_interval():
     """Generates a 1-sample t confidence interval problem for a population mean."""
@@ -42,9 +43,11 @@ def generate_mean_t_interval():
         f"<p>Confidence Interval: \\(({lower_table}, {upper_table})\\)</p>"
     )
 
-    return {
+    return add_inference_conditions({
         "type": "mean_t",
         "title": f"1-Sample t-Interval for Mean ({conf_level}%)",
+        "metadata": {"se": se, "critical": t_star_rounded, "point": xbar, "margin": moe_table,
+                     "lower": lower_table, "upper": upper_table, "confidence": conf_level, "df": df},
         "prompt": (
             f"A simple random sample of size \\(n = {n}\\) yields a sample mean \\(\\bar{{x}} = {xbar}\\) "
             f"and sample standard deviation \\(s = {s}\\). Construct a <strong>{conf_level}%</strong> "
@@ -99,7 +102,7 @@ def generate_mean_t_interval():
             }
         ],
         "solution": solution_html
-    }
+    }, [n])
 
 def generate_proportion_z_interval():
     """Generates a 1-sample z confidence interval problem for a population proportion."""
@@ -144,9 +147,11 @@ def generate_proportion_z_interval():
         f"<p>Confidence Interval: \\(({lower_table}, {upper_table})\\)</p>"
     )
 
-    return {
+    return add_inference_conditions({
         "type": "prop_z",
         "title": f"1-Sample z-Interval for Proportion ({conf_level}%)",
+        "metadata": {"se": se, "critical": z_star_rounded, "point": phat, "margin": moe_table,
+                     "lower": lower_table, "upper": upper_table, "confidence": conf_level},
         "prompt": (
             f"In a random sample of \\(n = {n}\\) surveyed individuals, \\(x = {x}\\) responded favorably. "
             f"Construct a <strong>{conf_level}%</strong> confidence interval for the true population proportion \\(p\\). "
@@ -201,7 +206,7 @@ def generate_proportion_z_interval():
             }
         ],
         "solution": solution_html
-    }
+    }, [n], min(x, n - x), r"Calculate \(n\hat p=x\) and \(n(1-\hat p)=n-x\).")
 
 def generate_two_sample_mean_t_interval():
     """Generates a conservative two-sample t confidence interval for a difference in means."""
@@ -242,9 +247,11 @@ def generate_two_sample_mean_t_interval():
         f"<p>Confidence Interval for \\(\\mu_1 - \\mu_2\\): \\(({lower}, {upper})\\)</p>"
     )
 
-    return {
+    return add_inference_conditions({
         "type": "mean_t_2samp",
         "title": f"2-Sample t-Interval for Means ({conf_level}%)",
+        "metadata": {"se": se, "critical": t_star, "point": point_estimate, "margin": moe,
+                     "lower": lower, "upper": upper, "confidence": conf_level, "df": df},
         "prompt": (
             f"Independent random samples have \\(n_1 = {n1}\\), "
             f"\\(\\bar{{x}}_1 = {xbar1}\\), and \\(s_1 = {s1}\\), and "
@@ -275,7 +282,7 @@ def generate_two_sample_mean_t_interval():
              "hint": "U = (x̄₁ - x̄₂) + E"}
         ],
         "solution": solution_html
-    }
+    }, [n1, n2])
 
 def generate_two_sample_prop_z_interval():
     """Generates a two-sample z confidence interval for a difference in proportions."""
@@ -316,9 +323,11 @@ def generate_two_sample_prop_z_interval():
         f"<p>Confidence Interval for \\(p_1 - p_2\\): \\(({lower}, {upper})\\)</p>"
     )
 
-    return {
+    return add_inference_conditions({
         "type": "prop_z_2samp",
         "title": f"2-Sample z-Interval for Proportions ({conf_level}%)",
+        "metadata": {"se": se, "critical": z_star, "point": point_estimate, "margin": moe,
+                     "lower": lower, "upper": upper, "confidence": conf_level},
         "prompt": (
             f"In two independent random samples, {x1} of {n1} individuals in group 1 and "
             f"{x2} of {n2} individuals in group 2 have the characteristic of interest. "
@@ -343,7 +352,8 @@ def generate_two_sample_prop_z_interval():
              "hint": "U = (p̂₁ - p̂₂) + E"}
         ],
         "solution": solution_html
-    }
+    }, [n1, n2], min(x1, n1 - x1, x2, n2 - x2),
+        r"Calculate successes and failures for each sample; compare all four counts.")
 
 def generate_matched_pairs_t_interval():
     """Generates a matched-pairs t confidence interval for a population mean difference."""
@@ -378,9 +388,11 @@ def generate_matched_pairs_t_interval():
         f"\\(({lower}, {upper})\\)</p>"
     )
 
-    return {
+    return add_inference_conditions({
         "type": "matched_pairs_t",
         "title": f"Matched Pairs t-Interval for μ_diff ({conf_level}%)",
+        "metadata": {"se": se, "critical": t_star, "point": d_bar, "margin": moe,
+                     "lower": lower, "upper": upper, "confidence": conf_level, "df": df},
         "prompt": (
             f"For {n} matched pairs, the sample mean of the paired differences is "
             f"\\(\\bar{{d}} = {d_bar}\\) and their sample standard deviation is "
@@ -406,7 +418,7 @@ def generate_matched_pairs_t_interval():
              "hint": "U = d̄ + E"}
         ],
         "solution": solution_html
-    }
+    }, [n])
 
 def generate_ci_problem(topic: str = "random"):
     if topic == "mean_t":

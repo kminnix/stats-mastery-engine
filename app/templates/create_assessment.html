@@ -251,9 +251,16 @@
         { id: 'left_tail', title: 'Left Tail Cumulative Area', topic: 'Normal Distributions', notation: 'P(X < b)' },
         { id: 'right_tail', title: 'Right Tail Cumulative Area', topic: 'Normal Distributions', notation: 'P(X > a)' },
         { id: 'inverse', title: 'Inverse Cutoffs & Percentiles', topic: 'Normal Distributions', notation: 'x = \\mu + z\\sigma' },
-        { id: 'eda_summary', title: '1-Variable Summary Stats, IQR & Outliers', topic: 'Exploring Data & Probability Rules', notation: 'Q_1, Q_3, IQR' },
-        { id: 'rv_transform_combine', title: 'Transforming & Combining Random Variables', topic: 'Exploring Data & Probability Rules', notation: '\\mu, \\sigma' },
-        { id: 'prob_twoway', title: 'Two-Way Tables, Conditional Probability & Independence', topic: 'Exploring Data & Probability Rules', notation: 'P(A \\mid B)' },
+        { id: 'eda_summary', title: '1-Variable Summary Stats, IQR & Outliers (Full)', topic: 'Exploring Data & Probability Rules', notation: 'Q_1, Q_3, IQR' },
+        { id: 'eda_five_num', title: 'Five-Number Summary (Min, Q1, Med, Q3, Max)', topic: 'Exploring Data & Probability Rules', notation: 'Q_1, Q_3' },
+        { id: 'eda_iqr_fences', title: 'IQR & 1.5×IQR Outlier Fences', topic: 'Exploring Data & Probability Rules', notation: 'IQR' },
+        { id: 'eda_mean_sd', title: 'Sample Mean & Standard Deviation', topic: 'Exploring Data & Probability Rules', notation: '\\bar{x}, s' },
+        { id: 'rv_transform_combine', title: 'Transforming & Combining Random Variables (Full)', topic: 'Exploring Data & Probability Rules', notation: '\\mu, \\sigma' },
+        { id: 'rv_transform', title: 'Linear Transformation (a + bX)', topic: 'Exploring Data & Probability Rules', notation: 'a + bX' },
+        { id: 'rv_combine', title: 'Combining Independent Random Variables (X ± Y)', topic: 'Exploring Data & Probability Rules', notation: 'X \\pm Y' },
+        { id: 'prob_twoway', title: 'Two-Way Tables & Conditional Probability (Full)', topic: 'Exploring Data & Probability Rules', notation: 'P(A \\mid B)' },
+        { id: 'prob_marginal_joint', title: 'Marginal & Joint Probabilities', topic: 'Exploring Data & Probability Rules', notation: 'P(A), P(A \\cap B)' },
+        { id: 'prob_conditional', title: 'Conditional Probability & Independence Check', topic: 'Exploring Data & Probability Rules', notation: 'P(A \\mid B)' },
         { id: 'prob_discrete_rv', title: 'Discrete Random Variables (E(X) & SD)', topic: 'Random Variables & Probability Distributions', notation: 'E(X), σ_X' },
         { id: 'prob_binom_geom', title: 'Binomial & Geometric Distributions', topic: 'Random Variables & Probability Distributions', notation: 'Binom(n, p), Geom(p)' },
         { id: 'sampling_dist', title: 'Sampling Distributions for x̄ and p̂', topic: 'Sampling Distributions (CLT)', notation: 'x̄, p̂' },
@@ -261,31 +268,59 @@
         { id: 'drill_se_prop', title: 'Standard Error for Proportions', topic: 'Confidence Intervals for Proportions (p)', notation: 'SE = √(p̂(1 − p̂)/n)' },
         { id: 'ci_prop_z', title: '1-Sample z-Interval for Proportion', topic: 'Confidence Intervals for Proportions (p)', notation: 'p' },
         { id: 'ci_prop_z_2samp', title: '2-Sample z-Interval for Proportions', topic: 'Confidence Intervals for Proportions (p)', notation: 'p_1 - p_2' },
+        { id: 'ci_prop_cond', title: 'Checking Conditions for Proportion Intervals', topic: 'Confidence Intervals for Proportions (p)', notation: 'Conditions' },
+        { id: 'ci_prop_crit_se', title: 'Critical Value (z*) & Standard Error for p', topic: 'Confidence Intervals for Proportions (p)', notation: 'z^*, SE' },
+        { id: 'ci_prop_bounds', title: 'Margin of Error & Interval Bounds for p', topic: 'Confidence Intervals for Proportions (p)', notation: 'E, L, U' },
+        { id: 'ci_prop_interp', title: 'Interpreting a Proportion Confidence Interval', topic: 'Confidence Intervals for Proportions (p)', notation: 'p' },
         { id: 'drill_hypo_prop', title: 'Stating Hypotheses for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'H_0, H_a' },
         { id: 'drill_stat_prop', title: 'Test Statistic & SE for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'SE_0, z' },
         { id: 'drill_conclusion_prop', title: 'P-Value & Conclusion for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'p-value vs. α' },
         { id: 'ht_prop_z', title: '1-Sample z-Test for Proportion', topic: 'Significance Tests for Proportions (p)', notation: 'H_0: p = p_0' },
         { id: 'ht_prop_z_2samp', title: '2-Sample z-Test for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'H_0: p_1 = p_2' },
+        { id: 'ht_prop_hypo', title: 'Stating Hypotheses for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'H_0, H_a' },
+        { id: 'ht_prop_cond', title: 'Checking Conditions for Proportion Tests', topic: 'Significance Tests for Proportions (p)', notation: 'Conditions' },
+        { id: 'ht_prop_stat', title: 'Standard Error (SE₀) & z-Statistic for p', topic: 'Significance Tests for Proportions (p)', notation: 'SE_0, z' },
+        { id: 'ht_prop_pval', title: 'P-Value & Interpretation for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'P' },
+        { id: 'ht_prop_conc', title: 'Decision & Contextual Conclusion for p', topic: 'Significance Tests for Proportions (p)', notation: 'P, \\alpha' },
         { id: 'cond_check_mean', title: 'Checking Conditions for Means', topic: 'Confidence Intervals for Means (μ)', notation: 'Random, 10%, Normality' },
         { id: 'drill_se_mean', title: 'Standard Error & Critical Value (t*) for Means', topic: 'Confidence Intervals for Means (μ)', notation: 'SE = s/√n, t*' },
         { id: 'ci_mean_t', title: '1-Sample t-Interval for Mean', topic: 'Confidence Intervals for Means (μ)', notation: '\\mu' },
         { id: 'ci_mean_t_2samp', title: '2-Sample t-Interval for Means', topic: 'Confidence Intervals for Means (μ)', notation: '\\mu_1 - \\mu_2' },
         { id: 'ci_matched_pairs_t', title: 'Matched Pairs t-Interval for Mean Difference', topic: 'Confidence Intervals for Means (μ)', notation: '\\mu_{\\text{diff}}' },
+        { id: 'ci_mean_cond', title: 'Checking Conditions for Mean Intervals', topic: 'Confidence Intervals for Means (μ)', notation: 'Conditions' },
+        { id: 'ci_mean_crit_se', title: 'Degrees of Freedom, t* & SE for μ', topic: 'Confidence Intervals for Means (μ)', notation: 'df, t^*, SE' },
+        { id: 'ci_mean_bounds', title: 'Margin of Error & Interval Bounds for μ', topic: 'Confidence Intervals for Means (μ)', notation: 'E, L, U' },
+        { id: 'ci_mean_interp', title: 'Interpreting a Mean Confidence Interval', topic: 'Confidence Intervals for Means (μ)', notation: '\\mu' },
         { id: 'drill_hypo_mean', title: 'Stating Hypotheses for Means', topic: 'Significance Tests for Means (μ)', notation: 'H_0, H_a' },
         { id: 'drill_stat_mean', title: 'Test Statistic & SE for Means', topic: 'Significance Tests for Means (μ)', notation: 'SE_0, t' },
         { id: 'drill_conclusion_mean', title: 'P-Value & Conclusion for Means', topic: 'Significance Tests for Means (μ)', notation: 'p-value vs. α' },
         { id: 'ht_mean_t', title: '1-Sample t-Test for Mean', topic: 'Significance Tests for Means (μ)', notation: 'H_0: \\mu = \\mu_0' },
         { id: 'ht_mean_t_2samp', title: '2-Sample t-Test for Means', topic: 'Significance Tests for Means (μ)', notation: 'H_0: \\mu_1 = \\mu_2' },
         { id: 'ht_matched_pairs_t', title: 'Matched Pairs t-Test', topic: 'Significance Tests for Means (μ)', notation: 'H_0: \\mu_{\\text{diff}} = 0' },
+        { id: 'ht_mean_hypo', title: 'Stating Hypotheses for Means', topic: 'Significance Tests for Means (μ)', notation: 'H_0, H_a' },
+        { id: 'ht_mean_cond', title: 'Checking Conditions for Mean Tests', topic: 'Significance Tests for Means (μ)', notation: 'Conditions' },
+        { id: 'ht_mean_stat', title: 'Standard Error & t-Statistic for μ', topic: 'Significance Tests for Means (μ)', notation: 'SE, t' },
+        { id: 'ht_mean_pval', title: 'P-Value & Interpretation for Means', topic: 'Significance Tests for Means (μ)', notation: 'P' },
+        { id: 'ht_mean_conc', title: 'Decision & Contextual Conclusion for μ', topic: 'Significance Tests for Means (μ)', notation: 'P, \\alpha' },
         { id: 'chi_gof', title: 'Chi-Square Goodness-of-Fit Test', topic: 'Chi-Square Tests (χ²)', notation: 'df = k - 1' },
         { id: 'chi_independence', title: 'Chi-Square Test for Independence', topic: 'Chi-Square Tests (χ²)', notation: 'df = (r-1)(c-1)' },
         { id: 'chi_homogeneity', title: 'Chi-Square Test for Homogeneity', topic: 'Chi-Square Tests (χ²)', notation: 'df = (r-1)(c-1)' },
+        { id: 'chi_step_hypo', title: 'Stating Chi-Square Hypotheses', topic: 'Chi-Square Tests (χ²)', notation: 'H_0, H_a' },
+        { id: 'chi_step_cond', title: 'Chi-Square Conditions & Minimum Expected Count (E_min)', topic: 'Chi-Square Tests (χ²)', notation: 'E_{min}' },
+        { id: 'chi_step_df', title: 'Chi-Square Degrees of Freedom (df)', topic: 'Chi-Square Tests (χ²)', notation: 'df' },
+        { id: 'chi_step_stat_pval', title: 'χ² Test Statistic & P-Value', topic: 'Chi-Square Tests (χ²)', notation: '\\chi^2, P' },
+        { id: 'chi_step_conc', title: 'Chi-Square Decision & Conclusion', topic: 'Chi-Square Tests (χ²)', notation: 'P, \\alpha' },
         { id: 'reg_lsrl', title: 'Least-Squares Regression Line (LSRL)', topic: 'Linear Regression Analysis', notation: 'ŷ = b_0 + b_1x' },
         { id: 'reg_pred_res', title: 'Predictions & Residual Analysis', topic: 'Linear Regression Analysis', notation: 'e = y - ŷ' },
         { id: 'reg_comp_output', title: 'Reading Regression Computer Output', topic: 'Linear Regression Analysis', notation: 'Coef, SE Coef, T, P' },
         { id: 'reg_raw_data', title: 'Regression from Raw Data Table', topic: 'Linear Regression Analysis', notation: 'Data Table → LSRL' },
         { id: 'reg_slope_ci', title: 'Confidence Interval for Slope (β₁)', topic: 'Linear Regression Analysis', notation: 'b_1 ± t*SE_b_1' },
-        { id: 'reg_slope_test', title: 'Significance Test for Slope (β₁)', topic: 'Linear Regression Analysis', notation: 'H_0: β_1 = 0' }
+        { id: 'reg_slope_test', title: 'Significance Test for Slope (β₁)', topic: 'Linear Regression Analysis', notation: 'H_0: β_1 = 0' },
+        { id: 'reg_step_slope_int', title: 'Calculating Slope & y-Intercept', topic: 'Linear Regression Analysis', notation: 'b_0, b_1' },
+        { id: 'reg_step_equation', title: 'Writing the LSRL Equation', topic: 'Linear Regression Analysis', notation: '\\hat{y} = b_0 + b_1x' },
+        { id: 'reg_step_pred_res', title: 'Calculating Predicted Value (ŷ) & Residual', topic: 'Linear Regression Analysis', notation: '\\hat{y}, e' },
+        { id: 'reg_step_slope_stat', title: 'Slope Hypotheses & t-Statistic', topic: 'Linear Regression Analysis', notation: 'H_0, t' },
+        { id: 'reg_step_slope_conc', title: 'Slope CI Bounds & Test Conclusion', topic: 'Linear Regression Analysis', notation: 'P, \\alpha' }
     ];
 
     function showBuilderError(message) {
@@ -336,9 +371,23 @@
             category.appendChild(heading);
             const rows = document.createElement('div');
             rows.className = 'builder-skill-rows';
-            skills.forEach(skill => {
+            const isDrill = skill => /^(?:eda_(?:five_num|iqr_fences|mean_sd)|rv_(?:transform|combine)$|prob_(?:marginal_joint|conditional)|(?:ci_prop|ci_mean)_(?:cond|crit_se|bounds|interp)|(?:ht_prop|ht_mean)_(?:hypo|cond|stat|pval|conc)|(?:chi|reg)_step_|cond_|drill_)/.test(skill.id);
+            const hasDrills = skills.some(isDrill);
+            const ordered = [...skills.filter(skill => !isDrill(skill)), ...skills.filter(isDrill)];
+            let currentGroup = null;
+            ordered.forEach(skill => {
+                const group = isDrill(skill) ? 'drills' : 'full';
+                if (hasDrills && group !== currentGroup) {
+                    const groupHeading = document.createElement('strong');
+                    groupHeading.className = 'builder-skill-group-heading';
+                    groupHeading.dataset.group = group;
+                    groupHeading.textContent = group === 'drills' ? 'Single-Step Skill Drills' : 'Full Multi-Stage Procedures';
+                    rows.appendChild(groupHeading);
+                    currentGroup = group;
+                }
                 const row = document.createElement('div');
                 row.className = 'builder-skill-row';
+                row.dataset.group = group;
                 row.dataset.searchText = `${topic} ${skill.title}`.toLowerCase();
                 const info = document.createElement('div');
                 info.className = 'builder-skill-info';
@@ -368,6 +417,11 @@
                 const matches = !query || categoryMatches || row.dataset.searchText.includes(query);
                 row.style.display = matches ? '' : 'none';
                 if (matches) visible += 1;
+            });
+            category.querySelectorAll('.builder-skill-group-heading').forEach(groupHeading => {
+                const groupVisible = [...category.querySelectorAll('.builder-skill-row')]
+                    .some(row => row.dataset.group === groupHeading.dataset.group && row.style.display !== 'none');
+                groupHeading.hidden = !groupVisible;
             });
             category.style.display = visible ? '' : 'none';
             if (query && visible) category.open = true;

@@ -4,6 +4,7 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from scipy.stats import norm, t
+from .inference_conditions import add_inference_conditions
 
 
 ALPHA_LEVELS = [0.01, 0.02, 0.025, 0.04, 0.05, 0.08, 0.10]
@@ -472,6 +473,9 @@ def _test_result(
     p_value_derivation: str,
     alpha: float,
     decision: str,
+    sample_sizes: List[int],
+    minimum_count: Optional[float] = None,
+    count_formula: str = "",
 ) -> Dict[str, Any]:
     parameter_symbols = {
         "ht_prop_z": ("p", "p̂"),
@@ -512,7 +516,7 @@ def _test_result(
         alpha=alpha,
         decision=decision,
     )
-    return {
+    return add_inference_conditions({
         "type": test_type,
         "title": title,
         "prompt": prompt,
@@ -540,8 +544,9 @@ def _test_result(
             "expected_claim": null_value,
             "sample_statistic": sample_statistic_value,
             "standard_error": standard_error,
+            "degrees_freedom": degrees_freedom,
         },
-    }
+    }, sample_sizes, minimum_count, count_formula, after_hypotheses=True)
 
 
 def generate_one_sample_prop_z_test() -> Dict[str, Any]:
@@ -567,6 +572,9 @@ def generate_one_sample_prop_z_test() -> Dict[str, Any]:
     symbol = _alternative_symbol(alternative)
     return _test_result(
         test_type="ht_prop_z",
+        sample_sizes=[n],
+        minimum_count=min(n * p0, n * (1 - p0)),
+        count_formula=r"Under \(H_0\), compare \(np_0\) and \(n(1-p_0)\).",
         title="1-Sample z-Test for Proportion",
         prompt=(
             f"{claimant} claims the proportion of {context_noun} is \\(p={p0:g}\\). "
@@ -641,6 +649,7 @@ def generate_one_sample_mean_t_test() -> Dict[str, Any]:
     symbol = _alternative_symbol(alternative)
     return _test_result(
         test_type="ht_mean_t",
+        sample_sizes=[n],
         title="1-Sample t-Test for Mean",
         prompt=(
             f"{claimant} claims the average {context_noun} is \\(\\mu={mu0:g}\\). "
@@ -699,6 +708,7 @@ def generate_two_sample_mean_t_test() -> Dict[str, Any]:
     symbol = _alternative_symbol(alternative)
     return _test_result(
         test_type="ht_mean_t_2samp",
+        sample_sizes=[n1, n2],
         title="2-Sample t-Test for Means",
         prompt=(
             f"Compare mean {context_noun} for {group1} and {group2}. The null claim is "
@@ -758,6 +768,9 @@ def generate_two_sample_prop_z_test() -> Dict[str, Any]:
     symbol = _alternative_symbol(alternative)
     return _test_result(
         test_type="ht_prop_z_2samp",
+        sample_sizes=[n1, n2],
+        minimum_count=min(n1 * pooled, n1 * (1 - pooled), n2 * pooled, n2 * (1 - pooled)),
+        count_formula=r"Under \(H_0:p_1=p_2\), pool \(\hat p_c=(x_1+x_2)/(n_1+n_2)\); compare \(n_i\hat p_c\) and \(n_i(1-\hat p_c)\) for both samples.",
         title="2-Sample z-Test for Proportions",
         prompt=(
             f"A {context_noun} compares the proportion of {group1} and {group2} who {success_phrase}. "
@@ -818,6 +831,7 @@ def generate_matched_pairs_t_test() -> Dict[str, Any]:
     symbol = _alternative_symbol(alternative)
     return _test_result(
         test_type="ht_matched_pairs_t",
+        sample_sizes=[n],
         title="Matched Pairs t-Test",
         prompt=(
             f"Measure {context_noun} on the same subjects {before_label} and {after_label}; "
