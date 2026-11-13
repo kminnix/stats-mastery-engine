@@ -140,7 +140,7 @@
             </a>
             <span class="tagline">Procedural Statistics Mastery Engine</span>
         </div>
-        <h2>Create Assignment or Assessment</h2>
+        <h2 id="builder-heading">Create Assignment or Assessment</h2>
         <div class="builder-header-actions">
             <a href="/teacher" class="btn-secondary">← Dashboard</a>
             <button id="publish-assessment-btn" class="btn-primary" type="button" onclick="publishAssessment()">🚀 Publish</button>
@@ -196,6 +196,16 @@
     </section>
 </main>
 
+<dialog id="submission-choice-dialog" aria-labelledby="submission-choice-title">
+    <h2 id="submission-choice-title">Existing student submissions</h2>
+    <p>Keep existing submissions and scores, or permanently reset all submissions so students can restart.</p>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+        <button type="button" class="btn-primary" id="keep-submissions-btn">Save Changes &amp; Keep Existing Student Scores</button>
+        <button type="button" class="btn-secondary" id="reset-submissions-btn">Save Changes &amp; Reset Student Submissions</button>
+        <button type="button" class="btn-secondary" id="cancel-submissions-btn">Cancel</button>
+    </div>
+</dialog>
+
 <script>
     window.SUPABASE_URL = {{ supabase_url | tojson }};
     window.SUPABASE_KEY = {{ supabase_key | tojson }};
@@ -206,6 +216,25 @@
     let currentClasses = [];
     let currentAssessments = [];
     let assessmentBlocks = [];
+    const editId = new URLSearchParams(window.location.search).get('edit_id');
+    let editingAssessment = null;
+    function chooseSubmissionAction() {
+        const dialog = document.getElementById('submission-choice-dialog');
+        return new Promise(resolve => {
+            const finish = choice => {
+                dialog.close();
+                resolve(choice);
+            };
+            document.getElementById('keep-submissions-btn').onclick = () => finish('keep');
+            document.getElementById('reset-submissions-btn').onclick = () => {
+                if (confirm('Permanently delete all existing submissions and scores? Students must restart.')) finish('reset');
+            };
+            document.getElementById('cancel-submissions-btn').onclick = () => finish(null);
+            dialog.oncancel = event => { event.preventDefault(); finish(null); };
+            dialog.showModal();
+            document.getElementById('keep-submissions-btn').focus();
+        });
+    }
     function setAssessmentToolPolicy(policy) {
         document.querySelectorAll('#assessment-tool-policy input').forEach(input => {
             input.checked = policy?.[input.dataset.tool] !== false;
@@ -693,6 +722,7 @@
 
     async function publishAssessment() {
         clearBuilderError();
+        if (editId && !editingAssessment) return showBuilderError('The assessment could not be loaded for editing.');
         const classId = document.getElementById('class-select').value;
         const title = document.getElementById('assessment-title').value.trim();
         const type = document.getElementById('assessment-type').value;
@@ -708,9 +738,11 @@
             return showBuilderError('Select the exam these corrections are for.');
         }
         const config = {
+            ...(editingAssessment?.config || {}),
             tool_policy: Object.fromEntries([...document.querySelectorAll('#assessment-tool-policy input')]
                 .map(input => [input.dataset.tool, input.checked])),
             blocks: assessmentBlocks.map(block => ({
+                ...block,
                 id: block.id,
                 topic: block.topic,
                 title: block.title,
@@ -729,10 +761,12 @@
         const publishButton = document.getElementById('publish-assessment-btn');
         publishButton.disabled = true;
         try {
-            const response = await fetch('/api/teacher/assessments/create', {
-                method: 'POST',
-                headers: getAuthHeaders(),
-                body: JSON.stringify({
+            let submissionAction = null;
+            if (editId && editingAssessment.submission_count > 0) {
+                submissionAction = await chooseSubmissionAction();
+                if (!submissionAction) return;
+            }
+            const payload = {
                     class_id: classId,
                     title,
                     type,
@@ -740,13 +774,26 @@
                     config,
                     allow_hints: type !== 'test_correction' && assessmentBlocks.some(block => block.mode !== 'no_hints'),
                     due_date: document.getElementById('assessment-due-date').value || null
-                })
+            };
+            config.allow_hints = payload.allow_hints;
+            const send = () => fetch(editId
+                ? `/api/teacher/assessments/${encodeURIComponent(editId)}`
+                : '/api/teacher/assessments/create', {
+                method: editId ? 'PUT' : 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ ...payload, submission_action: submissionAction })
             });
+            let response = await send();
+            if (editId && response.status === 409 && !submissionAction) {
+                submissionAction = await chooseSubmissionAction();
+                if (!submissionAction) return;
+                response = await send();
+            }
             if (!response.ok) {
                 const result = await response.json().catch(() => ({}));
                 throw new Error(result.detail || `Assessment could not be published (${response.status}).`);
             }
-            alert('Assessment published to your class.');
+            alert(editId ? 'Assessment changes saved.' : 'Assessment published to your class.');
             window.location.href = '/teacher';
         } catch (error) {
             showBuilderError(error.message || 'Assessment could not be published.');
@@ -790,9 +837,14 @@
 
         const urlParams = new URLSearchParams(window.location.search);
         const cloneId = urlParams.get('clone_from');
-        if (cloneId) {
+        const sourceId = editId || cloneId;
+        if (editId) {
+            document.getElementById('builder-heading').textContent = 'Edit Assignment / Assessment';
+            document.getElementById('publish-assessment-btn').textContent = '💾 Save Changes';
+        }
+        if (sourceId) {
             const response = await fetch(
-                `/api/teacher/assessments/${encodeURIComponent(cloneId)}/details`,
+                `/api/teacher/assessments/${encodeURIComponent(sourceId)}/details`,
                 { headers: getAuthHeaders() }
             );
             if (!response.ok) {
@@ -800,7 +852,9 @@
                 throw new Error(result.detail || `Could not load assessment to duplicate (${response.status}).`);
             }
             const assessment = await response.json();
-            document.getElementById('assessment-title').value = `${assessment.title} (Copy)`;
+            if (editId) editingAssessment = assessment;
+            document.getElementById('assessment-title').value = editId ? assessment.title : `${assessment.title} (Copy)`;
+            if (editId) document.getElementById('assessment-due-date').value = (assessment.due_date || '').slice(0, 10);
             document.getElementById('assessment-type').value = assessment.type;
             document.getElementById('parent-test-field').style.display =
                 assessment.type === 'test_correction' ? 'block' : 'none';

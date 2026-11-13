@@ -41,7 +41,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "150"
+STATIC_VERSION = "151"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -150,6 +150,23 @@ class AssessmentCreateRequest(BaseModel):
     config: Dict[str, Any]
     allow_hints: bool = True
     due_date: Optional[str] = None
+
+class AssessmentUpdateRequest(BaseModel):
+    class_id: Optional[str] = None
+    section_id: Optional[str] = None
+    title: str
+    type: str
+    parent_assessment_id: Optional[str] = None
+    config: Dict[str, Any]
+    due_date: Optional[str] = None
+    submission_action: Optional[Literal["keep", "reset"]] = None
+
+class StudentSubmissionRequest(BaseModel):
+    assessment_id: str
+    score: float
+    responses: List[Dict[str, Any]]
+    details: Dict[str, Any]
+    reset_version: Optional[str] = None
 
 def generate_join_code(length=6) -> str:
     chars = string.ascii_uppercase + string.digits
@@ -612,7 +629,50 @@ async def get_assessment_details(assessment_id: str, authorization: Optional[str
     if not res.data:
         raise HTTPException(status_code=404, detail="Assessment not found")
     verify_teacher_class_access(db, res.data[0]["class_id"], access["user"].id)
-    return res.data[0]
+    submission_res = db.table("assessment_submissions").select("id").eq("assessment_id", assessment_id).execute()
+    return {**res.data[0], "section_id": res.data[0]["class_id"], "submission_count": len(submission_res.data or [])}
+
+@app.put("/api/teacher/assessments/{assessment_id}")
+async def update_assessment(assessment_id: str, req: AssessmentUpdateRequest, authorization: Optional[str] = Header(None)):
+    access = verify_teacher_access(authorization)
+    db = get_scoped_supabase(authorization)
+    existing = db.table("assessments").select("*").eq("id", assessment_id).execute()
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+    current = existing.data[0]
+    verify_teacher_class_access(db, current["class_id"], access["user"].id)
+    class_id = req.class_id or req.section_id
+    if not class_id or (req.class_id and req.section_id and req.class_id != req.section_id):
+        raise HTTPException(status_code=422, detail="A consistent class_id or section_id is required")
+    verify_teacher_class_access(db, class_id, access["user"].id)
+    config = dict(req.config)
+    reset_version = (current.get("config") or {}).get("_submission_reset_version")
+    if reset_version:
+        config["_submission_reset_version"] = reset_version
+    else:
+        config.pop("_submission_reset_version", None)
+    fields_set = getattr(req, "model_fields_set", None)
+    if fields_set is None:
+        fields_set = getattr(req, "__fields_set__")
+    payload = {
+        "class_id": class_id, "title": req.title, "type": req.type,
+        "parent_assessment_id": req.parent_assessment_id if "parent_assessment_id" in fields_set else current.get("parent_assessment_id"),
+        "config": config, "due_date": req.due_date,
+    }
+    try:
+        result = db.rpc("update_assessment_with_submission_action", {
+            "p_assessment_id": assessment_id,
+            "p_values": payload,
+            "p_action": req.submission_action,
+        }).execute()
+    except Exception as exc:
+        if "SUBMISSION_CHOICE_REQUIRED" in str(exc):
+            raise HTTPException(status_code=409, detail="Choose whether to keep or reset existing submissions.") from exc
+        raise HTTPException(status_code=400, detail=f"Could not save assessment: {exc}") from exc
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Assessment could not be updated")
+    updated = result.data[0] if isinstance(result.data, list) else result.data
+    return {"status": "success", "assessment": updated}
 
 @app.patch("/api/teacher/assessments/{assessment_id}/archive")
 async def archive_assessment(assessment_id: str, authorization: Optional[str] = Header(None)):
@@ -668,6 +728,7 @@ async def restore_assessment(assessment_id: str, authorization: Optional[str] = 
         raise HTTPException(status_code=404, detail="Assessment could not be restored")
     return {"status": "restored"}
 
+@app.get("/api/teacher/assessments/{assessment_id}/results")
 @app.get("/api/teacher/assessment/{assessment_id}/submissions")
 async def get_assessment_submissions(assessment_id: str, authorization: Optional[str] = Header(None)):
     """Fetches all student submissions, scores, and names for a specific assessment."""
@@ -685,7 +746,7 @@ async def get_assessment_submissions(assessment_id: str, authorization: Optional
 
     subs_res = (
         db.table("assessment_submissions")
-        .select("id, student_id, status, score, responses, submitted_at")
+        .select("id, student_id, status, score, responses, details, submitted_at")
         .eq("assessment_id", assessment_id)
         .order("submitted_at", desc=True)
         .execute()
@@ -713,6 +774,8 @@ async def get_assessment_submissions(assessment_id: str, authorization: Optional
             "student_name": profile_names.get(submission["student_id"], "Unknown Student"),
             "status": submission.get("status", "submitted"),
             "score": submission.get("score"),
+            "responses": submission.get("responses"),
+            "details": submission.get("details"),
             "submitted_at": submission.get("submitted_at")
         }
         for submission in submissions
@@ -882,6 +945,41 @@ async def export_gradebook_csv(class_id: str, authorization: Optional[str] = Hea
             )
         }
     )
+
+@app.post("/api/student/submissions")
+async def submit_student_assessment(req: StudentSubmissionRequest, authorization: Optional[str] = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authentication required")
+    token = authorization[len("Bearer "):].strip()
+    db = get_scoped_supabase(authorization)
+    try:
+        user = db.auth.get_user(token).user
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="Invalid user session") from exc
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid user session")
+    assessment = db.table("assessments").select("class_id, config, is_active").eq("id", req.assessment_id).execute()
+    if not assessment.data or not assessment.data[0].get("is_active"):
+        raise HTTPException(status_code=404, detail="Assessment not found or inactive")
+    task = assessment.data[0]
+    enrollment = db.table("enrollments").select("class_id").eq("class_id", task["class_id"]).eq("student_id", user.id).execute()
+    if not enrollment.data:
+        raise HTTPException(status_code=403, detail="Assessment is not assigned to this student")
+    if (task.get("config") or {}).get("_submission_reset_version") != req.reset_version:
+        raise HTTPException(status_code=409, detail="This assessment was reset. Reload it before submitting.")
+    if not 0 <= req.score <= 100 or not isinstance(req.details.get("question_breakdown"), list):
+        raise HTTPException(status_code=422, detail="Invalid score or question breakdown")
+    try:
+        db.rpc("submit_assessment_with_details", {
+            "p_assessment_id": req.assessment_id, "p_score": req.score,
+            "p_responses": req.responses, "p_details": req.details,
+            "p_reset_version": req.reset_version,
+        }).execute()
+    except Exception as exc:
+        if "ASSESSMENT_RESET" in str(exc):
+            raise HTTPException(status_code=409, detail="This assessment was reset. Reload it before submitting.") from exc
+        raise HTTPException(status_code=400, detail=f"Could not submit assessment: {exc}") from exc
+    return {"status": "success"}
 
 @app.get("/api/student/tasks/{student_id}")
 async def get_student_tasks(student_id: str, authorization: Optional[str] = Header(None)):

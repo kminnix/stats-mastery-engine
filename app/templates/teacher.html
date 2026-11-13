@@ -1514,6 +1514,7 @@
 
             addActionButton('Results', 'btn-primary btn-sm', '', () => viewAssessmentResults(item.id, title));
             if (!showArchivedAssessments) {
+                addActionButton('✏ Edit', 'btn-secondary btn-sm', 'Edit assignment', () => editAssessment(item.id));
                 addActionButton('📋 Duplicate', 'btn-secondary btn-sm', 'Duplicate assignment', () => duplicateAssessment(item.id));
                 if (itemType === 'test') {
                     addActionButton('Corrections', 'btn-secondary btn-sm', '', () => promptCreateCorrections(item.id, title));
@@ -1525,6 +1526,10 @@
             tr.querySelector('.action-cell').appendChild(group);
             tbody.appendChild(tr);
         });
+    }
+
+    function editAssessment(assessmentId) {
+        window.location.href = '/teacher/assignments/new?edit_id=' + encodeURIComponent(assessmentId);
     }
 
     function duplicateAssessment(assessmentId) {
@@ -1781,7 +1786,7 @@
 
         try {
             const res = await fetch(
-                `/api/teacher/assessment/${encodeURIComponent(assessmentId)}/submissions`,
+                `/api/teacher/assessments/${encodeURIComponent(assessmentId)}/results`,
                 { headers: getAuthHeaders() }
             );
             if (!res.ok) throw new Error(`Could not load assessment results (${res.status}).`);
@@ -1818,7 +1823,39 @@
                     <td>${escapeHtml(scoreText)}</td>
                     <td>${escapeHtml(dateText)}</td>
                 `;
+                const drawer = document.createElement('tr');
+                drawer.hidden = true;
+                const cell = document.createElement('td');
+                cell.colSpan = 4;
+                cell.className = 'col-left';
+                const breakdown = submission.details?.question_breakdown;
+                if (!Array.isArray(breakdown) || breakdown.length === 0) {
+                    cell.textContent = 'Detailed question breakdown is not available for this submission.';
+                } else {
+                    const list = document.createElement('ul');
+                    breakdown.forEach(question => {
+                        const item = document.createElement('li');
+                        const firstTry = question.steps_first_try == null || question.total_steps == null
+                            ? '—' : `${question.steps_first_try}/${question.total_steps}`;
+                        item.textContent = `Q${question.q_num}: ${question.title || question.topic || 'Question'} — ${question.mode || '—'} — ${question.points_earned ?? '—'}/${question.max_points ?? '—'} points — ${firstTry} first-try steps — ${question.attempts_used ?? '—'} attempts`;
+                        list.appendChild(item);
+                    });
+                    cell.appendChild(list);
+                }
+                drawer.appendChild(cell);
+                const toggle = document.createElement('button');
+                toggle.type = 'button';
+                toggle.className = 'btn-secondary btn-sm';
+                toggle.textContent = 'View Breakdown ▾';
+                toggle.setAttribute('aria-expanded', 'false');
+                toggle.addEventListener('click', () => {
+                    drawer.hidden = !drawer.hidden;
+                    toggle.setAttribute('aria-expanded', String(!drawer.hidden));
+                    toggle.textContent = drawer.hidden ? 'View Breakdown ▾' : 'Hide Breakdown ▴';
+                });
+                row.children[2].append(' ', toggle);
                 tbody.appendChild(row);
+                tbody.appendChild(drawer);
             });
         } catch (error) {
             console.error('Failed to load assessment results:', error);

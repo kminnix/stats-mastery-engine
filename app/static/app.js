@@ -991,6 +991,7 @@ async function startStudentTask(task) {
         taskId: task.id || task.assessment_id,
         taskTitle: task.title || 'Assigned Task',
         taskType,
+        resetVersion: task.config?._submission_reset_version || null,
         allowHints: task.config?.allow_hints !== false && task.allow_hints !== false,
         totalQuestions: questionQueue.length,
         currentIndex: 1,
@@ -1038,14 +1039,18 @@ async function startStudentTask(task) {
             const stored = localStorage.getItem(key);
             if (stored) {
                 const saved = JSON.parse(stored);
-                if (!saved || saved.taskType !== 'test' || String(saved.taskId) !== String(activeTaskState.taskId) ||
-                    !Array.isArray(saved.questionQueue) || !Array.isArray(saved.questionsState) ||
-                    !Array.isArray(saved.responses) || !Array.isArray(saved.blocks) || !Array.isArray(saved.blockStates) ||
-                    !Number.isInteger(saved.currentIndex) || saved.currentIndex < 1 || saved.currentIndex > saved.questionQueue.length) {
-                    throw new Error('Invalid incomplete test data');
+                if (saved && (saved.resetVersion || null) !== activeTaskState.resetVersion) {
+                    localStorage.removeItem(key);
+                } else {
+                    if (!saved || saved.taskType !== 'test' || String(saved.taskId) !== String(activeTaskState.taskId) ||
+                        !Array.isArray(saved.questionQueue) || !Array.isArray(saved.questionsState) ||
+                        !Array.isArray(saved.responses) || !Array.isArray(saved.blocks) || !Array.isArray(saved.blockStates) ||
+                        !Number.isInteger(saved.currentIndex) || saved.currentIndex < 1 || saved.currentIndex > saved.questionQueue.length) {
+                        throw new Error('Invalid incomplete test data');
+                    }
+                    activeTaskState = { ...saved, active: true, isSubmitting: false, isVerifying: false, examCompleted: false,
+                        defaultNotation: task.default_notation, isPreview: task.status === 'preview' };
                 }
-                activeTaskState = { ...saved, active: true, isSubmitting: false, isVerifying: false, examCompleted: false,
-                    defaultNotation: task.default_notation, isPreview: task.status === 'preview' };
             }
         }
     } catch (error) {
@@ -1175,6 +1180,27 @@ async function loadNextTaskQuestion() {
     loadProblem();
 }
 
+function buildQuestionBreakdown(questionIndex, points, steps, totalSteps) {
+    const question = activeTaskState.questionQueue[questionIndex - 1] || {};
+    const block = activeTaskState.blocks[question.blockIndex];
+    const topic = question.topic || '';
+    const title = block?.title || TOPIC_REGISTRY.find(item => item.id === topic)?.title ||
+        LEGACY_TOPIC_TITLES[topic] || topic || 'Question';
+    return {
+        q_num: questionIndex,
+        topic,
+        title,
+        mode: question.mode || (question.allow_hints ? 'all_hints' : 'no_hints'),
+        attempts_used: totalSteps === null ? null : totalSteps
+            ? steps.reduce((sum, step) => sum + (step.attemptsUsed || 0), 0)
+            : (points === 0 && !steps.length ? 0 : 1),
+        points_earned: points,
+        max_points: 1,
+        steps_first_try: totalSteps === null ? null : steps.filter(step => step.firstAttemptCorrect).length,
+        total_steps: totalSteps
+    };
+}
+
 async function completeStudentTask() {
     if (activeTaskState.isSubmitting || activeTaskState.submitted) return;
     if (activeTaskState.taskType === 'test') {
@@ -1185,7 +1211,12 @@ async function completeStudentTask() {
                     questionIndex,
                     correct: false,
                     answer: null,
-                    skipped: true
+                    skipped: true,
+                    breakdown: {
+                        ...buildQuestionBreakdown(questionIndex, 0, [],
+                            activeTaskState.questionsState[questionIndex - 1]?.problem?.steps?.length ?? null),
+                        attempts_used: 0
+                    }
                 });
             }
         }
@@ -1201,20 +1232,33 @@ async function completeStudentTask() {
     if (supabaseClient && currentUser && !activeTaskState.isPreview) {
         activeTaskState.isSubmitting = true;
         try {
-            const { error } = await supabaseClient.from('assessment_submissions').upsert({
-                assessment_id: activeTaskState.taskId,
-                student_id: currentUser.id,
-                status: 'submitted',
-                score,
-                responses: activeTaskState.responses,
-                submitted_at: new Date().toISOString()
-            }, { onConflict: 'assessment_id,student_id' });
-            if (error) throw error;
+            const response = await fetch('/api/student/submissions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${currentSession.access_token}`
+                },
+                body: JSON.stringify({
+                    assessment_id: activeTaskState.taskId,
+                    score,
+                    responses: activeTaskState.responses,
+                    details: { question_breakdown: activeTaskState.responses.map(item =>
+                        item.breakdown || buildQuestionBreakdown(
+                            item.questionIndex, item.score ?? (item.correct ? 1 : 0), [], null
+                        )
+                    ) },
+                    reset_version: activeTaskState.resetVersion
+                })
+            });
+            if (!response.ok) {
+                const result = await response.json();
+                throw new Error(result.detail || `Submission failed (${response.status}).`);
+            }
             activeTaskState.submitted = true;
         } catch (error) {
             console.error('Task submission failed:', error);
             document.getElementById('completion-subtitle').textContent =
-                'Your task is complete, but we could not submit the results. Please contact your teacher.';
+                `Your task is complete, but we could not submit the results: ${error.message} Please contact your teacher.`;
         } finally {
             activeTaskState.isSubmitting = false;
         }
@@ -2323,6 +2367,12 @@ async function finalizeProblem(isSuccess, answer = null, questionScore = null) {
         correct: Boolean(isSuccess),
         score: questionScore,
         answer,
+        breakdown: buildQuestionBreakdown(
+            activeTaskState.currentIndex,
+            questionScore,
+            currentProblem.steps?.length ? currentStepAttemptStates : [{ attemptsUsed: 1, firstAttemptCorrect: Boolean(isSuccess) }],
+            currentProblem.steps?.length || 1
+        ),
         blockId: completedQuestion?.blockId || null,
         phase: completedQuestion?.phase || null
     });
