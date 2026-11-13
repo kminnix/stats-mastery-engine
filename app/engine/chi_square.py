@@ -4,12 +4,14 @@ from typing import Any, Dict, Sequence
 from scipy.stats import chi2
 
 
-def _decision_step(p_value: float, alpha: float, conclusion: str) -> Dict[str, Any]:
+def _decision_step(
+    p_value: float, alpha: float, conclusion: str, null_conclusion: str = ""
+) -> Dict[str, Any]:
     reject = p_value <= alpha
     decision = "reject" if reject else "fail to reject"
     comparison = "less than or equal to" if reject else "greater than"
     evidence = "is convincing" if reject else "is not convincing"
-    return {
+    step = {
         "step_num": 4,
         "label": "Decision & Conclusion:",
         "input_type": "cloze",
@@ -76,6 +78,18 @@ def _decision_step(p_value: float, alpha: float, conclusion: str) -> Dict[str, A
         ],
         "hint": r"Compare the \(P\)-value with \(\alpha\). If \(P \le \alpha\), reject \(H_0\); if \(P > \alpha\), fail to reject \(H_0\).",
     }
+    if null_conclusion:
+        step["components"].append({
+            "id": "chi-conclusion-context",
+            "type": "select",
+            "options": [
+                {"value": null_conclusion, "label": null_conclusion},
+                {"value": conclusion, "label": conclusion},
+            ],
+            "expected": [conclusion],
+        })
+        step["parts"][-2] = {"component": "chi-conclusion-context"}
+    return step
 
 
 def _count_table(labels: Sequence[str], observed: Sequence[int], expected: Sequence[float]) -> str:
@@ -90,6 +104,75 @@ def _count_table(labels: Sequence[str], observed: Sequence[int], expected: Seque
         rf"\[\begin{{array}}{{l|c|c|c}} \text{{Category}} & O_i & E_i "
         rf"& \frac{{(O_i - E_i)^2}}{{E_i}} \\ \hline {joined_rows} \end{{array}}\]"
     )
+
+
+def _hypotheses_step(null: str, alternative: str, distractor: str) -> Dict[str, Any]:
+    options = [{"value": value, "label": value} for value in (null, alternative, distractor)]
+    return {
+        "step_num": 1,
+        "label": "State Hypotheses:",
+        "input_type": "cloze",
+        "components": [
+            {"id": "chi-null", "type": "select", "options": options, "expected": [null]},
+            {"id": "chi-alternative", "type": "select", "options": options, "expected": [alternative]},
+        ],
+        "parts": [r"\(H_0\): ", {"component": "chi-null"}, r"; \(H_a\): ",
+                  {"component": "chi-alternative"}, "."],
+        "hint": r"\(H_0\) states the claimed distribution, independence, or identical distributions. \(H_a\) states a departure from that null.",
+    }
+
+
+def _conditions_step(minimum: float, formula: str) -> Dict[str, Any]:
+    met = "Met — random sample/assignment and all expected counts E ≥ 5"
+    options = [
+        met,
+        "Not met — at least one expected count is less than 5 (E < 5)",
+        "Not met — observed counts must all be at least 5 (O ≥ 5)",
+        "Not met — all expected counts must be at least 10 (E ≥ 10)",
+    ]
+    return {
+        "step_num": 2,
+        "label": "Check Conditions:",
+        "input_type": "cloze",
+        "components": [
+            {"id": "chi-conditions", "type": "select",
+             "options": [{"value": value, "label": value} for value in options],
+             "expected": [met]},
+            {"id": "chi-min-expected", "type": "number", "placeholder": "Minimum expected count",
+             "expected": [minimum], "tolerance": 0.05},
+        ],
+        "parts": ["Randomness and large counts: ", {"component": "chi-conditions"},
+                  r". Smallest expected count \(E_{\min}\): ", {"component": "chi-min-expected"}, "."],
+        "hint": rf"Check the stated sampling design, calculate every expected count using {formula}, and compare the smallest with \(5\).",
+    }
+
+
+def _calculation_steps(
+    df: int, statistic: float, p_value: float, df_formula: str,
+) -> list[Dict[str, Any]]:
+    return [
+        {
+            "step_num": 3,
+            "label": "Degrees of Freedom (df):",
+            "input_type": "number",
+            "placeholder": "df",
+            "expected": [df],
+            "tolerance": 0.01,
+            "hint": rf"Use {df_formula}.",
+        },
+        {
+            "step_num": 4,
+            "label": "Test Statistic & P-value:",
+            "input_type": "compound",
+            "inputs": [
+                {"id": "chi-statistic", "label": "χ²", "type": "number", "input_type": "math",
+                 "math_symbols": ["frac", "pow", "parens"], "expected": [statistic], "tolerance": 0.05},
+                {"id": "chi-test-p-value", "label": "P-value", "type": "number",
+                 "expected": [p_value], "tolerance": 0.001},
+            ],
+            "hint": r"Sum \(\chi^2=\sum (O-E)^2/E\), then find the right-tail area \(P(\chi^2_{df}\geq\chi^2_{\mathrm{obs}})\).",
+        },
+    ]
 
 
 def generate_chi_square_gof() -> Dict[str, Any]:
@@ -127,7 +210,6 @@ def generate_chi_square_gof() -> Dict[str, Any]:
     )
     p_value = float(chi2.sf(chi2_stat, df))
     alpha = random.choice([0.01, 0.05, 0.10])
-    target_index = random.randrange(len(categories))
     components = [
         (observed_count - expected_count) ** 2 / expected_count
         for observed_count, expected_count in zip(observed, expected)
@@ -152,14 +234,20 @@ def generate_chi_square_gof() -> Dict[str, Any]:
         f"\\(\\alpha={alpha:g}\\), test whether the observed category distribution differs "
         f"from the hypothesized distribution.<br><br>{observed_table}"
     )
+    null = f"the category proportions for {sample_description} match the claimed distribution"
+    alternative = f"at least one category proportion for {sample_description} differs from the claimed distribution"
+    distractor = f"the observed counts for {sample_description} exactly equal their expected counts"
     solution = (
         "<p><strong>Goodness-of-fit test</strong></p>"
-        f"<p>Degrees of freedom: \\(df=k-1={len(categories)}-1={df}\\). "
-        f"The expected count for {categories[target_index]} is "
-        f"\\(E={n}({proportions[target_index]:g})={expected[target_index]:.2f}\\).</p>"
+        f"<p>\\(H_0\\): {null}. \\(H_a\\): {alternative}.</p>"
+        f"<p>The sample is random. Using \\(E_i=np_i\\), "
+        f"\\(E_{{\\min}}={n}({min(proportions):g})={min(expected):.2f}\\geq 5\\), "
+        "so the large-counts condition is met.</p>"
+        f"<p>Degrees of freedom: \\(df=k-1={len(categories)}-1={df}\\).</p>"
         f"<p>Expected counts are \\(({', '.join(f'{value:.2f}' for value in expected)})\\); "
         f"all are at least 5. The test statistic is "
-        f"\\(\\chi^2={chi2_stat:.4f}\\) and the P-value is \\({p_value:.4g}\\).</p>"
+        f"\\(\\chi^2=\\sum (O_i-E_i)^2/E_i={chi2_stat:.4f}\\), and "
+        f"\\(P(\\chi^2_{{{df}}}\\geq {chi2_stat:.4f})={p_value:.4g}\\).</p>"
         f"<br><br>{_count_table(categories, observed, expected)}<br><br>"
         f"<p>Since the P-value {('≤' if p_value <= alpha else '>')} "
         f"\\(\\alpha={alpha:g}\\), {('reject' if p_value <= alpha else 'fail to reject')} "
@@ -167,40 +255,13 @@ def generate_chi_square_gof() -> Dict[str, Any]:
         f"{'convincing' if p_value <= alpha else 'not convincing'} statistical evidence that the "
         "distribution of categories differs from the hypothesized distribution.</p>"
     )
+    decision = _decision_step(p_value, alpha, alternative, null)
+    decision["step_num"] = 5
     steps = [
-        {
-            "step_num": 1,
-            "label": "Degrees of Freedom (df):",
-            "input_type": "number",
-            "placeholder": "df",
-            "expected": [df],
-            "tolerance": 0.01,
-            "hint": r"Degrees of freedom for Goodness-of-Fit is \(df = k - 1\), where \(k\) is the number of categories.",
-        },
-        {
-            "step_num": 2,
-            "label": f"Expected Count for {categories[target_index]}:",
-            "input_type": "number",
-            "placeholder": "Expected count",
-            "expected": [expected[target_index]],
-            "tolerance": 0.01,
-            "hint": r"Expected count for a category is \(E = n \cdot p_0\), multiplying the total sample size by the hypothesized proportion.",
-        },
-        {
-            "step_num": 3,
-            "label": "Test Statistic (χ²):",
-            "input_type": "math",
-            "math_symbols": ["frac", "pow", "parens"],
-            "placeholder": "χ²",
-            "expected": [chi2_stat],
-            "tolerance": 0.05,
-            "hint": r"Calculate \(\chi^2 = \sum \frac{(O - E)^2}{E}\) by summing the squared differences divided by expected counts across all categories.",
-        },
-        _decision_step(
-            p_value,
-            alpha,
-            "the distribution of categories differs from the hypothesized distribution",
-        ),
+        _hypotheses_step(null, alternative, distractor),
+        _conditions_step(min(expected), r"\(E_i=np_i\)"),
+        *_calculation_steps(df, chi2_stat, p_value, r"\(df=k-1\)"),
+        decision,
     ]
     if p_value <= alpha:
         largest_index = max(range(len(components)), key=components.__getitem__)
@@ -212,7 +273,7 @@ def generate_chi_square_gof() -> Dict[str, Any]:
         )
         steps.append(
             {
-                "step_num": 5,
+                "step_num": 6,
                 "label": "Follow-Up Analysis (Largest Discrepancy):",
                 "input_type": "cloze",
                 "components": [
@@ -250,8 +311,13 @@ def generate_chi_square_gof() -> Dict[str, Any]:
                     {"component": "largest-contributor-direction"},
                     ".",
                 ],
-                "hint": "Compare each category's observed and expected counts to identify the largest chi-square contribution and its direction.",
+                "hint": r"Compare \((O_i-E_i)^2/E_i\) across categories, then compare \(O_i\) with \(E_i\) for the largest contributor.",
             }
+        )
+        solution += (
+            f"<p>The largest contribution is for {largest_contributor}: "
+            f"\\((O-E)^2/E={components[largest_index]:.4f}\\); "
+            f"the category had {direction}.</p>"
         )
 
     return {
@@ -283,47 +349,65 @@ def _matrix_latex(
     return rf"\[\begin{{array}}{{{column_spec}}} {header} \\ \hline {joined_rows} \end{{array}}\]"
 
 
-def generate_chi_square_two_way() -> Dict[str, Any]:
-    scenarios = [
-        (
-            "treatment and recovery outcome",
-            ["Control", "Treatment"],
-            ["No improvement", "Improved", "Recovered"],
-            [[0.55, 0.30, 0.15], [0.30, 0.35, 0.35]],
-            "treatment is associated with recovery outcome",
-        ),
-        (
-            "survey responses by age group",
-            ["Age 18–34", "Age 35–54"],
-            ["Prefer A", "Prefer B", "No preference"],
-            [[0.45, 0.35, 0.20], [0.30, 0.40, 0.30]],
-            "survey response is associated with age group",
-        ),
-        (
-            "school preference by grade level",
-            ["Grade 9", "Grade 10", "Grade 11"],
-            ["Science", "Arts"],
-            [[0.60, 0.40], [0.48, 0.52], [0.35, 0.65]],
-            "school preference is associated with grade level",
-        ),
-    ]
-    scenario, row_labels, column_labels, row_probabilities, conclusion = random.choice(scenarios)
+def _generate_chi_square_two_way(kind: str) -> Dict[str, Any]:
+    if kind == "chi_independence":
+        scenarios = [
+            ("students", "grade level", "preferred study spot",
+             ["Grade 9", "Grade 10", "Grade 11"], ["Library", "Home", "Cafe"],
+             [[0.55, 0.30, 0.15], [0.35, 0.40, 0.25], [0.25, 0.30, 0.45]]),
+            ("adults", "age bracket", "commuting mode",
+             ["Age 18-34", "Age 35-54"], ["Car", "Transit", "Walk"],
+             [[0.45, 0.40, 0.15], [0.65, 0.25, 0.10]]),
+            ("college students", "major", "housing type",
+             ["Science", "Arts"], ["On campus", "Off campus", "Family"],
+             [[0.50, 0.30, 0.20], [0.30, 0.45, 0.25]]),
+        ]
+    else:
+        scenarios = [
+            ("patients", "treatment group", "recovery outcome",
+             ["Control", "Treatment"], ["No improvement", "Improved", "Recovered"],
+             [[0.55, 0.30, 0.15], [0.30, 0.35, 0.35]]),
+            ("customers", "store", "satisfaction rating",
+             ["Store A", "Store B"], ["Low", "Medium", "High"],
+             [[0.30, 0.40, 0.30], [0.15, 0.35, 0.50]]),
+            ("students", "class section", "course outcome",
+             ["Morning", "Evening"], ["Pass", "Fail"],
+             [[0.75, 0.25], [0.60, 0.40]]),
+        ]
+    population, row_variable, response, row_labels, column_labels, row_probabilities = random.choice(scenarios)
     row_count = len(row_labels)
-    row_totals = (
-        [random.randint(50, 150) for _ in row_labels]
-        if row_count == 2
-        else [random.randint(40, 100) for _ in row_labels]
-    )
-    observed = []
-    for probabilities, row_total in zip(row_probabilities, row_totals):
-        row_draws = random.choices(
-            range(len(column_labels)),
-            weights=probabilities,
-            k=row_total,
-        )
-        observed.append(
-            [row_draws.count(column) for column in range(len(column_labels))]
-        )
+    while True:
+        if kind == "chi_independence":
+            n = random.randint(150, 300)
+            cells = [(r, c) for r in range(row_count) for c in range(len(column_labels))]
+            weights = [row_probabilities[r][c] / row_count for r, c in cells]
+            draws = random.choices(cells, weights=weights, k=n)
+            observed = [[draws.count((r, c)) for c in range(len(column_labels))]
+                        for r in range(row_count)]
+        else:
+            row_totals = [random.randint(50, 150) for _ in row_labels]
+            observed = []
+            for probabilities, row_total in zip(row_probabilities, row_totals):
+                draws = random.choices(range(len(column_labels)), weights=probabilities, k=row_total)
+                observed.append([draws.count(column) for column in range(len(column_labels))])
+        row_totals = [sum(row) for row in observed]
+        column_totals = [sum(row[c] for row in observed) for c in range(len(column_labels))]
+        grand_total = sum(row_totals)
+        if all(row * col / grand_total >= 5 for row in row_totals for col in column_totals):
+            break
+    independence = kind == "chi_independence"
+    if independence:
+        title = "Chi-Square Test for Independence"
+        sampling = f"A single random sample of {population} is cross-classified by {row_variable} and {response}."
+        null = f"{row_variable} and {response} are independent in the population of {population}"
+        alternative = f"{row_variable} and {response} are associated (not independent) in the population of {population}"
+        distractor = f"every category of {row_variable} and {response} has the same population proportion"
+    else:
+        title = "Chi-Square Test for Homogeneity"
+        sampling = f"Independent random samples of {population} are taken from each {row_variable} group."
+        null = f"the distribution of {response} is the same across the {row_variable} populations"
+        alternative = f"the distribution of {response} differs across the {row_variable} populations"
+        distractor = f"every {response} category is equally likely within each {row_variable} group"
     row_totals = [sum(row) for row in observed]
     column_totals = [
         sum(observed[row][column] for row in range(row_count))
@@ -337,6 +421,10 @@ def generate_chi_square_two_way() -> Dict[str, Any]:
         ]
         for row in range(row_count)
     ]
+    min_row, min_column = min(
+        ((row, column) for row in range(row_count) for column in range(len(column_labels))),
+        key=lambda cell: expected[cell[0]][cell[1]],
+    )
     components = [
         [
             (observed[row][column] - expected[row][column]) ** 2 / expected[row][column]
@@ -348,8 +436,6 @@ def generate_chi_square_two_way() -> Dict[str, Any]:
     df = (row_count - 1) * (len(column_labels) - 1)
     p_value = float(chi2.sf(chi2_stat, df))
     alpha = random.choice([0.01, 0.05, 0.10])
-    target_row = random.randrange(row_count)
-    target_column = random.randrange(len(column_labels))
 
     observed_table = _matrix_latex(
         "Observed counts",
@@ -359,10 +445,8 @@ def generate_chi_square_two_way() -> Dict[str, Any]:
         "d",
     )
     prompt = (
-        f"A study examines {scenario}. The observed counts are shown below. Test whether "
-        f"the row and column variables are associated at \\(\\alpha={alpha:g}\\). "
-        f"Calculate the expected count for the cell ({row_labels[target_row]}, "
-        f"{column_labels[target_column]}).<br><br>{observed_table}"
+        f"{sampling} The observed counts are shown below. At \\(\\alpha={alpha:g}\\), "
+        f"test whether {alternative}.<br><br>{observed_table}"
     )
     expected_table = _matrix_latex(
         "Expected counts",
@@ -382,63 +466,56 @@ def generate_chi_square_two_way() -> Dict[str, Any]:
         f"{label} = {total}" for label, total in zip(row_labels, row_totals)
     ]
     solution = (
-        "<p><strong>Chi-square test of independence / homogeneity</strong></p>"
+        f"<p><strong>{title}</strong></p>"
+        f"<p>H₀: {null}. Hₐ: {alternative}.</p>"
         f"<p>Row totals are {', '.join(observed_with_totals)}; column totals are "
         f"{', '.join(f'{label} = {total}' for label, total in zip(column_labels, column_totals))}; "
         f"the grand total is \\({grand_total}\\). Degrees of freedom: "
         f"\\(df=(r-1)(c-1)=({row_count}-1)({len(column_labels)}-1)={df}\\).</p>"
-        f"<p>For the requested cell, "
-        f"\\(E=\\frac{{({row_totals[target_row]})({column_totals[target_column]})}}"
-        f"{{{grand_total}}}={expected[target_row][target_column]:.2f}\\).</p>"
+        f"<p>The sampling design is random. Using \\(E_{{ij}}=R_iC_j/N\\), "
+        f"the smallest expected count is for ({row_labels[min_row]}, {column_labels[min_column]}): "
+        f"\\(E_{{\\min}}=\\frac{{{row_totals[min_row]}\\cdot {column_totals[min_column]}}}"
+        f"{{{grand_total}}}={expected[min_row][min_column]:.2f}\\geq5\\), "
+        "so the large-counts condition is met.</p>"
         f"<br><br>{expected_table}<br><br>{component_table}<br><br>"
-        f"<p>The test statistic is \\(\\chi^2={chi2_stat:.4f}\\); "
-        f"the P-value is \\({p_value:.4g}\\).</p>"
+        f"<p>The test statistic is \\(\\chi^2=\\sum (O-E)^2/E={chi2_stat:.4f}\\); "
+        f"\\(P(\\chi^2_{{{df}}}\\geq {chi2_stat:.4f})={p_value:.4g}\\).</p>"
         f"<p>Since the P-value {('≤' if p_value <= alpha else '>')} "
         f"\\(\\alpha={alpha:g}\\), {('reject' if p_value <= alpha else 'fail to reject')} "
         f"\\(H_0\\). There is "
         f"{'convincing' if p_value <= alpha else 'not convincing'} statistical evidence that "
-        f"{conclusion}.</p>"
+        f"{alternative}.</p>"
     )
+    decision = _decision_step(p_value, alpha, alternative, null)
+    decision["step_num"] = 5
     return {
-        "type": "chi_two_way",
-        "title": "Chi-Square Test of Independence / Homogeneity",
+        "type": kind,
+        "topic": kind,
+        "title": title,
         "prompt": prompt,
         "steps": [
-            {
-                "step_num": 1,
-                "label": "Degrees of Freedom (df):",
-                "input_type": "number",
-                "placeholder": "df",
-                "expected": [df],
-                "tolerance": 0.01,
-                "hint": r"Degrees of freedom for a two-way table is \(df = (r - 1)(c - 1)\), where \(r\) is the number of rows and \(c\) is the number of columns.",
-            },
-            {
-                "step_num": 2,
-                "label": (
-                    f"Expected Count for ({row_labels[target_row]}, "
-                    f"{column_labels[target_column]}):"
-                ),
-                "input_type": "number",
-                "placeholder": "Expected count",
-                "expected": [expected[target_row][target_column]],
-                "tolerance": 0.01,
-                "hint": r"Expected count for a cell is \(E = \frac{(\text{row total})(\text{column total})}{\text{grand total}}\).",
-            },
-            {
-                "step_num": 3,
-                "label": "Test Statistic (χ²):",
-                "input_type": "math",
-                "math_symbols": ["frac", "pow", "parens"],
-                "placeholder": "χ²",
-                "expected": [chi2_stat],
-                "tolerance": 0.05,
-                "hint": r"Calculate \(\chi^2 = \sum \frac{(O - E)^2}{E}\) by summing the squared differences divided by expected counts across all cells.",
-            },
-            _decision_step(p_value, alpha, conclusion),
+            _hypotheses_step(null, alternative, distractor),
+            _conditions_step(min(min(row) for row in expected), r"\(E_{ij}=R_iC_j/N\)"),
+            *_calculation_steps(df, chi2_stat, p_value, r"\(df=(r-1)(c-1)\)"),
+            decision,
         ],
         "solution": f"{observed_table}{solution}",
     }
+
+
+def generate_chi_square_independence() -> Dict[str, Any]:
+    return _generate_chi_square_two_way("chi_independence")
+
+
+def generate_chi_square_homogeneity() -> Dict[str, Any]:
+    return _generate_chi_square_two_way("chi_homogeneity")
+
+
+def generate_chi_square_two_way() -> Dict[str, Any]:
+    problem = random.choice([generate_chi_square_independence, generate_chi_square_homogeneity])()
+    problem["type"] = "chi_two_way"
+    problem["topic"] = "chi_two_way"
+    return problem
 
 
 def generate_chi_problem(topic: str = "random") -> Dict[str, Any]:
@@ -446,6 +523,10 @@ def generate_chi_problem(topic: str = "random") -> Dict[str, Any]:
         return generate_chi_square_gof()
     if topic == "chi_two_way":
         return generate_chi_square_two_way()
+    if topic == "chi_independence":
+        return generate_chi_square_independence()
+    if topic == "chi_homogeneity":
+        return generate_chi_square_homogeneity()
     if topic == "random":
         return random.choice(
             [generate_chi_square_gof, generate_chi_square_two_way]
