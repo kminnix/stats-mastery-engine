@@ -26,6 +26,7 @@ class ChiSquareTwoWayTests(unittest.TestCase):
             ],
         )
         self.assertEqual(conditions["components"][1]["tolerance"], 0.05)
+        self.assertEqual(conditions["components"][1]["input_type"], "number")
         self.assertEqual(df["input_type"], "number")
         self.assertEqual(df["label"], "Degrees of Freedom (df):")
         self.assertNotIn("inputs", df)
@@ -71,6 +72,10 @@ class ChiSquareTwoWayTests(unittest.TestCase):
                             chi2.sf(statistic["inputs"][0]["expected"][0], calculations["expected"][0]),
                         )
                         self.assertEqual(statistic["inputs"][1]["expected"], decision["components"][0]["expected"])
+                        self.assertEqual(statistic["inputs"][0]["input_type"], "math")
+                        self.assertEqual(statistic["inputs"][0]["math_symbols"], ["sqrt", "frac", "parens"])
+                        self.assertEqual(statistic["inputs"][1]["input_type"], "number")
+                        self.assertEqual(decision["components"][0]["input_type"], "number")
         finally:
             random.setstate(state)
 

@@ -6,9 +6,65 @@ from fastapi.testclient import TestClient
 import main
 from app.engine.confidence_intervals import generate_ci_problem
 from app.engine.hypothesis_testing import generate_ht_problem
+from app.engine.inference_drills import generate_condition_check, generate_conclusion_drill
+from app.engine.linear_regression import (
+    generate_lsrl_equation_problem,
+    generate_computer_output_problem,
+    generate_slope_significance_test,
+)
+from app.engine.probability_sampling import (
+    generate_binomial_geom_problem,
+    generate_discrete_rv_problem,
+    generate_sampling_dist_problem,
+)
 
 
 class SingleStepDrillTests(unittest.TestCase):
+    def test_numeric_fields_have_explicit_metadata(self):
+        problems = [
+            generate_condition_check("proportion"),
+            generate_conclusion_drill(),
+            generate_ci_problem("prop_z"),
+            generate_ht_problem("ht_prop_z"),
+            generate_lsrl_equation_problem(),
+            generate_computer_output_problem(),
+            generate_slope_significance_test(),
+        ]
+        for problem in problems:
+            for step in problem["steps"]:
+                fields = step.get("inputs") or step.get("components") or [step]
+                for field in fields:
+                    if field.get("type") == "number":
+                        with self.subTest(problem=problem["type"], field=field["id"]):
+                            self.assertIn(field.get("input_type"), {"number", "math"})
+
+    def test_probability_and_sampling_input_types(self):
+        discrete = generate_discrete_rv_problem()["steps"]
+        self.assertEqual([step["input_type"] for step in discrete], ["number", "number", "math"])
+        self.assertEqual(discrete[2]["math_symbols"], ["sqrt", "pow", "parens"])
+
+        distribution = generate_binomial_geom_problem()["steps"]
+        self.assertEqual([field["input_type"] for field in distribution[0]["inputs"]], ["number", "math"])
+        self.assertEqual(distribution[0]["inputs"][1]["math_symbols"], ["sqrt", "parens"])
+        self.assertEqual(distribution[1]["input_type"], "math")
+        self.assertEqual(distribution[1]["math_symbols"], ["frac", "pow", "parens"])
+
+        sampling = generate_sampling_dist_problem()["steps"]
+        self.assertEqual([field["input_type"] for field in sampling[1]["inputs"]], ["number", "math"])
+        self.assertEqual(sampling[1]["inputs"][1]["math_symbols"], ["sqrt", "frac", "parens"])
+        self.assertEqual(sampling[2]["input_type"], "number")
+
+    def test_regression_readings_and_calculations(self):
+        lsrl = generate_lsrl_equation_problem()["steps"]
+        self.assertEqual([step["input_type"] for step in lsrl[:2]], ["math", "math"])
+        self.assertEqual(
+            [field["input_type"] for field in lsrl[2]["components"] if field["type"] == "number"],
+            ["number", "number"],
+        )
+        output = generate_computer_output_problem()["steps"]
+        self.assertTrue(all(field["input_type"] == "number" for field in output[0]["components"]))
+        self.assertEqual(output[2]["input_type"], "math")
+
     def test_all_topics_route_to_single_step(self):
         client = TestClient(main.app)
         for topic, (engine, _, _) in main.SINGLE_STEP_TOPICS.items():

@@ -35,7 +35,7 @@ class FoundationsTests(unittest.TestCase):
                 for step, answers in zip(problem["steps"], expected):
                     for field, value in zip(step["inputs"], answers):
                         self.assertAlmostEqual(field["expected"][0], value)
-                self.assertTrue(all(field["input_type"] == "math" for field in problem["steps"][1]["inputs"]))
+                self.assertTrue(all(field["input_type"] == "number" for field in problem["steps"][1]["inputs"]))
             self.assertEqual(lengths, {8, 9})
             self.assertEqual(directions, {"lower", "upper"})
         finally:
@@ -57,9 +57,10 @@ class FoundationsTests(unittest.TestCase):
                 steps = problem["steps"]
                 self.assertEqual(steps[0]["inputs"][0]["expected"], [a + b * mu_x])
                 self.assertEqual(steps[0]["inputs"][1]["expected"], [abs(b) * sd_x])
+                self.assertEqual(steps[0]["inputs"][1]["input_type"], "number")
                 self.assertEqual(steps[1]["inputs"][0]["expected"], [mu_x + mu_y if symbol == "+" else mu_x - mu_y])
                 self.assertAlmostEqual(steps[1]["inputs"][1]["expected"][0], math.hypot(sd_x, sd_y))
-                self.assertEqual(steps[1]["inputs"][1]["math_symbols"], ["sqrt", "pow", "parens"])
+                self.assertEqual(steps[1]["inputs"][1]["input_type"], "number")
             self.assertEqual(combinations, {"+", "-"})
             self.assertEqual(signs, {True, False})
         finally:
@@ -87,6 +88,10 @@ class FoundationsTests(unittest.TestCase):
                 self.assertAlmostEqual(steps[0]["inputs"][0]["expected"][0], first[-1] / n)
                 self.assertAlmostEqual(steps[0]["inputs"][1]["expected"][0], cells[0][0] / n)
                 self.assertAlmostEqual(steps[1]["inputs"][0]["expected"][0], cells[0][0] / totals[1])
+                self.assertTrue(all(
+                    field["input_type"] == "number"
+                    for step in steps[:2] for field in step["inputs"]
+                ))
                 independent = cells[0][0] * n == first[-1] * totals[1]
                 outcomes.add(independent)
                 self.assertEqual(steps[2]["expected"][0].startswith("Independent"), independent)
