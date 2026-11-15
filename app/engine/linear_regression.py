@@ -69,8 +69,7 @@ def generate_lsrl_equation_problem(notation: str = "ab") -> Dict[str, Any]:
             {
                 "id": "lsrl-intercept",
                 "type": "number",
-                "input_type": "math",
-                "math_symbols": ["frac", "parens"],
+                "input_type": "number",
                 "placeholder": intercept_placeholder,
                 "expected": [intercept],
                 "tolerance": 0.05,
@@ -87,8 +86,7 @@ def generate_lsrl_equation_problem(notation: str = "ab") -> Dict[str, Any]:
             {
                 "id": "lsrl-slope-magnitude",
                 "type": "number",
-                "input_type": "math",
-                "math_symbols": ["frac", "parens"],
+                "input_type": "number",
                 "placeholder": f"|{slope_placeholder}|",
                 "expected": [magnitude],
                 "tolerance": 0.01,
@@ -289,8 +287,7 @@ def generate_computer_output_problem(notation: str = "ab") -> Dict[str, Any]:
                     {
                         "id": "computer-output-intercept",
                         "type": "number",
-                        "input_type": "math",
-                        "math_symbols": ["frac", "parens"],
+                        "input_type": "number",
                         "placeholder": intercept_placeholder,
                         "expected": [intercept],
                         "tolerance": 0.001,
@@ -298,8 +295,7 @@ def generate_computer_output_problem(notation: str = "ab") -> Dict[str, Any]:
                     {
                         "id": "computer-output-slope",
                         "type": "number",
-                        "input_type": "math",
-                        "math_symbols": ["frac", "parens"],
+                        "input_type": "number",
                         "placeholder": slope_placeholder,
                         "expected": [slope],
                         "tolerance": 0.001,
@@ -322,8 +318,7 @@ def generate_computer_output_problem(notation: str = "ab") -> Dict[str, Any]:
                     {
                         "id": "computer-output-equation-intercept",
                         "type": "number",
-                        "input_type": "math",
-                        "math_symbols": ["frac", "parens"],
+                        "input_type": "number",
                         "placeholder": intercept_placeholder,
                         "expected": [intercept],
                         "tolerance": 0.001,
@@ -331,8 +326,7 @@ def generate_computer_output_problem(notation: str = "ab") -> Dict[str, Any]:
                     {
                         "id": "computer-output-equation-slope",
                         "type": "number",
-                        "input_type": "math",
-                        "math_symbols": ["frac", "parens"],
+                        "input_type": "number",
                         "placeholder": slope_placeholder,
                         "expected": [slope_magnitude],
                         "tolerance": 0.001,
@@ -365,6 +359,7 @@ def generate_computer_output_problem(notation: str = "ab") -> Dict[str, Any]:
                     {
                         "id": "computer-output-r-squared",
                         "type": "number",
+                        "input_type": "number",
                         "placeholder": "R² (%)",
                         "expected": [r_squared_percent],
                         "tolerance": 0.15,
@@ -487,6 +482,7 @@ def generate_raw_data_regression_problem(notation: str = "ab") -> Dict[str, Any]
                 {
                     "id": "raw-correlation",
                     "type": "number",
+                    "input_type": "number",
                     "placeholder": "r",
                     "expected": [correlation],
                     "tolerance": 0.02,
@@ -494,6 +490,7 @@ def generate_raw_data_regression_problem(notation: str = "ab") -> Dict[str, Any]
                 {
                     "id": "raw-r-squared",
                     "type": "number",
+                    "input_type": "number",
                     "placeholder": "R²",
                     "expected": [
                         correlation**2,
@@ -673,6 +670,7 @@ def generate_slope_confidence_interval(notation: str = "ab") -> Dict[str, Any]:
                     {
                         "id": "slope-ci-lower",
                         "type": "number",
+                        "input_type": "number",
                         "placeholder": "L",
                         "expected": [lower],
                         "tolerance": 0.02,
@@ -680,6 +678,7 @@ def generate_slope_confidence_interval(notation: str = "ab") -> Dict[str, Any]:
                     {
                         "id": "slope-ci-upper",
                         "type": "number",
+                        "input_type": "number",
                         "placeholder": "U",
                         "expected": [upper],
                         "tolerance": 0.02,
@@ -873,6 +872,7 @@ def generate_slope_significance_test(notation: str = "ab") -> Dict[str, Any]:
                     {
                         "id": "slope-test-h0-value",
                         "type": "number",
+                        "input_type": "number",
                         "placeholder": "0",
                         "expected": [0],
                         "tolerance": 0.00001,
@@ -880,6 +880,7 @@ def generate_slope_significance_test(notation: str = "ab") -> Dict[str, Any]:
                     {
                         "id": "slope-test-ha-value",
                         "type": "number",
+                        "input_type": "number",
                         "placeholder": "0",
                         "expected": [0],
                         "tolerance": 0.00001,
@@ -969,6 +970,7 @@ def generate_slope_significance_test(notation: str = "ab") -> Dict[str, Any]:
                     {
                         "id": "slope-test-df",
                         "type": "number",
+                        "input_type": "number",
                         "placeholder": "df",
                         "expected": [df],
                         "tolerance": 0.01,
@@ -1000,6 +1002,7 @@ def generate_slope_significance_test(notation: str = "ab") -> Dict[str, Any]:
                     {
                         "id": "stage-pval",
                         "type": "number",
+                        "input_type": "number",
                         "placeholder": "P-value",
                         "expected": [p_value],
                         "tolerance": 0.005,
@@ -1044,6 +1047,7 @@ def generate_slope_significance_test(notation: str = "ab") -> Dict[str, Any]:
                     {
                         "id": "decision-p-value",
                         "type": "number",
+                        "input_type": "number",
                         "placeholder": "P-value",
                         "expected": [p_value],
                         "tolerance": 0.005,
@@ -1051,6 +1055,7 @@ def generate_slope_significance_test(notation: str = "ab") -> Dict[str, Any]:
                     {
                         "id": "decision-alpha",
                         "type": "number",
+                        "input_type": "number",
                         "placeholder": "α",
                         "expected": [alpha],
                         "tolerance": 0.00001,

@@ -44,7 +44,6 @@ window.addEventListener('wheel', () => {
 
 let currentProblem = null;
 let isMultiStage = false;
-let hadStageMistake = false;
 let currentQuestionAnswers = [];
 let currentStepAttemptStates = [];
 let currentUser = null;
@@ -637,7 +636,6 @@ function captureTaskQuestionState() {
         stageInputs: currentQuestionAnswers.slice(),
         stepAttemptStates: currentStepAttemptStates.map(step => ({ ...step })),
         stageStates,
-        hadStageMistake,
         feedbackHtml: document.getElementById('feedback-banner')?.innerHTML || '',
         feedbackClass: document.getElementById('feedback-banner')?.className || 'banner',
         feedbackDisplay: document.getElementById('feedback-banner')?.style.display || 'none',
@@ -656,7 +654,6 @@ function captureTaskQuestionState() {
 
 function restoreTaskQuestionState(questionState) {
     currentQuestionAnswers = questionState.stageInputs?.slice() || [];
-    hadStageMistake = Boolean(questionState.hadStageMistake);
     if (questionState.stepAttemptStates) {
         currentStepAttemptStates = questionState.stepAttemptStates.map(step => ({ ...step }));
     }
@@ -1614,7 +1611,6 @@ async function loadProblem(problemToRender = null) {
     if (solutionCard) solutionCard.style.display = 'none';
     if (nextBtn) nextBtn.style.display = 'none';
     hideTaskAdvanceButton();
-    hadStageMistake = false;
     currentQuestionAnswers = [];
     currentStepAttemptStates = [];
 
@@ -1758,8 +1754,8 @@ function getStageControlId(idx, definition) {
         : `stage-input-${idx}${definition.id ? `-${definition.id}` : ''}`;
 }
 
-function isMathComputationField(step, definition) {
-    return (definition.input_type || step.input_type) === 'math';
+function isMathComputationField(definition) {
+    return definition.input_type === 'math';
 }
 
 function getStageControlValue(control) {
@@ -1817,7 +1813,7 @@ function renderMultiStageUI(topic) {
         inputRow.className = `input-row stage-input-row${step.full_width || step.input_type === 'cloze' ? ' full-width' : ''}`;
         const controlId = definition => getStageControlId(idx, definition);
         const createControl = definition => {
-            const isMathField = isMathComputationField(step, definition);
+            const isMathField = isMathComputationField(definition);
             const isSelect = isSelectDefinition(definition);
             const control = document.createElement(
                 isMathField ? 'math-field' : isSelect ? 'select' : 'input'
@@ -2246,7 +2242,6 @@ async function submitStage(idx) {
         return;
     }
 
-    hadStageMistake = true;
     if (stepState.attemptsUsed < stepState.maxAttempts) {
         controls.forEach(({ control, definition }, index) => {
             if (controls.length > 1 && isSelectDefinition(definition)) {
@@ -2319,7 +2314,10 @@ function unlockNextStage(idx) {
         captureTaskQuestionState();
         renderTaskNavigationChips();
     } else {
-        finalizeProblem(!hadStageMistake, currentQuestionAnswers.slice());
+        finalizeProblem(
+            currentStepAttemptStates.every(step => step.resolved && step.earnedCredit),
+            currentQuestionAnswers.slice()
+        );
     }
 }
 
@@ -2328,7 +2326,14 @@ async function submitSingleAnswer() {
     const rawVal = input.value.trim();
     if (!rawVal) return;
 
-    const userVal = parseFloat(rawVal);
+    const userVal = evaluateMathInput(rawVal);
+    if (!Number.isFinite(userVal)) {
+        const feedback = document.getElementById('feedback-banner');
+        feedback.className = 'banner incorrect';
+        feedback.textContent = 'Enter a valid number or arithmetic expression.';
+        feedback.style.display = 'block';
+        return;
+    }
     if (activeTaskState.active) {
         activeTaskState.isVerifying = true;
         const questionState = activeTaskState.questionsState[activeTaskState.currentIndex - 1];

@@ -19,6 +19,7 @@ def _decision_step(
             {
                 "id": "chi-p-value",
                 "type": "number",
+                "input_type": "number",
                 "placeholder": "P-value",
                 "expected": [p_value],
                 "tolerance": 0.001,
@@ -38,6 +39,7 @@ def _decision_step(
             {
                 "id": "chi-alpha",
                 "type": "number",
+                "input_type": "number",
                 "placeholder": "α",
                 "expected": [alpha],
                 "tolerance": 0.00001,
@@ -138,7 +140,7 @@ def _conditions_step(minimum: float, formula: str) -> Dict[str, Any]:
             {"id": "chi-conditions", "type": "select",
              "options": [{"value": value, "label": value} for value in options],
              "expected": [met]},
-            {"id": "chi-min-expected", "type": "number", "placeholder": "Minimum expected count",
+            {"id": "chi-min-expected", "type": "number", "input_type": "number", "placeholder": "Minimum expected count",
              "expected": [minimum], "tolerance": 0.05},
         ],
         "parts": ["Randomness and large counts: ", {"component": "chi-conditions"},
@@ -166,8 +168,8 @@ def _calculation_steps(
             "input_type": "compound",
             "inputs": [
                 {"id": "chi-statistic", "label": "χ²", "type": "number", "input_type": "math",
-                 "math_symbols": ["frac", "pow", "parens"], "expected": [statistic], "tolerance": 0.05},
-                {"id": "chi-test-p-value", "label": "P-value", "type": "number",
+                 "math_symbols": ["sqrt", "frac", "parens"], "expected": [statistic], "tolerance": 0.05},
+                {"id": "chi-test-p-value", "label": "P-value", "type": "number", "input_type": "number",
                  "expected": [p_value], "tolerance": 0.001},
             ],
             "hint": r"Sum \(\chi^2=\sum (O-E)^2/E\), then find the right-tail area \(P(\chi^2_{df}\geq\chi^2_{\mathrm{obs}})\).",

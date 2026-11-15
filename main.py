@@ -43,7 +43,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "153"
+STATIC_VERSION = "154"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -511,7 +511,8 @@ def slice_problem_to_step(problem_dict: Dict[str, Any], step_selector: Union[str
                              "math_symbols": ["sqrt", "frac", "parens"],
                              "expected": [metadata["se"]], "tolerance": 0.005}]
         if "df" in metadata:
-            fields.insert(0, {"label": "Degrees of Freedom (df)", "expected": [metadata["df"]], "tolerance": 0.01})
+            fields.insert(0, {"label": "Degrees of Freedom (df)", "input_type": "number",
+                              "expected": [metadata["df"]], "tolerance": 0.01})
         selected = _combine_drill_steps(fields, "Critical Value and Standard Error:")
     elif step_selector == "crit":
         selected = find("Critical Value")

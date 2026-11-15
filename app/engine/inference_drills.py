@@ -62,6 +62,7 @@ def generate_condition_check(kind: str = "random") -> Dict[str, Any]:
                     {
                         "id": "expected-successes",
                         "type": "number",
+                        "input_type": "number",
                         "placeholder": "n × p₀",
                         "expected": [successes],
                         "tolerance": 0.01,
@@ -69,6 +70,7 @@ def generate_condition_check(kind: str = "random") -> Dict[str, Any]:
                     {
                         "id": "expected-failures",
                         "type": "number",
+                        "input_type": "number",
                         "placeholder": "n × (1 − p₀)",
                         "expected": [failures],
                         "tolerance": 0.01,
@@ -408,6 +410,7 @@ def generate_conclusion_drill(kind: str = "random") -> Dict[str, Any]:
                 {
                     "id": "conclusion-pvalue",
                     "type": "number",
+                    "input_type": "number",
                     "placeholder": "P-value",
                     "expected": [p_value],
                     "tolerance": 0.00001,
@@ -424,6 +427,7 @@ def generate_conclusion_drill(kind: str = "random") -> Dict[str, Any]:
                 {
                     "id": "conclusion-alpha",
                     "type": "number",
+                    "input_type": "number",
                     "placeholder": "alpha",
                     "expected": [alpha],
                     "tolerance": 0.00001,
@@ -468,6 +472,7 @@ def generate_conclusion_drill(kind: str = "random") -> Dict[str, Any]:
                 {
                     "id": "conclusion-claim",
                     "type": "number",
+                    "input_type": "number",
                     "placeholder": "claim value",
                     "expected": [claim_value],
                     "tolerance": 0.00001,

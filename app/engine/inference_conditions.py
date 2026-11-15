@@ -42,7 +42,7 @@ def add_inference_conditions(
     parts = ["Conditions: ", {"component": "inference-conditions"}]
     if is_proportion:
         components.append({
-            "id": "inference-min-count", "type": "number",
+            "id": "inference-min-count", "type": "number", "input_type": "number",
             "placeholder": "Smallest success/failure count",
             "expected": [minimum_count], "tolerance": 0.05,
         })

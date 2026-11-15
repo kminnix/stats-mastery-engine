@@ -1,18 +1,15 @@
 import math
 import random
 from statistics import mean, median, stdev
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 
-def _field(field_id: str, label: str, value: float, input_type: str = "number",
-           symbols: Optional[list[str]] = None, tolerance: float = 0.005) -> Dict[str, Any]:
-    field: Dict[str, Any] = {
-        "id": field_id, "label": label, "type": "number", "input_type": input_type,
+def _field(field_id: str, label: str, value: float,
+           tolerance: float = 0.005) -> Dict[str, Any]:
+    return {
+        "id": field_id, "label": label, "type": "number", "input_type": "number",
         "expected": [value], "tolerance": tolerance,
     }
-    if symbols is not None:
-        field["math_symbols"] = symbols
-    return field
 
 
 def _step(number: int, label: str, fields: list[Dict[str, Any]], hint: str) -> Dict[str, Any]:
@@ -59,9 +56,9 @@ def generate_eda_summary_problem() -> Dict[str, Any]:
                 _field("eda-max", "Maximum", ordered[-1]),
             ], r"Sort the data. Find the median and the medians of the lower and upper halves; exclude the overall median when \(n\) is odd."),
             _step(2, "IQR and Outlier Fences:", [
-                _field("eda-iqr", "IQR", iqr, "math", ["parens"]),
-                _field("eda-lower", "Lower fence", lower, "math", ["parens"]),
-                _field("eda-upper", "Upper fence", upper, "math", ["parens"]),
+                _field("eda-iqr", "IQR", iqr),
+                _field("eda-lower", "Lower fence", lower),
+                _field("eda-upper", "Upper fence", upper),
             ], r"Use \(IQR=Q_3-Q_1\) and fences \(Q_1-1.5(IQR)\), \(Q_3+1.5(IQR)\)."),
             _step(3, "Outliers and Sample Statistics:", [
                 _field("eda-outliers", "Number of outliers", len(outliers), tolerance=0),
@@ -113,11 +110,11 @@ def generate_rv_transform_combine_problem() -> Dict[str, Any]:
         "steps": [
             _step(1, "Linear Transformation W:", [
                 _field("rv-w-mean", "Mean μW", transformed_mean),
-                _field("rv-w-sd", "Standard deviation σW", transformed_sd, "math", ["parens"]),
+                _field("rv-w-sd", "Standard deviation σW", transformed_sd),
             ], r"Use \(\mu_W=a+b\mu_X\) and \(\sigma_W=|b|\sigma_X\); adding a constant does not change standard deviation."),
             _step(2, f"Combination {result_name}:", [
                 _field("rv-comb-mean", f"Mean μ{result_name}", combined_mean),
-                _field("rv-comb-sd", f"Standard deviation σ{result_name}", combined_sd, "math", ["sqrt", "pow", "parens"]),
+                _field("rv-comb-sd", f"Standard deviation σ{result_name}", combined_sd),
             ], r"For independent variables, add variances for both sums and differences: \(\sigma_{X\pm Y}=\sqrt{\sigma_X^2+\sigma_Y^2}\)."),
         ],
         "solution": (
@@ -171,11 +168,11 @@ def generate_twoway_prob_problem() -> Dict[str, Any]:
         },
         "steps": [
             _step(1, "Marginal and Joint Probabilities:", [
-                _field("two-p-a", "P(A)", p_a, "math", ["frac"]),
-                _field("two-p-joint", "P(A and B)", p_joint, "math", ["frac"]),
+                _field("two-p-a", "P(A)", p_a),
+                _field("two-p-joint", "P(A and B)", p_joint),
             ], r"Divide the A row total and the A-and-B cell count by the grand total \(N\)."),
             _step(2, "Conditional Probability:", [
-                _field("two-p-conditional", "P(A | B)", p_cond, "math", ["frac"]),
+                _field("two-p-conditional", "P(A | B)", p_cond),
             ], r"Restrict the denominator to B: \(P(A\mid B)=P(A\cap B)/P(B)\)."),
             {
                 "step_num": 3, "label": "Independence:", "input_type": "select",
