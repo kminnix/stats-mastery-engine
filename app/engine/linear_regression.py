@@ -784,6 +784,12 @@ def generate_slope_significance_test(notation: str = "ab") -> Dict[str, Any]:
         "expected_decision": expected_decision,
         "expected_evidence": expected_evidence,
         "expected_claim": expected_claim,
+        "alternative": direction,
+        "parameter_description": context,
+        "alternative_statement": (
+            f"the true slope relating {explanatory} to {response} "
+            + {">": "is greater than 0", "<": "is less than 0", "!=": "differs from 0"}[direction]
+        ),
     }
     return {
         "type": "reg_slope_test",

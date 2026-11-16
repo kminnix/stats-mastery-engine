@@ -338,6 +338,12 @@
             const title = document.createElement('strong');
             title.textContent = task.title || 'Assigned Task';
             heading.append(typeBadge, title);
+            if (type === 'test_correction' && task.perfect_on_parent) {
+                const perfect = document.createElement('span');
+                perfect.className = 'task-badge';
+                perfect.textContent = '🌟 100% on Original — No Corrections Needed';
+                heading.appendChild(perfect);
+            }
 
             const metadata = document.createElement('div');
             metadata.style.cssText = 'font-size: 0.85rem; color: #64748b;';
@@ -359,6 +365,11 @@
             button.textContent = status === 'preview'
                 ? 'Preview'
                 : status === 'not_started' ? 'Start' : 'Continue';
+            if (type === 'test_correction' && (task.perfect_on_parent || task.parent_submission_missing || task.correction_error)) {
+                button.disabled = true;
+                if (task.parent_submission_missing) metadata.textContent += ' • Submit the original assessment first.';
+                if (task.correction_error) metadata.textContent += ` • ${task.correction_error}`;
+            }
             button.addEventListener('click', () => {
                 window.startStudentTask(task).catch(error => {
                     console.error('Could not start assigned task:', error);
@@ -471,6 +482,7 @@
             <div style="font-size: 2rem; font-weight: 800; color: #1e293b;" id="completion-score">0 / 0</div>
             <div style="font-size: 0.9rem; color: #64748b;" id="completion-percent">(0%)</div>
         </div>
+        <div id="completion-frq-feedback" style="text-align: left; max-height: 220px; overflow-y: auto;"></div>
         <button id="btn-finish-task" class="btn-primary" style="width: 100%; padding: 12px; font-size: 1rem;">Return to Assigned Tasks</button>
     </div>
 </div>

@@ -1513,12 +1513,12 @@
             };
 
             addActionButton('Results', 'btn-primary btn-sm', '', () => viewAssessmentResults(item.id, title));
+            if (count > 0) {
+                addActionButton('🩹 Create Corrections', 'btn-secondary btn-sm', '', () => createTestCorrections(item.id, title));
+            }
             if (!showArchivedAssessments) {
                 addActionButton('✏ Edit', 'btn-secondary btn-sm', 'Edit assignment', () => editAssessment(item.id));
                 addActionButton('📋 Duplicate', 'btn-secondary btn-sm', 'Duplicate assignment', () => duplicateAssessment(item.id));
-                if (itemType === 'test') {
-                    addActionButton('Corrections', 'btn-secondary btn-sm', '', () => promptCreateCorrections(item.id, title));
-                }
                 addActionButton('🗑', 'btn-danger-subtle btn-sm', 'Archive / Move to Trash', () => archiveAssessment(item.id, title));
             } else {
                 addActionButton('♻ Restore', 'btn-secondary btn-sm', 'Restore assignment', () => restoreAssessment(item.id, title));
@@ -1867,14 +1867,19 @@
         document.getElementById('results-modal').style.display = 'none';
     }
 
-    function promptCreateCorrections(testId, testTitle) {
-        const params = new URLSearchParams({
-            type: 'test_correction',
-            parent_assessment_id: testId,
-            title: `Corrections: ${testTitle}`,
-            class_id: document.getElementById('class-select').value
-        });
-        window.location.href = `/teacher/assignments/new?${params}`;
+    async function createTestCorrections(assessmentId, title) {
+        try {
+            const response = await fetch(`/api/teacher/assessments/${encodeURIComponent(assessmentId)}/corrections`, {
+                method: 'POST', headers: getAuthHeaders()
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.detail || 'Could not create corrections.');
+            alert(`Corrections created for "${title}".`);
+            invalidateTeacherCache('assessments', 'gradebook');
+            await loadAssessments(false);
+        } catch (error) {
+            alert(error.message || 'Could not create corrections.');
+        }
     }
 
     async function promptCreateClass() {

@@ -526,6 +526,7 @@ def _test_result(
             "parameter_description": parameter_description,
             "null_value": null_value,
             "alternative": alternative,
+            "alternative_statement": alternative_statement,
             "test_statistic": statistic,
             "p_value": p_value,
             "alpha": alpha,

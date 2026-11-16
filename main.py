@@ -5,6 +5,7 @@ import traceback
 import csv
 import io
 import re
+import math
 from copy import deepcopy
 from typing import List, Optional, Dict, Any, Literal, Union
 from fastapi import FastAPI, Request, HTTPException, Header
@@ -43,7 +44,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "154"
+STATIC_VERSION = "157"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -169,6 +170,16 @@ class StudentSubmissionRequest(BaseModel):
     responses: List[Dict[str, Any]]
     details: Dict[str, Any]
     reset_version: Optional[str] = None
+
+class ConclusionEvaluationRequest(BaseModel):
+    student_text: str
+    p_val: float
+    student_p_val: Any = None
+    alpha: float
+    decision: str
+    direction: str
+    context_keywords: List[str]
+    alternative_statement: Optional[str] = None
 
 def generate_join_code(length=6) -> str:
     chars = string.ascii_uppercase + string.digits
@@ -712,6 +723,175 @@ async def check_answer(payload: VerifyPayload):
     )
     return {"correct": is_correct}
 
+@app.post("/api/evaluate/conclusion")
+async def evaluate_conclusion(req: ConclusionEvaluationRequest):
+    if not (0 <= req.p_val <= 1 and 0 <= req.alpha <= 1):
+        raise HTTPException(status_code=422, detail="P-value and alpha must be between 0 and 1.")
+    directions = {
+        "<": "less", "less": "less", "less than": "less",
+        ">": "greater", "greater": "greater", "greater than": "greater",
+        "!=": "different", "≠": "different", "different": "different",
+        "different from": "different", "differ": "different", "differs": "different",
+        "differs from": "different", "not equal": "different", "not equal to": "different",
+    }
+    direction = directions.get(req.direction.strip().lower())
+    keywords = [word.strip() for word in req.context_keywords if word.strip()]
+    if not direction or not keywords:
+        raise HTTPException(status_code=422, detail="A valid direction and context keyword are required.")
+    official_reject = req.p_val <= req.alpha
+    supplied_decision = req.decision.lower().replace("₀", "0").strip()
+    try:
+        student_p_val = float(req.student_p_val) if req.student_p_val is not None else req.p_val
+    except (TypeError, ValueError, OverflowError):
+        student_p_val = req.p_val
+    effective_p_val = student_p_val if math.isfinite(student_p_val) else req.p_val
+    reject = effective_p_val <= req.alpha
+    supplied_failure = "fail" in supplied_decision or "not reject" in supplied_decision
+    if "reject" not in supplied_decision or supplied_failure not in (not official_reject, not reject):
+        raise HTTPException(status_code=422, detail="Decision does not match P-value and alpha.")
+    expected_decision = "reject" if reject else "fail to reject"
+    text = req.student_text.lower().replace("₀", "0").replace("α", "alpha").replace("−", "-").replace("’", "'")
+    text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"\bho\b", "h0", text)
+    text = re.sub(r"\bp\s*(?:-\s*|\s*)value\b|\bpval\b", "pvalue", text)
+    null = r"(?:the\s+)?(?:h\s*_?\s*0|null(?: hypothesis)?)"
+    failed_reject = bool(re.search(rf"\b(?:fail(?:ed|ing)?(?: to)?|do(?:es)? not|don't|cannot|can't|not)\s+reject\w*\s+{null}\b", text))
+    rejected = bool(re.search(rf"\breject\w*\s+{null}", text)) and not failed_reject
+    forbidden = bool(re.search(
+        rf"\b(?:accept\w*|prov\w*)\s+{null}\b|"
+        rf"\b{null}\s+(?:(?:is|was)\s+)?(?:accepted|proven|proved|true)\b",
+        text,
+    ))
+    p_match = re.search(r"\bpvalue\b|\bp\s*(?=[<>=≤≥])", text)
+    comparison = text[p_match.start():p_match.start() + 120] if p_match else ""
+    comparison = re.split(r"[!?]|\.(?!\d)", comparison, maxsplit=1)[0]
+    comparison = re.split(r"\b(?:we|therefore|so)\b", comparison, maxsplit=1)[0]
+    smaller = bool(re.search(r"≤|<=|<(?![=])|\b(?:less than|smaller than|lower than|below|at most)\b", comparison))
+    larger = bool(re.search(r"≥|>=|(?<!<)>(?!=)|\b(?:greater than|larger than|bigger than|higher than|above|exceeds)\b", comparison))
+    equal = bool(re.search(r"≤|<=|\b(?:equal to|at most)\b", comparison))
+    number = r"(?:\d+(?:\.\d+)?|\.\d+)"
+    has_alpha = bool(re.search(r"\balpha\b", comparison)) or any(
+        abs(float(value) - req.alpha) <= 0.005 + 1e-12 for value in re.findall(number, comparison)
+    )
+    relation_ok = (
+        equal and not larger if effective_p_val == req.alpha
+        else smaller and not larger if reject
+        else larger and not smaller
+    )
+    if re.search(r"\b(?:not|never)\s+(?:less|smaller|lower|below|greater|larger|bigger|higher|above|equal)", comparison):
+        relation_ok = False
+    numeric_pattern = (
+        rf"(?<![\w.])({number})\s*(?:is\s+)?"
+        rf"(<=|>=|≤|≥|<|>|=|less than|smaller than|lower than|below|at most|"
+        rf"greater than|larger than|bigger than|higher than|above|exceeds|equal to)"
+        rf"\s*({number})(?!\w|\.\d)"
+    )
+    local_comparisons = list(re.finditer(numeric_pattern, comparison)) if p_match else []
+    numeric_comparisons = local_comparisons or list(re.finditer(numeric_pattern, text))
+    numeric_ok = False
+    for numeric_comparison in numeric_comparisons:
+        left, operator, right = numeric_comparison.groups()
+        left, right = float(left), float(right)
+        less_ops = {"<", "less than", "smaller than", "lower than", "below"}
+        greater_ops = {">", "greater than", "larger than", "bigger than", "higher than", "above", "exceeds"}
+        at_most_ops = {"<=", "≤", "at most"}
+        at_least_ops = {">=", "≥"}
+        relation_is_true = (
+            (operator in less_ops and left < right)
+            or (operator in greater_ops and left > right)
+            or (operator in at_most_ops and left <= right)
+            or (operator in at_least_ops and left >= right)
+            or (operator in {"=", "equal to"} and left == right)
+        )
+        matches_forward = abs(left - effective_p_val) <= 0.01 + 1e-12 and abs(right - req.alpha) <= 0.005 + 1e-12
+        matches_reverse = abs(right - effective_p_val) <= 0.01 + 1e-12 and abs(left - req.alpha) <= 0.005 + 1e-12
+        numeric_ok = relation_is_true and (
+            (matches_forward and (left <= right) == reject)
+            or (matches_reverse and (right <= left) == reject)
+        )
+        if numeric_ok:
+            break
+    stated_p = re.search(rf"\bpvalue\s*(?:(?:is|of)\s*|[=:]\s*)?({number})(?!\w|\.\d)", comparison)
+    stated_alpha = re.search(rf"\balpha\s*(?:(?:is|of)\s*|[=:]\s*)?({number})(?!\w|\.\d)", comparison)
+    stated_values_ok = (
+        (not stated_p or abs(float(stated_p.group(1)) - effective_p_val) <= 0.01 + 1e-12)
+        and (not stated_alpha or abs(float(stated_alpha.group(1)) - req.alpha) <= 0.005 + 1e-12)
+    )
+    comparison_ok = bool(stated_values_ok and (
+        numeric_ok if local_comparisons else numeric_ok or (p_match and has_alpha and relation_ok)
+    ))
+    decision_ok = comparison_ok and not forbidden and (rejected if reject else failed_reject)
+
+    evidence_wording = r"(?:statistically\s+)?(?:convincing|sufficient|strong|enough|statistical)(?:\s+statistical)?\s+evidence"
+    negation = r"(?:not|no|don't|do not|isn't|is not|insufficient|lack(?: of)?)"
+    insufficient = bool(re.search(
+        rf"\b{negation}\s+(?:have\s+)?(?:any\s+)?(?:{evidence_wording}|evidence)\b", text
+    )) or bool(re.search(
+        r"\bevidence\b[^.!?]*\b(?:is not|isn't|not)\s+(?:convincing|sufficient|strong|enough)\b",
+        text,
+    ))
+    convincing = bool(re.search(rf"\b{evidence_wording}\b", text))
+    evidence_ok = (convincing and not insufficient) if reject else insufficient
+    direction_patterns = {
+        "less": r"\b(?:less|lower|smaller)\s+than\b|<",
+        "greater": r"\b(?:greater|higher|larger)\s+than\b|(?<!<)>(?!=)",
+        "different": r"\b(?:differ(?:s|ent)?(?:\s+from)?|not\s+equal)\b|≠|!=",
+    }
+    evidence_clause = text.rsplit("evidence", 1)[-1] if "evidence" in text else (
+        text[:p_match.start()] + text[p_match.start() + len(comparison):] if p_match else text
+    )
+    direction_match = re.search(direction_patterns[direction], evidence_clause)
+    direction_ok = bool(direction_match and not re.search(
+        r"\b(?:not|no)\s*$",
+        evidence_clause[max(0, direction_match.start() - 12):direction_match.start()]
+    ))
+    direction_ok = direction_ok and not any(
+        re.search(pattern, evidence_clause)
+        for name, pattern in direction_patterns.items() if name != direction
+    )
+    context_ok = any(
+        re.search(
+            r"(?<!\w)" + re.escape(re.sub(
+                r"\s+", " ", keyword.lower().replace("₀", "0").replace("α", "alpha").replace("−", "-").replace("’", "'")
+            )) + r"(?!\w)",
+            text,
+        )
+        for keyword in keywords
+    )
+    context_direction_ok = context_ok and direction_ok
+    checks = [decision_ok, evidence_ok, context_direction_ok]
+    score = sum(checks)
+    feedback = " ".join(
+        message for ok, message in zip(checks, [
+            "Compare the P-value with alpha and state the correct decision about H0 without accepting or proving it.",
+            "Use the appropriate convincing or insufficient evidence wording.",
+            "Include the scenario context and the direction of the alternative hypothesis.",
+        ]) if not ok
+    ) or "All three rubric components are present."
+    statement = req.alternative_statement or (
+        f"the population parameter for {keywords[0]} is "
+        + {"less": "less than", "greater": "greater than", "different": "different from"}[direction]
+        + " the null value"
+    )
+    model = (
+        f"Because the P-value {effective_p_val:.5g} is {'less than or equal to' if reject else 'greater than'} "
+        f"alpha {req.alpha:g}, we {expected_decision} H0. There is "
+        f"{'convincing' if reject else 'insufficient'} evidence that {statement}."
+    )
+    return {
+        "score_code": "E" if score == 3 else "P" if score == 2 else "I",
+        "passed": score == 3,
+        "feedback": feedback,
+        "model_conclusion": model,
+        "decision_ok": decision_ok,
+        "evidence_ok": evidence_ok,
+        "context_ok": context_direction_ok,
+        "rubric": [
+            {"part": part, "passed": passed}
+            for part, passed in zip(("Decision & comparison", "Evidence", "Context & direction"), checks)
+        ],
+    }
+
 # --- ROSTER & CLASSROOM ENDPOINTS ---
 
 @app.post("/api/classes/create")
@@ -960,6 +1140,43 @@ async def create_assessment(req: AssessmentCreateRequest, authorization: Optiona
         raise HTTPException(status_code=400, detail=str(e))
 
     raise HTTPException(status_code=400, detail="Could not create assessment")
+
+@app.post("/api/teacher/assessments/{assessment_id}/corrections")
+async def create_test_corrections(assessment_id: str, authorization: Optional[str] = Header(None)):
+    access = verify_teacher_access(authorization)
+    db = get_scoped_supabase(authorization)
+    result = db.table("assessments").select("title, class_id, config").eq("id", assessment_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+    parent = result.data[0]
+    verify_teacher_class_access(db, parent["class_id"], access["user"].id)
+    db.table("assessment_submissions").select("id, student_id, details, responses").eq(
+        "assessment_id", assessment_id
+    ).execute()
+    config = parent.get("config") or {}
+    questions = config.get("questions")
+    if not isinstance(questions, list):
+        questions = [
+            {"topic": block["topic"], "allow_hints": True}
+            for block in config.get("blocks", [])
+            for _ in range(int(block.get("count", 1)))
+        ]
+    payload = {
+        "title": f"{parent['title']} — Test Corrections",
+        "type": "test_correction",
+        "class_id": parent["class_id"],
+        "parent_assessment_id": assessment_id,
+        "is_active": True,
+        "config": {
+            "parent_assessment_id": assessment_id,
+            "fallback_questions": questions,
+            "allow_hints": True,
+        },
+    }
+    created = db.table("assessments").insert(payload).execute()
+    if not created.data:
+        raise HTTPException(status_code=500, detail="Could not create corrections")
+    return {"status": "ok", "correction_assessment": created.data[0]}
 
 @app.get("/api/teacher/assessments/{class_id}")
 async def get_class_assessments(
@@ -1382,7 +1599,12 @@ async def get_student_tasks(student_id: str, authorization: Optional[str] = Head
     if not assessments:
         return []
 
-    assessment_ids = [a["id"] for a in assessments]
+    assessment_ids = list({
+        identifier
+        for a in assessments
+        for identifier in (a["id"], a.get("parent_assessment_id") if a.get("type") == "test_correction" else None)
+        if identifier
+    })
 
     # 3. Get existing student submission statuses
     sub_res = db.table("assessment_submissions").select("*").eq("student_id", student_id).in_("assessment_id", assessment_ids).execute()
@@ -1392,7 +1614,7 @@ async def get_student_tasks(student_id: str, authorization: Optional[str] = Head
     task_list = []
     for a in assessments:
         sub = submission_map.get(a["id"])
-        task_list.append({
+        task = {
             "assessment_id": a["id"],
             "title": a["title"],
             "type": a["type"],
@@ -1405,6 +1627,46 @@ async def get_student_tasks(student_id: str, authorization: Optional[str] = Head
             "parent_assessment_id": a.get("parent_assessment_id"),
             "status": sub["status"] if sub else "not_started",
             "score": sub.get("score") if sub else None
-        })
+        }
+        parent_id = a.get("parent_assessment_id")
+        if a["type"] == "test_correction" and parent_id:
+            parent_sub = submission_map.get(parent_id)
+            if parent_sub is not None and parent_sub.get("status") not in (None, "submitted", "completed"):
+                parent_sub = None
+            task["parent_submission_missing"] = parent_sub is None
+            task["missed_questions"] = []
+            task["perfect_on_parent"] = False
+            if parent_sub is not None:
+                details = parent_sub.get("details") or {}
+                breakdown = details.get("question_breakdown") if isinstance(details, dict) else None
+                if not isinstance(breakdown, list):
+                    breakdown = parent_sub.get("responses")
+                if not isinstance(breakdown, list):
+                    task["correction_error"] = "The original submission has no question breakdown. Contact your teacher."
+                else:
+                    missed = []
+                    for response in breakdown:
+                        if not isinstance(response, dict):
+                            task["correction_error"] = "The original submission has an invalid question breakdown. Contact your teacher."
+                            break
+                        question = response.get("breakdown") if isinstance(response.get("breakdown"), dict) else response
+                        earned, maximum = question.get("points_earned"), question.get("max_points")
+                        correct = question.get("correct", response.get("correct"))
+                        if isinstance(earned, (int, float)) and isinstance(maximum, (int, float)):
+                            is_missed = earned < maximum or correct is False
+                        elif isinstance(correct, bool):
+                            is_missed = correct is False
+                        else:
+                            task["correction_error"] = "The original submission has an incomplete question breakdown. Contact your teacher."
+                            break
+                        if is_missed:
+                            if not isinstance(question.get("topic"), str) or not question["topic"]:
+                                task["correction_error"] = "A missed question has no topic. Contact your teacher."
+                                break
+                            missed.append({"topic": question["topic"], "allow_hints": True})
+                    if "correction_error" not in task:
+                        task["missed_questions"] = missed
+                        task["perfect_on_parent"] = not missed
+        task_list.append(task)
 
     return task_list

@@ -436,7 +436,8 @@
             title,
             count: 1,
             mode: 'no_hints',
-            max_step_attempts: null
+            max_step_attempts: null,
+            allow_frq_conclusion: false
         });
         renderBlocksList();
     }
@@ -558,6 +559,16 @@
             );
             stepAttemptsLabel.appendChild(stepAttemptsInput);
             controls.append(countLabel, modeLabel, stepAttemptsLabel);
+            if (block.topic.startsWith('ht_') || block.topic === 'reg_slope_test' ||
+                block.topic.startsWith('chi_') || block.topic.startsWith('drill_conclusion_')) {
+                const frqLabel = document.createElement('label');
+                const frq = document.createElement('input');
+                frq.type = 'checkbox';
+                frq.checked = Boolean(block.allow_frq_conclusion);
+                frq.addEventListener('change', () => { block.allow_frq_conclusion = frq.checked; });
+                frqLabel.append(frq, ' ✍️ Guided FRQ Conclusion (Free-Response)');
+                controls.appendChild(frqLabel);
+            }
             if (block.topic.startsWith('reg_')) {
                 const notationLabel = document.createElement('label');
                 notationLabel.textContent = 'LSRL Notation: ';
@@ -812,6 +823,14 @@
             })),
             total_count: getTotalQuestionCount()
         };
+        config.questions = config.blocks.flatMap(block =>
+            Array.from({ length: block.count }, (_unused, index) => ({
+                topic: block.topic,
+                allow_hints: type === 'test_correction' || (type !== 'test' &&
+                    (block.mode === 'all_hints' || (['scaffold', 'mastery'].includes(block.mode) && index === 0))),
+                allow_frq_conclusion: Boolean(block.allow_frq_conclusion)
+            }))
+        );
         const publishButton = document.getElementById('publish-assessment-btn');
         publishButton.disabled = true;
         try {
@@ -826,7 +845,7 @@
                     type,
                     parent_assessment_id: parentId,
                     config,
-                    allow_hints: type !== 'test_correction' && assessmentBlocks.some(block => block.mode !== 'no_hints'),
+                    allow_hints: type === 'test_correction' || assessmentBlocks.some(block => block.mode !== 'no_hints'),
                     due_date: document.getElementById('assessment-due-date').value || null
             };
             config.allow_hints = payload.allow_hints;

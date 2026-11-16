@@ -327,6 +327,12 @@ def generate_chi_square_gof() -> Dict[str, Any]:
         "title": "Chi-Square Goodness-of-Fit Test",
         "prompt": prompt,
         "steps": steps,
+        "metadata": {
+            "expected_pval": p_value, "expected_alpha": alpha,
+            "expected_decision": "reject H0" if p_value <= alpha else "fail to reject H0",
+            "alternative": "different", "parameter_description": sample_description,
+            "alternative_statement": alternative,
+        },
         "solution": solution,
     }
 
@@ -501,6 +507,12 @@ def _generate_chi_square_two_way(kind: str) -> Dict[str, Any]:
             *_calculation_steps(df, chi2_stat, p_value, r"\(df=(r-1)(c-1)\)"),
             decision,
         ],
+        "metadata": {
+            "expected_pval": p_value, "expected_alpha": alpha,
+            "expected_decision": "reject H0" if p_value <= alpha else "fail to reject H0",
+            "alternative": "different", "parameter_description": f"{row_variable} {response} {population}",
+            "alternative_statement": alternative + " (the distribution differs from the null hypothesis)",
+        },
         "solution": f"{observed_table}{solution}",
     }
 

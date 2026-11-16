@@ -515,6 +515,9 @@ function updateTaskRunnerUI() {
             badges.push('<span class="badge" style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a;">📝 Exam Mode (Formula Hints &amp; Step Solutions Suppressed)</span>');
             badges.push('<span class="badge">Exiting saves a draft only in this browser on this device.</span>');
         }
+        if (activeTaskState.taskType === 'test_correction') {
+            badges.push('<span class="badge">🩹 Test Corrections (Missed Questions Only)</span>');
+        }
         if (activeTaskState.blockMode === 'scaffold') {
             badges.push(`<span class="badge" style="background: #e0f2fe; color: #0369a1;">🎓 Scaffolded (${activeTaskState.allowHints ? 'Guided: Hints ON' : 'Independent: Hints OFF'})</span>`);
         } else if (activeTaskState.blockMode === 'mastery') {
@@ -600,7 +603,7 @@ function captureTaskQuestionState() {
     const stageStates = currentProblem.steps
         ? currentProblem.steps.map((_step, stageIndex) => {
             const controls = Array.from(
-                document.querySelectorAll(`#stage-box-${stageIndex} input, #stage-box-${stageIndex} select, #stage-box-${stageIndex} math-field`)
+                document.querySelectorAll(`#stage-box-${stageIndex} input, #stage-box-${stageIndex} select, #stage-box-${stageIndex} math-field, #stage-box-${stageIndex} textarea`)
             );
             const values = controls.map(control => control.matches('math-field')
                 ? control.getValue()
@@ -660,7 +663,7 @@ function restoreTaskQuestionState(questionState) {
     if (currentProblem.steps) {
         questionState.stageStates?.forEach((stage, index) => {
             const controls = Array.from(
-                document.querySelectorAll(`#stage-box-${index} input, #stage-box-${index} select, #stage-box-${index} math-field`)
+                document.querySelectorAll(`#stage-box-${index} input, #stage-box-${index} select, #stage-box-${index} math-field, #stage-box-${index} textarea`)
             );
             const box = document.getElementById(`stage-box-${index}`);
             const status = document.getElementById(`stage-status-${index}`);
@@ -701,6 +704,13 @@ function restoreTaskQuestionState(questionState) {
             if (warning) {
                 warning.textContent = stage.attemptWarning || '';
                 warning.style.display = stage.attemptWarningDisplay || 'none';
+            }
+            if (currentStepAttemptStates[index]?.frqEnabled) {
+                const textarea = document.getElementById('frq-conclusion-input');
+                const check = document.getElementById(`frq-check-${index}`);
+                if (check && textarea) check.disabled = textarea.disabled || currentStepAttemptStates[index].resolved;
+                showFrqResult(index, activeTaskState.taskType !== 'test' ||
+                    (activeTaskState.examCompleted && (activeTaskState.submitted || activeTaskState.isPreview)));
             }
         });
     } else {
@@ -854,6 +864,7 @@ function selectTaskTopic() {
     if (queuedQuestion) {
         activeTaskState.selectedTopic = queuedQuestion.topic;
         activeTaskState.allowHints = queuedQuestion.allow_hints;
+        activeTaskState.allowFrqConclusion = Boolean(queuedQuestion.allow_frq_conclusion);
         if (queuedQuestion.blockId) {
             activeTaskState.currentBlockIdx = queuedQuestion.blockIndex ?? 0;
             activeTaskState.currentBlockIndex = activeTaskState.currentBlockIdx;
@@ -934,10 +945,14 @@ async function startStudentTask(task) {
         ? 'test'
         : task.task_type || task.type || 'assignment';
     const isTest = taskType === 'test';
+    const isCorrection = taskType === 'test_correction' && task.status !== 'preview';
+    if (isCorrection && task.perfect_on_parent) throw new Error('No corrections are needed for the original assessment.');
+    if (isCorrection && task.parent_submission_missing) throw new Error('Submit the original assessment before starting corrections.');
+    if (isCorrection && task.correction_error) throw new Error(task.correction_error);
     const assignedTopic = task.skill_topic || task.config?.skill_topic || task.config?.topic;
     const supportedTopics = new Set([...TOPIC_REGISTRY.map(topic => topic.id), ...Object.keys(LEGACY_TOPIC_TITLES)]);
     const questionQueue = [];
-    const configuredBlocks = Array.isArray(task.config?.blocks) ? task.config.blocks : null;
+    const configuredBlocks = !isCorrection && Array.isArray(task.config?.blocks) ? task.config.blocks : null;
     const taskBlocks = configuredBlocks
         ? configuredBlocks.map((block, index) => {
             const stepAttemptLimit = Number(block?.max_step_attempts);
@@ -952,7 +967,17 @@ async function startStudentTask(task) {
             };
         })
         : [];
-    if (configuredBlocks) {
+    if (isCorrection) {
+        if (!Array.isArray(task.missed_questions) || !task.missed_questions.length) {
+            throw new Error('No missed questions are available. Contact your teacher.');
+        }
+        task.missed_questions.forEach(question => {
+            if (!question || !supportedTopics.has(question.topic)) {
+                throw new Error('A missed question has an unsupported topic. Contact your teacher.');
+            }
+            questionQueue.push({ topic: question.topic, allow_hints: true });
+        });
+    } else if (configuredBlocks) {
         if (!taskBlocks.length) {
             throw new Error('This task does not have any question blocks configured.');
         }
@@ -987,7 +1012,8 @@ async function startStudentTask(task) {
                     blockIndex,
                     qInBlock: index,
                     mode: block.mode,
-                    phase
+                    phase,
+                    allow_frq_conclusion: Boolean(block.allow_frq_conclusion)
                 });
             }
         });
@@ -1004,7 +1030,8 @@ async function startStudentTask(task) {
                 topic: question.topic,
                 allow_hints: typeof question.allow_hints === 'boolean'
                     ? question.allow_hints
-                    : task.config?.allow_hints !== false && task.allow_hints !== false
+                    : task.config?.allow_hints !== false && task.allow_hints !== false,
+                allow_frq_conclusion: Boolean(question.allow_frq_conclusion)
             });
         });
     } else if (Array.isArray(task.config?.skills)) {
@@ -1044,6 +1071,7 @@ async function startStudentTask(task) {
         taskType,
         resetVersion: task.config?._submission_reset_version || null,
         allowHints: task.config?.allow_hints !== false && task.allow_hints !== false,
+        allowFrqConclusion: false,
         totalQuestions: questionQueue.length,
         currentIndex: 1,
         correctCount: 0,
@@ -1320,6 +1348,17 @@ async function completeStudentTask() {
         `${Number(earnedPoints.toFixed(2))} / ${responseCount}`;
     document.getElementById('completion-percent').textContent = `(${score}%)`;
     document.getElementById('completion-icon').textContent = score >= 70 ? '🎉' : '📝';
+    const frqFeedback = document.getElementById('completion-frq-feedback');
+    frqFeedback.replaceChildren();
+    if (activeTaskState.taskType === 'test' && (activeTaskState.submitted || activeTaskState.isPreview)) {
+        activeTaskState.questionsState.forEach((question, index) => {
+            const result = question?.stepAttemptStates?.find(step => step.frqEnabled && step.frqResult)?.frqResult;
+            if (!result) return;
+            const details = document.createElement('p');
+            details.textContent = `Question ${index + 1} (${result.score_code}): ${result.feedback} Model conclusion: ${result.model_conclusion}`;
+            frqFeedback.appendChild(details);
+        });
+    }
     document.getElementById('task-completion-modal').style.display = 'flex';
     if (activeTaskState.taskType === 'test') {
         activeTaskState.examCompleted = true;
@@ -1702,6 +1741,10 @@ async function loadProblem(problemToRender = null) {
 }
 
 function getStageInputDefinitions(step) {
+    const index = currentProblem.steps.indexOf(step);
+    if (index >= 0 && currentStepAttemptStates[index]?.frqEnabled) {
+        return [{ id: 'frq-conclusion-input', type: 'frq' }];
+    }
     if (step.components) {
         return step.components.map(definition => definition.id === 'stage-pval'
             ? {
@@ -1749,6 +1792,7 @@ function isSelectDefinition(definition) {
     return definition.type === 'select' || definition.input_type === 'select';
 }
 function getStageControlId(idx, definition) {
+    if (definition.id === 'frq-conclusion-input') return definition.id;
     return definition.id === 'stage-pval'
         ? 'step-stage-pval'
         : `stage-input-${idx}${definition.id ? `-${definition.id}` : ''}`;
@@ -1772,6 +1816,139 @@ function updateLongSelectText(control) {
     if (text) text.textContent = control.value ? control.selectedOptions[0]?.textContent || '' : '';
 }
 
+function isFrqConclusionStep(step) {
+    return /conclusion/i.test(step.label || '') &&
+        Array.isArray(step.components) &&
+        step.components.some(component => ['conclusion-decision', 'chi-decision'].includes(component.id)) &&
+        Boolean(currentProblem.metadata?.alternative && currentProblem.metadata?.parameter_description);
+}
+
+function getStudentPValue(conclusionIndex) {
+    for (let index = conclusionIndex - 1; index >= 0; index -= 1) {
+        const step = currentProblem.steps[index];
+        const definition = getStageInputDefinitions(step).find(field =>
+            !isSelectDefinition(field) &&
+            (/^(stage-pval|chi-test-p-value)$/.test(field.id || '') ||
+                /p[\s-]*value/i.test(field.label || field.placeholder || '') ||
+                (!field.id && /p[\s-]*value/i.test(step.label || '')))
+        );
+        if (!definition) continue;
+        const control = document.getElementById(getStageControlId(index, definition));
+        if (!control) continue;
+        const value = evaluateMathInput(getStageControlValue(control));
+        return Number.isFinite(value) ? value : null;
+    }
+    return null;
+}
+
+function showFrqResult(idx, revealDetails) {
+    const stepState = currentStepAttemptStates[idx];
+    const feedback = document.getElementById(`frq-feedback-${idx}`);
+    if (!feedback || !stepState?.frqResult) return;
+    feedback.replaceChildren();
+    const badge = document.createElement('strong');
+    const labels = { E: 'Full Credit / E', P: 'Partial Credit / P', I: 'No Credit / I' };
+    badge.textContent = labels[stepState.frqResult.score_code];
+    feedback.appendChild(badge);
+    if (Array.isArray(stepState.frqResult.rubric)) {
+        const parts = document.createElement('div');
+        parts.textContent = stepState.frqResult.rubric.map(part =>
+            `${part.part}: ${part.passed ? 'Full Credit / E' : 'No Credit / I'}`
+        ).join(' · ');
+        feedback.appendChild(parts);
+    }
+    if (revealDetails && stepState.resolved) {
+        const explanation = document.createElement('p');
+        explanation.textContent = stepState.frqResult.feedback;
+        const exemplar = document.createElement('p');
+        exemplar.textContent = `Model conclusion: ${stepState.frqResult.model_conclusion}`;
+        feedback.append(explanation, exemplar);
+    }
+}
+
+async function submitFrqConclusion(idx, regrade = false) {
+    const stepState = currentStepAttemptStates[idx];
+    const textarea = document.getElementById('frq-conclusion-input');
+    const text = textarea.value.trim();
+    if (!text || (stepState.resolved && !regrade) || activeTaskState.isVerifying) return false;
+    const metadata = currentProblem.metadata;
+    const studentPVal = getStudentPValue(idx);
+    const ignored = new Set(['the', 'true', 'population', 'proportion', 'proportions', 'mean', 'difference',
+        'between', 'of', 'and', 'for', 'in', 'who', 'paired', 'after', 'before', 'group']);
+    const keywords = (metadata.parameter_description.match(/[a-zA-Z][a-zA-Z0-9'-]*/g) || [])
+        .filter(word => word.length > 2 && !ignored.has(word.toLowerCase()));
+    if (!keywords.length) {
+        showStageInputWarning(idx, 'The question is missing context for FRQ evaluation. Contact your teacher.');
+        return false;
+    }
+    const button = document.getElementById(`frq-check-${idx}`);
+    button.disabled = true;
+    activeTaskState.isVerifying = true;
+    try {
+        const evaluate = async studentText => {
+            const response = await fetch('/api/evaluate/conclusion', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    student_text: studentText,
+                    student_p_val: studentPVal,
+                    p_val: metadata.expected_pval,
+                    alpha: metadata.expected_alpha,
+                    decision: metadata.expected_decision,
+                    direction: metadata.alternative,
+                    context_keywords: keywords,
+                    alternative_statement: metadata.alternative_statement
+                })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.detail || 'Could not evaluate the conclusion.');
+            return result;
+        };
+        const result = await evaluate(text);
+        const pValueChanged = stepState.frqResult && stepState.frqCheckedPVal !== studentPVal;
+        const firstText = stepState.frqFirstText ||
+            (stepState.attemptsUsed === 1 ? stepState.frqCheckedText : '');
+        const firstResult = pValueChanged && firstText && firstText !== text
+            ? await evaluate(firstText)
+            : result;
+        if (!regrade) stepState.attemptsUsed += 1;
+        stepState.maxAttempts = 2;
+        if (stepState.firstAttemptCorrect === null || (pValueChanged && firstText)) {
+            stepState.firstAttemptCorrect = firstResult.passed;
+            stepState.frqFirstScore = firstResult.score_code === 'E' ? 1 : firstResult.score_code === 'P' ? 0.5 : 0;
+            stepState.frqFirstText = firstText || text;
+        }
+        stepState.frqResult = result;
+        stepState.frqCheckedText = text;
+        stepState.frqCheckedPVal = studentPVal;
+        stepState.resolved = result.passed || stepState.attemptsUsed >= 2;
+        stepState.earnedCredit = result.passed;
+        currentQuestionAnswers[idx] = text;
+        const isTest = activeTaskState.active && activeTaskState.taskType === 'test';
+        showFrqResult(idx, !isTest);
+        showStageInputWarning(idx, '');
+        const switchButton = document.querySelector(`#stage-box-${idx} .stage-header button`);
+        if (switchButton) switchButton.disabled = true;
+        textarea.disabled = stepState.resolved;
+        button.disabled = stepState.resolved;
+        if (!isTest && stepState.resolved) {
+            const box = document.getElementById(`stage-box-${idx}`);
+            box.className = result.passed ? 'stage-box completed' : 'stage-box revealed';
+            document.getElementById(`stage-status-${idx}`).textContent = result.passed ? '✓ Correct' : '✘ No attempts remaining';
+            unlockNextStage(idx);
+        } else {
+            captureTaskQuestionState();
+        }
+        return true;
+    } catch (error) {
+        showStageInputWarning(idx, error.message || 'Could not evaluate the conclusion.');
+        button.disabled = false;
+        return false;
+    } finally {
+        activeTaskState.isVerifying = false;
+    }
+}
+
 function renderMultiStageUI(topic) {
     const container = document.getElementById('multi-stage-panel');
     container.innerHTML = '';
@@ -1787,7 +1964,13 @@ function renderMultiStageUI(topic) {
             maxAttempts: saved?.maxAttempts || getAllowedStepAttempts(step),
             firstAttemptCorrect: saved?.firstAttemptCorrect ?? null,
             resolved: Boolean(saved?.resolved),
-            earnedCredit: Boolean(saved?.earnedCredit)
+            earnedCredit: Boolean(saved?.earnedCredit),
+            frqEnabled: saved?.frqEnabled ?? (isFrqConclusionStep(step) && Boolean(activeTaskState.allowFrqConclusion)),
+            frqResult: saved?.frqResult || null,
+            frqCheckedText: saved?.frqCheckedText || '',
+            frqCheckedPVal: saved?.frqCheckedPVal ?? null,
+            frqFirstText: saved?.frqFirstText || '',
+            frqFirstScore: saved?.frqFirstScore ?? null
         };
     });
     const showHints = !isTest && (
@@ -2043,6 +2226,47 @@ function renderMultiStageUI(topic) {
             inputRow.appendChild(verifyButton);
         }
 
+        let frqPanel = null;
+        if (isFrqConclusionStep(step)) {
+            const stepState = currentStepAttemptStates[idx];
+            const switchButton = document.createElement('button');
+            switchButton.type = 'button';
+            switchButton.textContent = stepState.frqEnabled
+                ? 'Switch to Guided Selection'
+                : '✍️ Switch to Free-Response FRQ Mode';
+            switchButton.disabled = stepState.attemptsUsed > 0;
+            frqPanel = document.createElement('div');
+            frqPanel.className = 'frq-conclusion-panel';
+            frqPanel.hidden = !stepState.frqEnabled;
+            inputRow.hidden = stepState.frqEnabled;
+            const textarea = document.createElement('textarea');
+            textarea.id = 'frq-conclusion-input';
+            textarea.rows = 3;
+            textarea.placeholder = 'Write your conclusion in context (compare P-value to α, state decision on H₀, and state evidence in context)...';
+            textarea.style.cssText = 'display:block;width:100%;max-width:700px;margin:8px 0;';
+            textarea.disabled = (idx > 0 && !isTest) || stepState.resolved;
+            const check = document.createElement('button');
+            check.type = 'button';
+            check.id = `frq-check-${idx}`;
+            check.textContent = 'Check FRQ Conclusion';
+            check.disabled = textarea.disabled;
+            check.addEventListener('click', () => submitFrqConclusion(idx));
+            const feedback = document.createElement('div');
+            feedback.id = `frq-feedback-${idx}`;
+            feedback.setAttribute('aria-live', 'polite');
+            frqPanel.append(textarea, check, feedback);
+            switchButton.addEventListener('click', () => {
+                stepState.frqEnabled = !stepState.frqEnabled;
+                inputRow.hidden = stepState.frqEnabled;
+                frqPanel.hidden = !stepState.frqEnabled;
+                switchButton.textContent = stepState.frqEnabled
+                    ? 'Switch to Guided Selection'
+                    : '✍️ Switch to Free-Response FRQ Mode';
+                captureTaskQuestionState();
+            });
+            header.appendChild(switchButton);
+        }
+
         const hint = document.createElement('div');
         hint.className = 'stage-hint';
         hint.textContent = step.hint || '';
@@ -2058,7 +2282,9 @@ function renderMultiStageUI(topic) {
         inputWarning.style.display = 'none';
         inputWarning.style.color = '#b45309';
 
-        box.append(header, inputRow, hint, inputWarning, reveal);
+        box.append(header, inputRow);
+        if (frqPanel) box.appendChild(frqPanel);
+        box.append(hint, inputWarning, reveal);
         container.appendChild(box);
         triggerKaTeX(box);
     });
@@ -2071,13 +2297,15 @@ function renderMultiStageUI(topic) {
         submitButton.addEventListener('click', submitTestQuestion);
         container.appendChild(submitButton);
     }
-    const firstInput = container.querySelector('#stage-box-0 input, #stage-box-0 select, #stage-box-0 math-field');
+    const firstInput = currentStepAttemptStates[0]?.frqEnabled
+        ? document.getElementById('frq-conclusion-input')
+        : container.querySelector('#stage-box-0 input, #stage-box-0 select, #stage-box-0 math-field');
     const activeStepInputs = isTest
-        ? container.querySelectorAll('input, select, math-field')
-        : container.querySelectorAll('#stage-box-0 input, #stage-box-0 select, #stage-box-0 math-field');
+        ? container.querySelectorAll('input, select, math-field, textarea')
+        : container.querySelectorAll('#stage-box-0 input, #stage-box-0 select, #stage-box-0 math-field, #stage-box-0 textarea');
     activeStepInputs.forEach(control => {
         control.addEventListener('keydown', event => {
-            if (event.key === 'Enter') {
+            if (event.key === 'Enter' && !control.matches('textarea')) {
                 event.preventDefault();
                 if (isTest) submitTestQuestion();
                 else submitStage(0);
@@ -2105,7 +2333,7 @@ async function submitTestQuestion() {
     for (const [stepIndex, step] of currentProblem.steps.entries()) {
         showStageInputWarning(stepIndex, '');
         for (const definition of getStageInputDefinitions(step)) {
-            if (isSelectDefinition(definition)) continue;
+            if (isSelectDefinition(definition) || definition.type === 'frq') continue;
             const control = document.getElementById(getStageControlId(stepIndex, definition));
             const value = evaluateMathInput(getStageControlValue(control));
             if (!Number.isFinite(value)) {
@@ -2113,6 +2341,14 @@ async function submitTestQuestion() {
                 return;
             }
         }
+    }
+    for (const [stepIndex] of currentProblem.steps.entries()) {
+        const stepState = currentStepAttemptStates[stepIndex];
+        if (!stepState?.frqEnabled) continue;
+        const text = document.getElementById('frq-conclusion-input').value.trim();
+        const sameText = stepState.frqCheckedText === text;
+        if ((!sameText || stepState.frqCheckedPVal !== getStudentPValue(stepIndex)) &&
+            !(await submitFrqConclusion(stepIndex, sameText))) return;
     }
 
     activeTaskState.isVerifying = true;
@@ -2124,7 +2360,9 @@ async function submitTestQuestion() {
             for (const definition of getStageInputDefinitions(step)) {
                 const control = document.getElementById(getStageControlId(stepIndex, definition));
                 const answer = getStageControlValue(control).trim();
-                if (isSelectDefinition(definition)) {
+                if (definition.type === 'frq') {
+                    stepCorrect = Boolean(currentStepAttemptStates[stepIndex].frqResult?.passed);
+                } else if (isSelectDefinition(definition)) {
                     if (!definition.expected.includes(answer)) stepCorrect = false;
                 } else {
                     const value = evaluateMathInput(answer);
@@ -2136,11 +2374,14 @@ async function submitTestQuestion() {
                     }
                 }
             }
-            if (stepCorrect) firstAttemptCorrectCount += 1;
+            const previous = currentStepAttemptStates[stepIndex];
+            const firstCorrect = previous.frqEnabled ? previous.firstAttemptCorrect : stepCorrect;
+            if (firstCorrect) firstAttemptCorrectCount += 1;
             return {
-                attemptsUsed: 1,
+                ...previous,
+                attemptsUsed: previous.frqEnabled ? previous.attemptsUsed : 1,
                 maxAttempts: getAllowedStepAttempts(step),
-                firstAttemptCorrect: stepCorrect,
+                firstAttemptCorrect: firstCorrect,
                 resolved: true,
                 earnedCredit: stepCorrect
             };
@@ -2162,6 +2403,10 @@ async function submitStage(idx) {
     const step = currentProblem.steps[idx];
     const stepState = currentStepAttemptStates[idx];
     if (!stepState || stepState.resolved) return;
+    if (stepState.frqEnabled) {
+        await submitFrqConclusion(idx);
+        return;
+    }
     const controls = getStageInputDefinitions(step).map(definition => ({
         definition,
         control: document.getElementById(getStageControlId(idx, definition))
@@ -2228,7 +2473,7 @@ async function submitStage(idx) {
     const statusEl = document.getElementById(`stage-status-${idx}`);
     const box = document.getElementById(`stage-box-${idx}`);
     const revealEl = document.getElementById(`stage-reveal-${idx}`);
-    const stageInputs = Array.from(box.querySelectorAll('input, select, math-field'));
+    const stageInputs = Array.from(box.querySelectorAll('input, select, math-field, textarea'));
     if (isCorrect) {
         stepState.resolved = true;
         stepState.earnedCredit = true;
@@ -2297,15 +2542,19 @@ function unlockNextStage(idx) {
         nextBox.className = 'stage-box active';
         nextBox.style.display = 'block';
         triggerKaTeX(nextBox);
-        const nextInput = nextBox.querySelector('input, select, math-field');
+        const nextInput = currentStepAttemptStates[idx + 1]?.frqEnabled
+            ? nextBox.querySelector('textarea')
+            : nextBox.querySelector('input, select, math-field');
         const nextBtn = document.getElementById(`stage-btn-${idx + 1}`);
-        nextBox.querySelectorAll('input, select, math-field').forEach(input => setStageControlDisabled(input, false));
-        nextBtn.disabled = false;
+        nextBox.querySelectorAll('input, select, math-field, textarea').forEach(input => setStageControlDisabled(input, false));
+        if (nextBtn) nextBtn.disabled = false;
+        const frqButton = document.getElementById(`frq-check-${idx + 1}`);
+        if (frqButton) frqButton.disabled = false;
         nextInput.focus();
 
-        nextBox.querySelectorAll('input, select, math-field').forEach(control => {
+        nextBox.querySelectorAll('input, select, math-field, textarea').forEach(control => {
             control.addEventListener('keydown', event => {
-                if (event.key === 'Enter') {
+                if (event.key === 'Enter' && !control.matches('textarea')) {
                     event.preventDefault();
                     submitStage(idx + 1);
                 }
@@ -2373,9 +2622,11 @@ async function finalizeProblem(isSuccess, answer = null, questionScore = null) {
     if (questionState?.completed) return;
     let firstAttemptCorrectCount = 0;
     if (currentProblem.steps?.length) {
-        firstAttemptCorrectCount = currentStepAttemptStates.filter(
-            step => step.firstAttemptCorrect === true
-        ).length;
+        firstAttemptCorrectCount = currentStepAttemptStates.reduce(
+            (total, step) => total + (step.frqEnabled && step.frqFirstScore !== null
+                ? step.frqFirstScore : step.firstAttemptCorrect === true ? 1 : 0),
+            0
+        );
         questionScore = firstAttemptCorrectCount / currentProblem.steps.length;
         isSuccess = currentStepAttemptStates.length === currentProblem.steps.length &&
             currentStepAttemptStates.every(step => step.resolved && step.earnedCredit);
@@ -2457,7 +2708,8 @@ async function finalizeProblem(isSuccess, answer = null, questionScore = null) {
             blockIndex,
             qInBlock: blockState.attemptsCount,
             mode: blockState.mode,
-            phase
+            phase,
+            allow_frq_conclusion: completedQuestion.allow_frq_conclusion
         });
         const discardRemainingBlockQuestions = () => {
             const retained = activeTaskState.questionQueue

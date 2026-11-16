@@ -391,6 +391,7 @@ def generate_conclusion_drill(kind: str = "random") -> Dict[str, Any]:
         p_value = random.choice([0.002, 0.008, 0.018, 0.035, 0.065, 0.12])
     reject = p_value < alpha
     comparison = "<" if reject else ">"
+    alternative_phrase = {"<": "less than", ">": "greater than", "!=": "different from"}[alternative]
     decision = "reject H0" if reject else "fail to reject H0"
     evidence = "is convincing" if reject else "is not convincing"
     p_value_text = f"{p_value:g}"
@@ -504,6 +505,14 @@ def generate_conclusion_drill(kind: str = "random") -> Dict[str, Any]:
         "type": "drill_conclusion",
         "title": "Sub-Skill: P-Value & Contextual Conclusion",
         "prompt": prompt,
+        "metadata": {
+            "expected_pval": p_value,
+            "expected_alpha": alpha,
+            "expected_decision": decision,
+            "alternative": alternative,
+            "parameter_description": parameter_description,
+            "alternative_statement": f"{parameter_description} is {alternative_phrase} {claim_value:g}",
+        },
         "steps": steps,
         "solution": (
             f"<p>Since the P-value \\({p_value_text}\\) is {comparison} "
