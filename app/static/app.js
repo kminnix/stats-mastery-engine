@@ -257,6 +257,16 @@ window.applyStudentToolPermissions = applyStudentToolPermissions;
 
 const LEGACY_TOPIC_TITLES = { chi_two_way: 'Chi-Square Test of Independence / Homogeneity' };
 
+Object.entries(window.TARGETED_STEP_LABELS || {}).forEach(([parentId, labels]) => {
+    const parent = TOPIC_REGISTRY.find(topic => topic.id === parentId);
+    if (!parent) return;
+    labels.forEach((label, index) => TOPIC_REGISTRY.push({
+        ...parent,
+        id: `step__${parentId}__${index + 1}`,
+        title: `${parent.title}: ${label}`
+    }));
+});
+
 function getTaskTopics(task) {
     const supportedTopics = [...TOPIC_REGISTRY.map(topic => topic.id), ...Object.keys(LEGACY_TOPIC_TITLES)];
     const configuredTopics = Array.isArray(task.config?.topics) ? task.config.topics : [];
@@ -307,7 +317,7 @@ function renderTopicCatalog() {
         skills.className = 'catalog-category-skills';
         const skillsInner = document.createElement('div');
         skillsInner.className = 'catalog-category-skills-inner';
-        const isDrill = topic => /^(?:eda_(?:five_num|iqr_fences|mean_sd)|rv_(?:transform|combine)$|prob_(?:marginal_joint|conditional)|(?:ci_prop|ci_mean)_(?:cond|crit_se|bounds|interp)|(?:ht_prop|ht_mean)_(?:hypo|cond|stat|pval|conc)|(?:chi|reg)_step_|cond_|drill_)/.test(topic.id);
+        const isDrill = topic => /^(?:step__|eda_(?:five_num|iqr_fences|mean_sd)|rv_(?:transform|combine)$|prob_(?:marginal_joint|conditional)|(?:ci_prop|ci_mean)_(?:cond|crit_se|bounds|interp)|(?:ht_prop|ht_mean)_(?:hypo|cond|stat|pval|conc)|(?:chi|reg)_step_|cond_|drill_)/.test(topic.id);
         const hasDrills = topics.some(isDrill);
         const ordered = [...topics.filter(topic => !isDrill(topic)), ...topics.filter(isDrill)];
         let currentGroup = null;
@@ -516,7 +526,9 @@ function updateTaskRunnerUI() {
             badges.push('<span class="badge">Exiting saves a draft only in this browser on this device.</span>');
         }
         if (activeTaskState.taskType === 'test_correction') {
-            badges.push('<span class="badge">🩹 Test Corrections (Missed Questions Only)</span>');
+            const scopeLabel = activeTaskState.correctionsScope === 'full_questions'
+                ? 'Full Missed Questions' : 'Missed Steps Only';
+            badges.push(`<span class="badge">🩹 Test Corrections (${scopeLabel})</span>`);
         }
         if (activeTaskState.blockMode === 'scaffold') {
             badges.push(`<span class="badge" style="background: #e0f2fe; color: #0369a1;">🎓 Scaffolded (${activeTaskState.allowHints ? 'Guided: Hints ON' : 'Independent: Hints OFF'})</span>`);
@@ -527,6 +539,13 @@ function updateTaskRunnerUI() {
             badges.push('<span class="badge" style="background: #dbeafe; color: #1e40af;">📘 Practice (Hints ON)</span>');
         }
         modeBadges.innerHTML = badges.join('');
+        const item = activeTaskState.questionQueue[activeTaskState.currentIndex - 1];
+        if (activeTaskState.taskType === 'test_correction' && item?.source_q && item?.step_label) {
+            const source = document.createElement('span');
+            source.className = 'badge';
+            source.textContent = `🩹 Correction from Q${item.source_q} · ${item.step_label}`;
+            modeBadges.appendChild(source);
+        }
     }
     const progressTrack = banner.querySelector('[role="progressbar"]');
     const progressFill = document.getElementById('task-progress-fill');
@@ -727,6 +746,7 @@ function restoreTaskQuestionState(questionState) {
         feedback.innerHTML = questionState.feedbackHtml || '';
         feedback.className = questionState.feedbackClass || 'banner';
         feedback.style.display = questionState.feedbackDisplay || 'none';
+        bindOptionalStepButtons();
     }
     const solutionCard = document.getElementById('solution-card');
     const solutionContent = document.getElementById('solution-content');
@@ -952,7 +972,19 @@ async function startStudentTask(task) {
     const assignedTopic = task.skill_topic || task.config?.skill_topic || task.config?.topic;
     const supportedTopics = new Set([...TOPIC_REGISTRY.map(topic => topic.id), ...Object.keys(LEGACY_TOPIC_TITLES)]);
     const questionQueue = [];
-    const configuredBlocks = !isCorrection && Array.isArray(task.config?.blocks) ? task.config.blocks : null;
+    if (isCorrection && (!Array.isArray(task.missed_questions) || !task.missed_questions.length)) {
+        throw new Error('No missed questions are available. Contact your teacher.');
+    }
+    const configuredBlocks = isCorrection
+        ? task.missed_questions.map((question, index) => ({
+            ...question,
+            id: `correction-${index}`,
+            count: 2,
+            mode: 'mastery',
+            required_passes: question.required_passes,
+            max_attempts: 6
+        }))
+        : Array.isArray(task.config?.blocks) ? task.config.blocks : null;
     const taskBlocks = configuredBlocks
         ? configuredBlocks.map((block, index) => {
             const stepAttemptLimit = Number(block?.max_step_attempts);
@@ -967,17 +999,7 @@ async function startStudentTask(task) {
             };
         })
         : [];
-    if (isCorrection) {
-        if (!Array.isArray(task.missed_questions) || !task.missed_questions.length) {
-            throw new Error('No missed questions are available. Contact your teacher.');
-        }
-        task.missed_questions.forEach(question => {
-            if (!question || !supportedTopics.has(question.topic)) {
-                throw new Error('A missed question has an unsupported topic. Contact your teacher.');
-            }
-            questionQueue.push({ topic: question.topic, allow_hints: true });
-        });
-    } else if (configuredBlocks) {
+    if (configuredBlocks) {
         if (!taskBlocks.length) {
             throw new Error('This task does not have any question blocks configured.');
         }
@@ -992,8 +1014,9 @@ async function startStudentTask(task) {
             if (!Number.isInteger(parsedCount) || parsedCount < 1 || parsedCount > 50) {
                 throw new Error('This task contains an invalid question count.');
             }
-            const count = !isTest && (block.mode === 'mastery' || block.mode === 'scaffold')
-                ? Math.max(2, parsedCount)
+            const count = !isTest && block.mode === 'mastery'
+                ? 2
+                : !isTest && block.mode === 'scaffold' ? Math.max(2, parsedCount)
                 : parsedCount;
             for (let index = 0; index < count; index += 1) {
                 let phase = 'standard';
@@ -1013,6 +1036,9 @@ async function startStudentTask(task) {
                     qInBlock: index,
                     mode: block.mode,
                     phase,
+                    source_q: block.source_q,
+                    step_label: block.step_label,
+                    fallback_guided: block.fallback_guided,
                     allow_frq_conclusion: Boolean(block.allow_frq_conclusion)
                 });
             }
@@ -1069,6 +1095,7 @@ async function startStudentTask(task) {
         taskId: task.id || task.assessment_id,
         taskTitle: task.title || 'Assigned Task',
         taskType,
+        correctionsScope: task.config?.corrections_scope || 'missed_steps',
         resetVersion: task.config?._submission_reset_version || null,
         allowHints: task.config?.allow_hints !== false && task.allow_hints !== false,
         allowFrqConclusion: false,
@@ -1087,8 +1114,12 @@ async function startStudentTask(task) {
             phase: block.mode === 'no_hints' ? 'independent' : 'guided',
             guidedPassed: false,
             cleanPassesCount: 0,
-            requiredPasses: Math.min(5, Math.max(1, parseInt(block.required_clean_passes, 10) || 1)),
+            requiredPasses: Math.min(5, Math.max(1, parseInt(block.required_passes || block.required_clean_passes, 10) || 1)),
             attemptsCount: 0,
+            shieldActive: false,
+            remediationStepTopic: null,
+            consecutiveStepMisses: {},
+            optionalMissedStepTopic: null,
             maxAttempts: Math.min(15, Math.max(2, parseInt(block.max_attempts, 10) || 4)),
             count: Math.max(1, parseInt(block.count, 10) || 1),
             completedCount: 0,
@@ -1262,6 +1293,8 @@ async function loadNextTaskQuestion() {
 function buildQuestionBreakdown(questionIndex, points, steps, totalSteps) {
     const question = activeTaskState.questionQueue[questionIndex - 1] || {};
     const block = activeTaskState.blocks[question.blockIndex];
+    const problem = activeTaskState.questionsState[questionIndex - 1]?.problem ||
+        (questionIndex === activeTaskState.currentIndex ? currentProblem : null);
     const topic = question.topic || '';
     const title = block?.title || TOPIC_REGISTRY.find(item => item.id === topic)?.title ||
         LEGACY_TOPIC_TITLES[topic] || topic || 'Question';
@@ -1276,7 +1309,15 @@ function buildQuestionBreakdown(questionIndex, points, steps, totalSteps) {
         points_earned: points,
         max_points: 1,
         steps_first_try: totalSteps === null ? null : steps.filter(step => step.firstAttemptCorrect).length,
-        total_steps: totalSteps
+        total_steps: totalSteps,
+        missed_steps: (problem?.steps || [])
+            .map((step, index) => ({ step, state: steps[index], index }))
+            .filter(({ state }) => !state || state.firstAttemptCorrect !== true)
+            .map(({ step, index }) => ({
+                step_index: index + 1,
+                step_label: step.label || `Step ${index + 1}`,
+                step_topic: `step__${topic}__${index + 1}`
+            }))
     };
 }
 
@@ -1654,7 +1695,7 @@ async function loadProblem(problemToRender = null) {
     currentStepAttemptStates = [];
 
     const topic = state.selectedTopic || 'random';
-    isMultiStage = topic.startsWith('ci_') || topic.startsWith('ht_') || topic.startsWith('chi_') ||
+    isMultiStage = topic.startsWith('step__') || topic.startsWith('ci_') || topic.startsWith('ht_') || topic.startsWith('chi_') ||
         topic.startsWith('reg_') ||
         topic.startsWith('cond_') || topic.startsWith('drill_') ||
         topic.startsWith('prob_') || topic.startsWith('sampling_') ||
@@ -1679,7 +1720,9 @@ async function loadProblem(problemToRender = null) {
                 : topic.startsWith('ci_') && !['ci_prop_cond', 'ci_prop_crit_se', 'ci_prop_bounds', 'ci_prop_interp',
                     'ci_mean_cond', 'ci_mean_crit_se', 'ci_mean_bounds', 'ci_mean_interp'].includes(topic)
                     ? topic.replace('ci_', '') : topic;
-            const endpoint = isInferenceDrill
+            const endpoint = topic.startsWith('step__')
+                ? '/api/problem/targeted-step'
+                : isInferenceDrill
                 ? '/api/problem/drill'
                 : isFoundations ? '/api/problem/foundations'
                 : isHypothesisTest ? '/api/problem/ht'
@@ -1687,7 +1730,7 @@ async function loadProblem(problemToRender = null) {
                         : isRegression ? '/api/problem/regression'
                             : isProbSampling ? '/api/problem/prob_sampling' : '/api/problem/ci';
             const notation = getActiveLsrlNotation();
-            const notationParam = isRegression ? `&notation=${encodeURIComponent(notation)}` : '';
+            const notationParam = isRegression || topic.startsWith('step__') ? `&notation=${encodeURIComponent(notation)}` : '';
             const res = await fetch(`${endpoint}?topic=${encodeURIComponent(problemTopic)}${notationParam}`);
             if (!res.ok) throw new Error(`Could not load problem (${res.status}).`);
             currentProblem = await res.json();
@@ -2282,7 +2325,25 @@ function renderMultiStageUI(topic) {
         inputWarning.style.display = 'none';
         inputWarning.style.color = '#b45309';
 
-        box.append(header, inputRow);
+        box.appendChild(header);
+        const queued = activeTaskState.questionQueue[activeTaskState.currentIndex - 1];
+        const blockState = queued?.blockIndex === undefined ? null : activeTaskState.blockStates[queued.blockIndex];
+        const key = targetedStepTopic(queued?.topic || '', idx) || `${queued?.topic}#${idx + 1}`;
+        if (blockState?.mode === 'mastery' && (blockState.consecutiveStepMisses?.[key] || 0) >= 2) {
+            const match = /^step__(.+)__(\d+)$/.exec(key);
+            const sourceTopic = match ? match[1] : queued.topic;
+            const label = match ? window.TARGETED_STEP_LABELS?.[sourceTopic]?.[Number(match[2]) - 1] || step.label : step.label;
+            const blueprint = document.createElement('div');
+            blueprint.className = 'step-blueprint';
+            blueprint.style.cssText = 'padding:10px;margin:8px 0;border:1px solid #93c5fd;border-radius:6px;background:#eff6ff;';
+            const heading = document.createElement('strong');
+            heading.textContent = '📐 Step Blueprint';
+            const explanation = document.createElement('div');
+            explanation.textContent = stepBlueprint(sourceTopic, label || '');
+            blueprint.append(heading, explanation);
+            box.appendChild(blueprint);
+        }
+        box.appendChild(inputRow);
         if (frqPanel) box.appendChild(frqPanel);
         box.append(hint, inputWarning, reveal);
         container.appendChild(box);
@@ -2609,6 +2670,83 @@ async function submitSingleAnswer() {
     input.disabled = true;
 }
 
+function targetedStepTopic(topic, index) {
+    if (topic.startsWith('step__')) return topic;
+    const candidate = `step__${topic}__${index + 1}`;
+    return TOPIC_REGISTRY.some(item => item.id === candidate) ? candidate : null;
+}
+
+function missedMasterySteps(question) {
+    if (!currentProblem.steps?.length) {
+        return [{ key: question.topic, topic: question.topic, label: currentProblem.input_label || 'Question', fallback: true }];
+    }
+    return currentProblem.steps.flatMap((step, index) => {
+        if (currentStepAttemptStates[index]?.firstAttemptCorrect === true) return [];
+        const topic = targetedStepTopic(question.topic, index);
+        return [{
+            key: topic || `${question.topic}#${index + 1}`,
+            topic: topic || question.topic,
+            label: step.label || `Step ${index + 1}`,
+            fallback: !topic
+        }];
+    });
+}
+
+function stepBlueprint(topic, label) {
+    const text = label.toLowerCase();
+    if (/hypotheses/.test(text)) return 'H₀: θ = θ₀; Hₐ: θ [<, >, ≠] θ₀. θ is the population parameter; θ₀ is its null value.';
+    if (/parameter/.test(text)) return 'θ = the population quantity in context. θ describes the population, not the sample.';
+    if (/conditions/.test(text)) return 'Independence: n ≤ fN when sampling without replacement; also check randomization and the model-specific condition. n is sample size, N is population size, and f is the allowed sampling fraction.';
+    if (/degrees of freedom/.test(text)) {
+        if (topic === 'chi_gof') return 'df = k − 1. k is the number of categories.';
+        if (topic.startsWith('chi_')) return 'df = (r − 1)(c − 1). r and c are the numbers of rows and columns.';
+        if (topic.startsWith('reg_')) return 'df = n − 2. n is the number of paired observations.';
+        if (topic === 'ci_mean_t_2samp') return 'df = min(n₁ − 1, n₂ − 1). n₁ and n₂ are the two sample sizes.';
+        return 'df = n − 1. n is the sample size.';
+    }
+    if (/critical value/.test(text)) return 'c* = F⁻¹((1 + C)/2). C is confidence level; F is the appropriate standard normal or t distribution.';
+    if (/margin of error/.test(text)) return 'E = c* × SE. E is margin of error, c* is the critical value, and SE is standard error.';
+    if (/lower bound|upper bound|interval bounds/.test(text)) return 'L = estimate − E; U = estimate + E. L and U are the bounds; E is margin of error.';
+    if (/test statistic/.test(text) && topic.startsWith('chi_')) return 'χ² = Σ (O − E)² / E; p = P(χ² ≥ χ²observed | H₀). O and E are observed and expected counts.';
+    if (/test statistic/.test(text)) return 'statistic = (estimate − null value) / SE. SE is the standard error under the null model.';
+    if (/p-value|conclusion/.test(text)) return 'p = P(result at least as extreme | H₀); compare p with α. α is the significance level; H₀ is the null hypothesis.';
+    if (/standard error|sample statistic and se|mean and standard error/.test(text)) return 'μestimate = E(estimate); SE = √Var(estimate). The estimate is the sample statistic; Var is its sampling variance.';
+    if (/point estimate/.test(text)) return 'estimate = the corresponding sample statistic. It estimates the population parameter θ.';
+    if (/iqr|fences/.test(text)) return 'IQR = Q₃ − Q₁; fences = Q₁ − k·IQR and Q₃ + k·IQR. Q₁ and Q₃ are quartiles; k is the fence multiplier.';
+    if (/five.number/.test(text)) return 'minimum ≤ Q₁ ≤ median ≤ Q₃ ≤ maximum. Quartiles describe positions in the ordered data.';
+    if (/sample statistics/.test(text)) return 'x̄ = Σxᵢ/n; s = √[Σ(xᵢ − x̄)²/(n − 1)]. xᵢ are observations and n is their count.';
+    if (/transformation/.test(text)) return 'E(a + bX) = a + bE(X); SD(a + bX) = |b|SD(X). a and b are constants.';
+    if (/combining variables/.test(text)) return 'E(X ± Y) = E(X) ± E(Y); Var(X ± Y) = Var(X) + Var(Y) for independent variables.';
+    if (/residual|prediction/.test(text)) return 'ŷ = a + bx; e = y − ŷ. a is intercept, b is slope, x is predictor and y is observed response.';
+    if (/slope|intercept|regression equation/.test(text)) return 'ŷ = a + bx; b = r(sᵧ/sₓ); a = ȳ − bx̄. a is intercept, b is slope, r is correlation, and sₓ and sᵧ are sample standard deviations.';
+    if (/missing probability/.test(text)) return 'p(missing) = 1 − Σp(other values). Probabilities across all possible values sum to one.';
+    if (/probability/.test(text)) return 'P(A) = P(X ∈ A). A is the event and X follows the stated distribution.';
+    if (/expected value|standard deviation/.test(text)) return 'μ = Σx·P(X=x); σ = √[Σ(x − μ)²P(X=x)]. x is a possible value of X.';
+    if (/correlation|r.squared/.test(text)) return 'R² = r². r is correlation; R² is the fraction of response variability explained by the linear model.';
+    return 'quantity = f(inputs). Identify the relevant variables and apply the relationship stated by the model.';
+}
+
+function bindOptionalStepButtons() {
+    document.querySelectorAll('#feedback-banner .optional-step-practice').forEach(button => {
+        button.onclick = async () => {
+            const current = activeTaskState.questionQueue[activeTaskState.currentIndex - 1];
+            const block = activeTaskState.blockStates[current?.blockIndex];
+            if (!current || !block) return;
+            const topic = button.dataset.topic;
+            button.disabled = true;
+            activeTaskState.questionQueue.splice(activeTaskState.currentIndex, 0, {
+                ...current, topic, phase: 'optional', allow_hints: true,
+                blueprintStepKey: button.dataset.key,
+                fallback_guided: button.dataset.fallback === 'true'
+            });
+            activeTaskState.questionsState.splice(activeTaskState.currentIndex, 0, null);
+            activeTaskState.totalQuestions = activeTaskState.questionQueue.length;
+            captureTaskQuestionState();
+            await loadTaskQuestion(activeTaskState.currentIndex + 1);
+        };
+    });
+}
+
 async function finalizeProblem(isSuccess, answer = null, questionScore = null) {
     const feedback = document.getElementById('feedback-banner');
     feedback.style.display = 'block';
@@ -2674,6 +2812,21 @@ async function finalizeProblem(isSuccess, answer = null, questionScore = null) {
         return;
     }
 
+    if (completedQuestion?.phase === 'optional') {
+        if (questionState) {
+            questionState.completed = true;
+            questionState.correct = Boolean(isSuccess);
+            questionState.score = questionScore;
+        }
+        feedback.textContent = 'Optional practice complete. Your mastery progress is unchanged.';
+        captureTaskQuestionState();
+        updateTaskRunnerUI();
+        renderTaskNavigationChips();
+        nextBtn.style.display = 'none';
+        showTaskAdvanceButton();
+        return;
+    }
+
     activeTaskState.responses.push({
         questionIndex: activeTaskState.currentIndex,
         prompt: currentProblem.prompt,
@@ -2701,14 +2854,18 @@ async function finalizeProblem(isSuccess, answer = null, questionScore = null) {
     if (completedQuestion?.blockId) {
         const blockIndex = completedQuestion.blockIndex;
         const blockState = activeTaskState.blockStates[blockIndex];
-        const makeQuestion = (phase, allowHints) => ({
-            topic: completedQuestion.topic,
+        const makeQuestion = (phase, allowHints, drill = null) => ({
+            topic: drill?.topic || activeTaskState.blocks[blockIndex].topic,
             allow_hints: allowHints,
             blockId: completedQuestion.blockId,
             blockIndex,
             qInBlock: blockState.attemptsCount,
             mode: blockState.mode,
             phase,
+            source_q: completedQuestion.source_q,
+            step_label: completedQuestion.step_label,
+            blueprintStepKey: drill?.key,
+            fallback_guided: Boolean(drill?.fallback),
             allow_frq_conclusion: completedQuestion.allow_frq_conclusion
         });
         const discardRemainingBlockQuestions = () => {
@@ -2723,7 +2880,9 @@ async function finalizeProblem(isSuccess, answer = null, questionScore = null) {
             activeTaskState.questionsState.splice(activeTaskState.currentIndex, 0, ...questions.map(() => null));
         };
 
-        blockState.attemptsCount += 1;
+        if (blockState.mode !== 'mastery' || completedQuestion.phase === 'independent') {
+            blockState.attemptsCount += 1;
+        }
         activeTaskState.blockProgress.failedUnassisted = completedQuestion.allow_hints === false && !isSuccess;
         if (blockState.mode === 'scaffold') {
             if (completedQuestion.phase === 'guided') {
@@ -2742,12 +2901,27 @@ async function finalizeProblem(isSuccess, answer = null, questionScore = null) {
                 insertBlockQuestions([makeQuestion('guided', true), makeQuestion('independent', false)]);
             }
         } else if (blockState.mode === 'mastery') {
+            blockState.consecutiveStepMisses = blockState.consecutiveStepMisses || {};
+            const totalSteps = currentProblem.steps?.length || 1;
+            const passed = questionScore >= (totalSteps >= 3 ? 0.8 : 1);
+            activeTaskState.blockProgress.failedUnassisted = completedQuestion.phase === 'independent' && !passed;
+            const missedSteps = missedMasterySteps(completedQuestion);
             if (completedQuestion.phase === 'guided') {
                 blockState.guidedPassed = true;
                 blockState.phase = 'independent';
                 feedback.innerHTML += ' Guided step complete. Continue with an unassisted mastery problem.';
-            } else if (isSuccess) {
+            } else if (completedQuestion.phase === 'remediation') {
+                blockState.phase = 'independent';
+                blockState.remediationStepTopic = null;
+                feedback.innerHTML += ' Remediation complete. Continue with a fresh unassisted problem.';
+            } else if (passed) {
                 blockState.cleanPassesCount += 1;
+                blockState.shieldActive = true;
+                blockState.consecutiveStepMisses = {};
+                if (totalSteps >= 3 && questionScore < 1) {
+                    feedback.innerHTML += ` ✔ Mastery Pass Earned (${currentStepAttemptStates.filter(step => step.firstAttemptCorrect).length}/${totalSteps} steps)!`;
+                    blockState.optionalMissedStepTopic = missedSteps[0]?.topic || null;
+                }
                 if (blockState.cleanPassesCount >= blockState.requiredPasses) {
                     blockState.completed = true;
                     feedback.innerHTML += ' 🎯 Mastery block complete with the required unassisted passes.';
@@ -2764,19 +2938,49 @@ async function finalizeProblem(isSuccess, answer = null, questionScore = null) {
                     insertBlockQuestions([makeQuestion('independent', false)]);
                 }
             } else {
-                blockState.cleanPassesCount = 0;
-                blockState.guidedPassed = false;
-                blockState.phase = 'guided';
+                const missedKeys = new Set(missedSteps.map(item => item.key));
+                Object.keys(blockState.consecutiveStepMisses).forEach(key => {
+                    if (!missedKeys.has(key)) delete blockState.consecutiveStepMisses[key];
+                });
+                missedSteps.forEach(item => {
+                    blockState.consecutiveStepMisses[item.key] = (blockState.consecutiveStepMisses[item.key] || 0) + 1;
+                });
+                const protectedPass = blockState.cleanPassesCount > 0 && blockState.shieldActive;
+                if (protectedPass) blockState.shieldActive = false;
+                else blockState.cleanPassesCount = Math.max(0, blockState.cleanPassesCount - 1);
+                blockState.phase = protectedPass || blockState.cleanPassesCount > 0 ? 'remediation' : 'guided';
                 if (blockState.attemptsCount >= blockState.maxAttempts) {
                     blockState.completed = true;
                     if (questionState) questionState.maxAttemptsReached = true;
                     feedback.innerHTML = '<strong>⚠️ Max Attempts Reached for this Topic.</strong><br>You have completed the allowed attempts for this practice block. Move on to the next section or review with your teacher.';
                     discardRemainingBlockQuestions();
                 } else {
-                    feedback.innerHTML += ' Review the derivation, then return to guided practice.';
                     discardRemainingBlockQuestions();
-                    insertBlockQuestions([makeQuestion('guided', true), makeQuestion('independent', false)]);
+                    if (blockState.phase === 'remediation') {
+                        const drill = missedSteps[0];
+                        blockState.remediationStepTopic = drill.topic;
+                        feedback.innerHTML += protectedPass
+                            ? ' Second-chance shield used. Your passes are preserved; practice the missed step.'
+                            : ' One pass was stepped back. Practice the missed step before trying again.';
+                        insertBlockQuestions([makeQuestion('remediation', true, drill), makeQuestion('independent', false)]);
+                    } else {
+                        blockState.guidedPassed = false;
+                        feedback.innerHTML += ' Review the derivation, then return to guided practice.';
+                        insertBlockQuestions([makeQuestion('guided', true), makeQuestion('independent', false)]);
+                    }
                 }
+            }
+            if (completedQuestion.phase === 'independent' && passed && totalSteps >= 3 && questionScore < 1) {
+                missedSteps.forEach(step => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'btn-secondary optional-step-practice';
+                    button.dataset.topic = step.topic;
+                    button.dataset.key = step.key;
+                    button.dataset.fallback = String(step.fallback);
+                    button.textContent = `🔧 Practice: ${step.label} (Optional)`;
+                    feedback.appendChild(button);
+                });
             }
         } else {
             blockState.completedCount += 1;
@@ -2802,6 +3006,7 @@ async function finalizeProblem(isSuccess, answer = null, questionScore = null) {
         questionState.solutionDisplay = solutionCard?.style.display || 'none';
     }
     captureTaskQuestionState();
+    bindOptionalStepButtons();
     updateTaskRunnerUI();
     renderTaskNavigationChips();
     nextBtn.style.display = 'none';

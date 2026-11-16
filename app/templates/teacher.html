@@ -557,6 +557,22 @@
             <h2 style="margin: 0 0 16px; font-size: 1.2rem; color: #1e293b;">Section Management</h2>
             <div style="max-width: 640px; display: grid; gap: 20px;">
                 <section style="padding: 16px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <h3 style="margin: 0 0 12px; color: #334155;">Default Mastery &amp; Corrections Policy</h3>
+                    <label for="policy-mastery-passes">Default Required Unassisted Passes (without hints)</label>
+                    <select id="policy-mastery-passes">
+                        <option value="1">1 Unassisted Pass</option>
+                        <option value="2" selected>2 Unassisted Passes (Default)</option>
+                        <option value="3">3 Unassisted Passes</option>
+                        <option value="4">4 Unassisted Passes</option>
+                    </select>
+                    <label for="policy-corrections-scope">Default Test Corrections Scope</label>
+                    <select id="policy-corrections-scope">
+                        <option value="missed_steps" selected>🎯 Missed Steps Only (Targeted single-step drills)</option>
+                        <option value="full_questions">📋 Full Original Questions</option>
+                    </select>
+                    <button class="btn-primary" type="button" onclick="saveClassSettings()">Save Policy</button>
+                </section>
+                <section style="padding: 16px; border: 1px solid #e2e8f0; border-radius: 8px;">
                     <h3 style="margin: 0 0 12px; color: #334155;">Rename Section</h3>
                     <label for="settings-class-name" style="display: block; margin-bottom: 6px; color: #475569; font-weight: 600;">Section name</label>
                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -1111,6 +1127,8 @@
             input.disabled = !selectedClass || pendingToolPolicySaves.has(String(classId));
             input.checked = selectedClass?.tool_policy?.[input.dataset.tool] !== false;
         });
+        document.getElementById('policy-mastery-passes').value = String(selectedClass?.tool_policy?.mastery_required_passes || 2);
+        document.getElementById('policy-corrections-scope').value = selectedClass?.tool_policy?.corrections_scope || 'missed_steps';
 
         if (teacherCache.classId !== classId) {
             teacherCache.classId = classId;
@@ -1181,7 +1199,7 @@
         if (!activeClass) return;
         const controls = [...document.querySelectorAll('#class-settings-view input[type="checkbox"]')];
         const previous = activeClass.tool_policy || {};
-        const policy = Object.fromEntries(controls.map(input => [input.dataset.tool, input.checked]));
+        const policy = { ...previous, ...Object.fromEntries(controls.map(input => [input.dataset.tool, input.checked])) };
         pendingToolPolicySaves.add(String(activeClass.id));
         controls.forEach(input => { input.disabled = true; });
         try {
@@ -1253,8 +1271,48 @@
         document.querySelectorAll('#settings-view button').forEach(button => {
             button.disabled = !activeClass;
         });
+        document.getElementById('policy-mastery-passes').disabled = !activeClass || pendingToolPolicySaves.has(String(activeClass.id));
+        document.getElementById('policy-corrections-scope').disabled = !activeClass || pendingToolPolicySaves.has(String(activeClass.id));
         if (feedback) feedback.style.display = 'none';
         if (!activeClass) showSettingsFeedback('Select a class to manage its settings.', true);
+    }
+
+    async function saveClassSettings() {
+        const activeClass = getActiveClass();
+        if (!activeClass) return showSettingsFeedback('Select a class first.', true);
+        const id = String(activeClass.id);
+        if (pendingToolPolicySaves.has(id)) return;
+        const policy = {
+            ...activeClass.tool_policy,
+            mastery_required_passes: Number(document.getElementById('policy-mastery-passes').value),
+            corrections_scope: document.getElementById('policy-corrections-scope').value
+        };
+        pendingToolPolicySaves.add(id);
+        document.querySelectorAll('#class-settings-view input[type="checkbox"]').forEach(input => { input.disabled = true; });
+        document.getElementById('policy-mastery-passes').disabled = true;
+        document.getElementById('policy-corrections-scope').disabled = true;
+        try {
+            const response = await fetch(`/api/teacher/classes/${encodeURIComponent(id)}/settings`, {
+                method: 'PATCH', headers: getAuthHeaders(), body: JSON.stringify({ tool_policy: policy })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.detail || 'Could not save mastery policy.');
+            activeClass.tool_policy = result.tool_policy;
+            if (getActiveClass()?.id === activeClass.id) showSettingsFeedback('Mastery and corrections policy saved.');
+        } catch (error) {
+            if (getActiveClass()?.id === activeClass.id) {
+                document.getElementById('policy-mastery-passes').value = String(activeClass.tool_policy?.mastery_required_passes || 2);
+                document.getElementById('policy-corrections-scope').value = activeClass.tool_policy?.corrections_scope || 'missed_steps';
+                showSettingsFeedback(error.message || 'Could not save mastery policy.', true);
+            }
+        } finally {
+            pendingToolPolicySaves.delete(id);
+            const currentClass = getActiveClass();
+            const disabled = !currentClass || pendingToolPolicySaves.has(String(currentClass.id));
+            document.querySelectorAll('#class-settings-view input[type="checkbox"]').forEach(input => { input.disabled = disabled; });
+            document.getElementById('policy-mastery-passes').disabled = disabled;
+            document.getElementById('policy-corrections-scope').disabled = disabled;
+        }
     }
 
     async function renameActiveClass() {
@@ -1724,7 +1782,7 @@
                         classTotals[index].count += 1;
                         const scoreBadge = document.createElement('span');
                         scoreBadge.className = 'badge-streak';
-                        scoreBadge.textContent = `${numericScore}%`;
+                        scoreBadge.textContent = `${numericScore}%${grade?.auto_exempt ? ' (Exempt)' : ''}`;
                         cell.appendChild(scoreBadge);
                     } else {
                         const missing = document.createElement('span');

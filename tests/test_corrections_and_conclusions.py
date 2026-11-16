@@ -14,6 +14,7 @@ class Query:
         self.table_name = table
         self.filters = []
         self.payload = None
+        self.update_payload = None
 
     def select(self, *_args, **_kwargs):
         return self
@@ -33,18 +34,27 @@ class Query:
         self.payload = payload
         return self
 
+    def update(self, payload):
+        self.update_payload = payload
+        return self
+
     def execute(self):
         rows = self.database.rows[self.table_name]
         if self.payload is not None:
             row = {"id": "correction", "due_date": None, **self.payload}
             rows.append(row)
             return SimpleNamespace(data=[row])
-        return SimpleNamespace(data=[row for row in rows if all(check(row) for check in self.filters)])
+        selected = [row for row in rows if all(check(row) for check in self.filters)]
+        if self.update_payload is not None:
+            for row in selected:
+                row.update(self.update_payload)
+        return SimpleNamespace(data=selected)
 
 
 class Database:
     def __init__(self):
         self.rows = {
+            "classes": [{"id": "class", "teacher_id": "teacher", "tool_policy": {}}],
             "enrollments": [{"student_id": "student", "class_id": "class", "classes": {"name": "Statistics"}}],
             "assessments": [{
                 "id": "parent", "title": "Original", "class_id": "class",
@@ -56,6 +66,24 @@ class Database:
 
     def table(self, name):
         return Query(self, name)
+
+    def rpc(self, name, params):
+        if name != "auto_exempt_correction":
+            raise AssertionError(name)
+        database = self
+
+        class Exemption:
+            def execute(self):
+                if not any(row["assessment_id"] == params["p_assessment_id"] and
+                           row["student_id"] == params["p_student_id"]
+                           for row in database.rows["assessment_submissions"]):
+                    database.rows["assessment_submissions"].append({
+                        "assessment_id": params["p_assessment_id"],
+                        "student_id": params["p_student_id"], "status": "submitted", "score": 100,
+                        "details": {"auto_exempt": True, "reason": "100% on parent exam"},
+                    })
+                return SimpleNamespace(data=True)
+        return Exemption()
 
 
 class CorrectionsTests(unittest.TestCase):
@@ -85,15 +113,18 @@ class CorrectionsTests(unittest.TestCase):
             {"topic": "ht_prop_z", "allow_hints": True},
             {"topic": "ht_prop_z", "allow_hints": True},
         ])
+        self.assertEqual(correction["config"]["blocks"][0]["required_passes"], 2)
+        self.assertEqual(correction["config"]["blocks"][0]["mode"], "mastery")
         self.db.rows["assessment_submissions"].append({
-            "assessment_id": "parent", "student_id": "student",
+            "assessment_id": "parent", "student_id": "student", "status": "submitted",
             "details": {"question_breakdown": [
                 {"topic": "ht_prop_z", "points_earned": 0.5, "max_points": 1},
                 {"topic": "ht_mean_t", "points_earned": 1, "max_points": 1},
             ]},
         })
         task = self.client.get("/api/student/tasks/student").json()[0]
-        self.assertEqual(task["missed_questions"], [{"topic": "ht_prop_z", "allow_hints": True}])
+        self.assertEqual(task["missed_questions"][0]["topic"], "ht_prop_z")
+        self.assertTrue(task["missed_questions"][0]["fallback_guided"])
         self.assertFalse(task["perfect_on_parent"])
 
     def test_missing_perfect_and_legacy_submissions(self):
@@ -102,17 +133,99 @@ class CorrectionsTests(unittest.TestCase):
         self.assertTrue(task["parent_submission_missing"])
         self.db.rows["assessment_submissions"].append({
             "assessment_id": "parent", "student_id": "student",
+            "status": "submitted",
             "responses": [{"correct": True, "breakdown": {"topic": "ht_mean_t", "points_earned": 1, "max_points": 1}}],
         })
         task = self.client.get("/api/student/tasks/student").json()[0]
         self.assertTrue(task["perfect_on_parent"])
         self.db.rows["assessment_submissions"][0]["responses"][0]["correct"] = False
         task = self.client.get("/api/student/tasks/student").json()[0]
-        self.assertEqual(task["missed_questions"], [{"topic": "ht_mean_t", "allow_hints": True}])
+        self.assertEqual(task["missed_questions"][0]["topic"], "ht_mean_t")
         self.db.rows["assessment_submissions"][0]["responses"] = [{"correct": False}]
         task = self.client.get("/api/student/tasks/student").json()[0]
         self.assertIn("correction_error", task)
         self.assertFalse(task["perfect_on_parent"])
+
+    def test_targeted_and_full_question_scopes(self):
+        self.create_correction()
+        self.db.rows["assessments"][-1]["config"]["blocks"][0]["allow_frq_conclusion"] = True
+        self.db.rows["assessment_submissions"].append({
+            "assessment_id": "parent", "student_id": "student", "status": "submitted",
+            "details": {"question_breakdown": [{
+                "q_num": 2, "topic": "ht_prop_z", "points_earned": 0.5, "max_points": 1,
+                "missed_steps": [{"step_index": 6, "step_label": "P-Value & Interpretation:"},
+                                 {"step_index": 7, "step_label": "Conclusion:"}],
+            }]},
+        })
+        task = self.client.get("/api/student/tasks/student").json()[0]
+        self.assertEqual([item["topic"] for item in task["missed_questions"]],
+                         ["step__ht_prop_z__6", "step__ht_prop_z__7"])
+        self.assertEqual(task["missed_questions"][0]["source_q"], 2)
+        self.assertTrue(all(item["required_passes"] == 2 for item in task["missed_questions"]))
+        self.assertTrue(task["missed_questions"][1]["allow_frq_conclusion"])
+        self.db.rows["assessments"][-1]["config"]["corrections_scope"] = "full_questions"
+        task = self.client.get("/api/student/tasks/student").json()[0]
+        self.assertEqual([item["topic"] for item in task["missed_questions"]], ["ht_prop_z"])
+
+    def test_canonical_step_ids_stay_with_their_parent(self):
+        self.assertEqual(main.correction_step_topic("ht_prop_z", "step__ht_prop_z__6"), "step__ht_prop_z__6")
+        self.assertEqual(main.correction_step_topic("ht_prop_z", {"step_topic": "step__ht_prop_z__7"}), "step__ht_prop_z__7")
+        self.assertIsNone(main.correction_step_topic("ht_prop_z", "step__ht_mean_t__6"))
+        self.assertIsNone(main.correction_step_topic("ht_prop_z", "step__ht_prop_z__999"))
+
+    def test_perfect_exemption_is_idempotent_and_preserves_existing_submission(self):
+        self.create_correction()
+        self.db.rows["assessment_submissions"].append({
+            "assessment_id": "parent", "student_id": "student", "status": "submitted",
+            "score": 100, "details": {"question_breakdown": [
+                {"topic": "ht_prop_z", "points_earned": 1, "max_points": 1, "missed_steps": []},
+            ]},
+        })
+        for _ in range(2):
+            task = self.client.get("/api/student/tasks/student").json()[0]
+            self.assertTrue(task["perfect_on_parent"])
+            self.assertEqual((task["status"], task["score"]), ("submitted", 100))
+        submissions = [row for row in self.db.rows["assessment_submissions"] if row["assessment_id"] == "correction"]
+        self.assertEqual(len(submissions), 1)
+        self.assertTrue(submissions[0]["details"]["auto_exempt"])
+        submissions[0]["score"] = 73
+        self.assertEqual(self.client.get("/api/student/tasks/student").json()[0]["score"], 73)
+
+    def test_score_100_with_missed_steps_is_not_exempt(self):
+        self.create_correction()
+        self.db.rows["assessment_submissions"].append({
+            "assessment_id": "parent", "student_id": "student", "status": "submitted", "score": 100,
+            "details": {"question_breakdown": [{
+                "topic": "ht_prop_z", "points_earned": 1, "max_points": 1,
+                "missed_steps": [{"step_index": 6, "step_label": "P-value"}],
+            }]},
+        })
+        task = self.client.get("/api/student/tasks/student").json()[0]
+        self.assertFalse(task["perfect_on_parent"])
+        self.assertEqual(task["missed_questions"][0]["topic"], "step__ht_prop_z__6")
+        self.assertEqual(len(self.db.rows["assessment_submissions"]), 1)
+
+    def test_all_targeted_topics_generate_one_fresh_step(self):
+        for topic, labels in main.TARGETED_STEP_LABELS.items():
+            for index in range(1, len(labels) + 1):
+                with self.subTest(topic=topic, index=index):
+                    problem = main.generate_single_step(f"step__{topic}__{index}")
+                    self.assertEqual(len(problem["steps"]), 1)
+
+    def test_class_mastery_policy_round_trip_and_validation(self):
+        response = self.client.patch("/api/teacher/classes/class/settings", json={
+            "tool_policy": {"allow_calc": False, "mastery_required_passes": 4, "corrections_scope": "full_questions"}
+        })
+        self.assertEqual(response.status_code, 200)
+        policy = response.json()["tool_policy"]
+        self.assertFalse(policy["allow_calc"])
+        self.assertEqual(policy["mastery_required_passes"], 4)
+        self.assertEqual(policy["corrections_scope"], "full_questions")
+        for policy in ({"mastery_required_passes": 5}, {"corrections_scope": "invalid"}):
+            with self.subTest(policy=policy):
+                self.assertEqual(self.client.patch("/api/teacher/classes/class/settings", json={
+                    "tool_policy": policy
+                }).status_code, 422)
 
 
 class ConclusionTests(unittest.TestCase):

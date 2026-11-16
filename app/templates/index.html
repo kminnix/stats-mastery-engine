@@ -20,6 +20,7 @@
     <!-- Supabase Environment Injection -->
     <script>
         window.SUPABASE_URL = "{{ supabase_url }}";
+        window.TARGETED_STEP_LABELS = {{ targeted_step_labels | tojson }};
         window.SUPABASE_KEY = "{{ supabase_key }}";
     </script>
 
@@ -341,7 +342,7 @@
             if (type === 'test_correction' && task.perfect_on_parent) {
                 const perfect = document.createElement('span');
                 perfect.className = 'task-badge';
-                perfect.textContent = '🌟 100% on Original — No Corrections Needed';
+                perfect.textContent = '🌟 100% on Original — Complete / Exempt';
                 heading.appendChild(perfect);
             }
 

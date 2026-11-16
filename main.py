@@ -6,6 +6,7 @@ import csv
 import io
 import re
 import math
+import html
 from copy import deepcopy
 from typing import List, Optional, Dict, Any, Literal, Union
 from fastapi import FastAPI, Request, HTTPException, Header
@@ -44,7 +45,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "157"
+STATIC_VERSION = "159"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -136,6 +137,8 @@ class ToolPolicy(BaseModel):
     allow_stats_tool: bool = True
     allow_tables: bool = True
     allow_popouts: bool = True
+    mastery_required_passes: Literal[1, 2, 3, 4] = 2
+    corrections_scope: Literal["missed_steps", "full_questions"] = "missed_steps"
 
 class ClassSettingsPayload(BaseModel):
     default_notation: Optional[Literal["ab", "b0b1"]] = None
@@ -213,7 +216,8 @@ async def serve_student_practice(request: Request):
             "supabase_url": SUPABASE_URL, 
             "supabase_key": SUPABASE_KEY,
             "v": STATIC_VERSION,
-            "static_version": STATIC_VERSION
+            "static_version": STATIC_VERSION,
+            "targeted_step_labels": TARGETED_STEP_LABELS
         }
     )
 
@@ -255,11 +259,40 @@ async def get_teacher_assessment_builder(request: Request):
         context={
             "supabase_url": SUPABASE_URL,
             "supabase_key": SUPABASE_ANON_KEY,
-            "static_version": STATIC_VERSION
+            "static_version": STATIC_VERSION,
+            "targeted_step_labels": TARGETED_STEP_LABELS
         }
     )
 
 # --- PROBLEM & VERIFICATION APIS ---
+
+TARGETED_STEP_LABELS = {
+    "eda_summary": ["Five-number summary", "IQR and fences", "Outliers and sample statistics"],
+    "rv_transform_combine": ["Linear transformation", "Combining variables"],
+    "prob_twoway": ["Marginal and joint probabilities", "Conditional probability", "Independence"],
+    "ci_prop_z": ["Conditions", "Point estimate", "Critical value", "Margin of error", "Lower bound", "Upper bound"],
+    "ci_prop_z_2samp": ["Conditions", "Point estimate", "Critical value", "Margin of error", "Lower bound", "Upper bound"],
+    "ci_mean_t": ["Conditions", "Point estimate", "Critical value", "Margin of error", "Lower bound", "Upper bound"],
+    "ci_mean_t_2samp": ["Conditions", "Point estimate", "Degrees of freedom", "Critical value", "Margin of error", "Lower bound", "Upper bound"],
+    "ci_matched_pairs_t": ["Conditions", "Point estimate", "Critical value", "Margin of error", "Lower bound", "Upper bound"],
+    "ht_prop_z": ["Parameter", "Hypotheses", "Conditions", "Sample statistic and SE", "Test statistic", "P-value", "Conclusion"],
+    "ht_prop_z_2samp": ["Parameter", "Hypotheses", "Conditions", "Sample statistic and SE", "Test statistic", "P-value", "Conclusion"],
+    "ht_mean_t": ["Parameter", "Hypotheses", "Conditions", "Sample statistic and SE", "Test statistic", "P-value", "Conclusion"],
+    "ht_mean_t_2samp": ["Parameter", "Hypotheses", "Conditions", "Sample statistic and SE", "Test statistic", "P-value", "Conclusion"],
+    "ht_matched_pairs_t": ["Parameter", "Hypotheses", "Conditions", "Sample statistic and SE", "Test statistic", "P-value", "Conclusion"],
+    "chi_gof": ["Hypotheses", "Conditions", "Degrees of freedom", "Test statistic and P-value", "Conclusion"],
+    "chi_independence": ["Hypotheses", "Conditions", "Degrees of freedom", "Test statistic and P-value", "Conclusion"],
+    "chi_homogeneity": ["Hypotheses", "Conditions", "Degrees of freedom", "Test statistic and P-value", "Conclusion"],
+    "reg_lsrl": ["Slope", "Intercept", "Regression equation"],
+    "reg_pred_res": ["Prediction", "Residual", "Residual interpretation"],
+    "reg_comp_output": ["Intercept and slope", "Regression equation", "Slope test statistic", "R-squared interpretation"],
+    "reg_raw_data": ["Correlation and R-squared", "Slope and intercept", "Prediction and residual"],
+    "reg_slope_ci": ["Degrees of freedom", "Critical value", "Margin of error", "Interval bounds"],
+    "reg_slope_test": ["Parameter", "Hypotheses", "Conditions", "Test statistic", "P-value", "Conclusion"],
+    "prob_discrete_rv": ["Missing probability", "Expected value", "Standard deviation"],
+    "prob_binom_geom": ["Mean and standard deviation", "Probability"],
+    "sampling_dist": ["Conditions", "Mean and standard error", "Probability"],
+}
 
 @app.get("/api/health")
 async def health_check():
@@ -315,6 +348,22 @@ SINGLE_STEP_TOPICS = {
     "reg_step_slope_stat": ("regression", "reg_slope_test", "slope_stat"),
     "reg_step_slope_conc": ("regression", "reg_slope_test", "conc"),
 }
+
+for _topic, _labels in TARGETED_STEP_LABELS.items():
+    if _topic.startswith("ci_"):
+        _engine, _parent = "ci", _topic[3:]
+    elif _topic.startswith("ht_"):
+        _engine, _parent = "ht", _topic
+    elif _topic.startswith("chi_"):
+        _engine, _parent = "chi", _topic
+    elif _topic.startswith("reg_"):
+        _engine, _parent = "regression", _topic
+    elif _topic in ("eda_summary", "rv_transform_combine", "prob_twoway"):
+        _engine, _parent = "foundations", _topic
+    else:
+        _engine, _parent = "prob_sampling", _topic
+    for _index in range(1, len(_labels) + 1):
+        SINGLE_STEP_TOPICS[f"step__{_topic}__{_index}"] = (_engine, _parent, _index)
 
 
 def _combine_drill_steps(steps: List[Dict[str, Any]], label: str) -> Dict[str, Any]:
@@ -493,6 +542,17 @@ def slice_problem_to_step(problem_dict: Dict[str, Any], step_selector: Union[str
         if step_selector < 1 or step_selector > len(steps):
             raise ValueError(f"Step number out of range: {step_selector}")
         selected = steps[step_selector - 1]
+        for earlier in steps[:step_selector - 1]:
+            fields = earlier.get("inputs") or earlier.get("components") or [earlier]
+            values = []
+            for field in fields:
+                expected = field.get("expected")
+                if isinstance(expected, list) and expected:
+                    label = field.get("label") or field.get("placeholder") or field.get("id") or earlier.get("label", "Value")
+                    values.append(f"{html.escape(str(label))}: {html.escape(str(expected[0]))}")
+            if values:
+                context.append(f"Given from {html.escape(str(earlier.get('label', 'an earlier step')))} " + "; ".join(values) + ".")
+        context.append(f"Solve only this step: {html.escape(str(selected.get('label', '')))}")
     elif step_selector == "cond":
         selected = find("Check Conditions")
     elif step_selector == "hypo":
@@ -640,12 +700,19 @@ def generate_single_step(topic: str, notation: str = "ab") -> Dict[str, Any]:
         "ht": lambda: generate_ht_problem(parent),
         "chi": lambda: generate_chi_problem(parent),
         "regression": lambda: generate_regression_problem(parent, notation),
+        "prob_sampling": lambda: generate_prob_sampling_problem(parent),
     }
     if topic == "reg_step_slope_conc":
         parent = random.choice(["reg_slope_ci", "reg_slope_test"])
         selector = "slope_interval" if parent == "reg_slope_ci" else "conc"
     result = slice_problem_to_step(generators[engine](), selector)
     return tag_problem_input_types(result)
+
+@app.get("/api/problem/targeted-step")
+async def get_targeted_step(topic: str, notation: str = "ab"):
+    if not topic.startswith("step__") or topic not in SINGLE_STEP_TOPICS:
+        raise HTTPException(status_code=404, detail="Unknown targeted step topic")
+    return generate_single_step(topic, notation)
 
 @app.get("/api/problem/ci")
 async def get_ci_problem(topic: str = "mean_t", problem_type: str = "mean_t"):
@@ -1150,6 +1217,13 @@ async def create_test_corrections(assessment_id: str, authorization: Optional[st
         raise HTTPException(status_code=404, detail="Assessment not found")
     parent = result.data[0]
     verify_teacher_class_access(db, parent["class_id"], access["user"].id)
+    class_result = db.table("classes").select("tool_policy").eq("id", parent["class_id"]).execute()
+    if not class_result.data:
+        raise HTTPException(status_code=404, detail="Class not found")
+    policy = class_result.data[0].get("tool_policy") or {}
+    passes = policy.get("mastery_required_passes", 2)
+    if not isinstance(passes, int) or isinstance(passes, bool) or not 1 <= passes <= 4:
+        raise HTTPException(status_code=422, detail="Invalid class mastery policy")
     db.table("assessment_submissions").select("id, student_id, details, responses").eq(
         "assessment_id", assessment_id
     ).execute()
@@ -1161,6 +1235,23 @@ async def create_test_corrections(assessment_id: str, authorization: Optional[st
             for block in config.get("blocks", [])
             for _ in range(int(block.get("count", 1)))
         ]
+    source_blocks = config.get("blocks") or [
+        {**question, "count": 1} for question in questions if isinstance(question, dict)
+    ]
+    if not source_blocks:
+        raise HTTPException(status_code=422, detail="The parent assessment has no questions to import")
+    blocks = [
+        {
+            **block,
+            "id": f"correction-{index}",
+            "mode": "mastery",
+            "required_passes": passes,
+            "required_clean_passes": passes,
+            "recovery_mode": "second_chance",
+            "max_attempts": 6,
+        }
+        for index, block in enumerate(source_blocks)
+    ]
     payload = {
         "title": f"{parent['title']} — Test Corrections",
         "type": "test_correction",
@@ -1170,6 +1261,9 @@ async def create_test_corrections(assessment_id: str, authorization: Optional[st
         "config": {
             "parent_assessment_id": assessment_id,
             "fallback_questions": questions,
+            "blocks": blocks,
+            "corrections_scope": "missed_steps",
+            "mastery_required_passes": passes,
             "allow_hints": True,
         },
     }
@@ -1421,7 +1515,7 @@ async def get_class_gradebook(class_id: str, authorization: Optional[str] = Head
     assessment_ids = [assessment["id"] for assessment in assessments]
     sub_res = (
         db.table("assessment_submissions")
-        .select("assessment_id, student_id, score, status")
+        .select("assessment_id, student_id, score, status, details")
         .in_("assessment_id", assessment_ids)
         .in_("student_id", student_ids)
         .execute()
@@ -1433,7 +1527,8 @@ async def get_class_gradebook(class_id: str, authorization: Optional[str] = Head
         assessment_id = submission["assessment_id"]
         grades.setdefault(student_id, {})[assessment_id] = {
             "score": submission.get("score"),
-            "status": submission.get("status", "submitted")
+            "status": submission.get("status", "submitted"),
+            "auto_exempt": isinstance(submission.get("details"), dict) and submission["details"].get("auto_exempt") is True
         }
 
     return {
@@ -1567,10 +1662,17 @@ async def submit_student_assessment(req: StudentSubmissionRequest, authorization
         raise HTTPException(status_code=409, detail="This assessment was reset. Reload it before submitting.")
     if not 0 <= req.score <= 100 or not isinstance(req.details.get("question_breakdown"), list):
         raise HTTPException(status_code=422, detail="Invalid score or question breakdown")
+    breakdown = req.details["question_breakdown"]
+    if any(not isinstance(item, dict) or not isinstance(item.get("missed_steps", []), list) for item in breakdown):
+        raise HTTPException(status_code=422, detail="Invalid missed-step breakdown")
+    details = {
+        **req.details,
+        "question_breakdown": [{**item, "missed_steps": item.get("missed_steps", [])} for item in breakdown],
+    }
     try:
         db.rpc("submit_assessment_with_details", {
             "p_assessment_id": req.assessment_id, "p_score": req.score,
-            "p_responses": req.responses, "p_details": req.details,
+            "p_responses": req.responses, "p_details": details,
             "p_reset_version": req.reset_version,
         }).execute()
     except Exception as exc:
@@ -1578,6 +1680,35 @@ async def submit_student_assessment(req: StudentSubmissionRequest, authorization
             raise HTTPException(status_code=409, detail="This assessment was reset. Reload it before submitting.") from exc
         raise HTTPException(status_code=400, detail=f"Could not submit assessment: {exc}") from exc
     return {"status": "success"}
+
+def correction_step_topic(topic: str, step: Any) -> Optional[str]:
+    if topic in SINGLE_STEP_TOPICS:
+        return topic
+    labels = TARGETED_STEP_LABELS.get(topic)
+    if not labels:
+        return None
+    if isinstance(step, dict):
+        index = step.get("step_index", step.get("step_num"))
+        label = step.get("step_topic", step.get("step_label", step.get("label", "")))
+    else:
+        index, label = None, step
+    if isinstance(index, int) and not isinstance(index, bool) and 1 <= index <= len(labels):
+        return f"step__{topic}__{index}"
+    if isinstance(label, str):
+        prefix = f"step__{topic}__"
+        if label.startswith(prefix) and label[len(prefix):].isdigit():
+            index = int(label[len(prefix):])
+            if 1 <= index <= len(labels):
+                return f"{prefix}{index}"
+        normalized = re.sub(r"[^a-z0-9]+", " ", label.lower()).strip()
+        matches = [
+            i for i, candidate in enumerate(labels, 1)
+            if re.sub(r"[^a-z0-9]+", " ", candidate.lower()).strip() in normalized
+        ]
+        if len(matches) == 1:
+            return f"step__{topic}__{matches[0]}"
+    return None
+
 
 @app.get("/api/student/tasks/{student_id}")
 async def get_student_tasks(student_id: str, authorization: Optional[str] = Header(None)):
@@ -1631,7 +1762,7 @@ async def get_student_tasks(student_id: str, authorization: Optional[str] = Head
         parent_id = a.get("parent_assessment_id")
         if a["type"] == "test_correction" and parent_id:
             parent_sub = submission_map.get(parent_id)
-            if parent_sub is not None and parent_sub.get("status") not in (None, "submitted", "completed"):
+            if parent_sub is not None and parent_sub.get("status") not in ("submitted", "completed"):
                 parent_sub = None
             task["parent_submission_missing"] = parent_sub is None
             task["missed_questions"] = []
@@ -1641,21 +1772,29 @@ async def get_student_tasks(student_id: str, authorization: Optional[str] = Head
                 breakdown = details.get("question_breakdown") if isinstance(details, dict) else None
                 if not isinstance(breakdown, list):
                     breakdown = parent_sub.get("responses")
-                if not isinstance(breakdown, list):
+                if (not isinstance(breakdown, list) or not breakdown) and parent_sub.get("score") != 100:
                     task["correction_error"] = "The original submission has no question breakdown. Contact your teacher."
                 else:
                     missed = []
-                    for response in breakdown:
+                    config = a.get("config") or {}
+                    scope = config.get("corrections_scope", "missed_steps")
+                    if scope not in ("missed_steps", "full_questions"):
+                        task["correction_error"] = "This correction has an invalid scope. Contact your teacher."
+                    for response in breakdown or []:
                         if not isinstance(response, dict):
                             task["correction_error"] = "The original submission has an invalid question breakdown. Contact your teacher."
                             break
                         question = response.get("breakdown") if isinstance(response.get("breakdown"), dict) else response
                         earned, maximum = question.get("points_earned"), question.get("max_points")
-                        correct = question.get("correct", response.get("correct"))
+                        correct = False if response.get("correct") is False else question.get("correct", response.get("correct"))
+                        missed_steps = question.get("missed_steps", [])
+                        if not isinstance(missed_steps, list):
+                            task["correction_error"] = "The original submission has an invalid step breakdown. Contact your teacher."
+                            break
                         if isinstance(earned, (int, float)) and isinstance(maximum, (int, float)):
-                            is_missed = earned < maximum or correct is False
+                            is_missed = earned < maximum or correct is False or bool(missed_steps)
                         elif isinstance(correct, bool):
-                            is_missed = correct is False
+                            is_missed = correct is False or bool(missed_steps)
                         else:
                             task["correction_error"] = "The original submission has an incomplete question breakdown. Contact your teacher."
                             break
@@ -1663,10 +1802,55 @@ async def get_student_tasks(student_id: str, authorization: Optional[str] = Head
                             if not isinstance(question.get("topic"), str) or not question["topic"]:
                                 task["correction_error"] = "A missed question has no topic. Contact your teacher."
                                 break
-                            missed.append({"topic": question["topic"], "allow_hints": True})
+                            topic = question["topic"]
+                            blocks = config.get("blocks") or []
+                            block = next((b for b in blocks if isinstance(b, dict) and b.get("topic") == topic), {})
+                            passes = block.get("required_passes", block.get("required_clean_passes",
+                                config.get("mastery_required_passes", (task["tool_policy"] or {}).get("mastery_required_passes", 2))))
+                            if not isinstance(passes, int) or isinstance(passes, bool) or not 1 <= passes <= 5:
+                                task["correction_error"] = "This correction has an invalid mastery requirement. Contact your teacher."
+                                break
+                            base = {
+                                "mode": "mastery", "required_passes": passes,
+                                "recovery_mode": "second_chance", "allow_hints": True,
+                                "source_q": question.get("q_num", response.get("questionIndex")),
+                                "allow_frq_conclusion": bool(block.get("allow_frq_conclusion")),
+                            }
+                            for setting in ("notation_style", "max_step_attempts"):
+                                if setting in block:
+                                    base[setting] = block[setting]
+                            if scope == "missed_steps" and missed_steps:
+                                for step in missed_steps:
+                                    label = step.get("step_label", step.get("label", "Missed step")) if isinstance(step, dict) else str(step)
+                                    step_topic = correction_step_topic(topic, step)
+                                    missed.append({
+                                        **base, "topic": step_topic or topic,
+                                        "step_label": label,
+                                        "fallback_guided": step_topic is None,
+                                    })
+                            else:
+                                missed.append({
+                                    **base, "topic": topic,
+                                    "fallback_guided": scope == "missed_steps" and topic not in SINGLE_STEP_TOPICS,
+                                })
                     if "correction_error" not in task:
                         task["missed_questions"] = missed
-                        task["perfect_on_parent"] = not missed
+                        task["perfect_on_parent"] = not missed and (
+                            bool(breakdown) or parent_sub.get("score") == 100
+                        )
+                        if task["perfect_on_parent"] and sub is None:
+                            exempt = db.rpc("auto_exempt_correction", {
+                                "p_assessment_id": a["id"], "p_student_id": student_id,
+                            }).execute()
+                            if exempt.data is not True:
+                                raise HTTPException(status_code=409, detail="Could not confirm correction exemption")
+                            synced = db.table("assessment_submissions").select("status, score").eq(
+                                "assessment_id", a["id"]
+                            ).eq("student_id", student_id).execute()
+                            if not synced.data:
+                                raise HTTPException(status_code=500, detail="Correction exemption was not saved")
+                            task["status"] = synced.data[0]["status"]
+                            task["score"] = synced.data[0].get("score")
         task_list.append(task)
 
     return task_list

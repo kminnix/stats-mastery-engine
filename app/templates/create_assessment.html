@@ -169,10 +169,18 @@
             <input id="assessment-due-date" type="date">
         </div>
         <div class="meta-field" id="parent-test-field" style="display: none;">
-            <label for="parent-test-select">Exam for Corrections</label>
-            <select id="parent-test-select"><option value="">Select a test...</option></select>
+            <label for="parent-exam-select">Exam for Corrections</label>
+            <select id="parent-exam-select"><option value="">Select a test...</option></select>
+        </div>
+        <div class="meta-field" id="corrections-scope-field" style="display: none;">
+            <label for="corrections-scope-select">Corrections Scope</label>
+            <select id="corrections-scope-select">
+                <option value="missed_steps">🎯 Missed Steps Only</option>
+                <option value="full_questions">📋 Full Original Questions</option>
+            </select>
         </div>
     </section>
+    <p id="corrections-import-banner" role="status" hidden></p>
 
     <fieldset id="assessment-tool-policy">
         <legend>Student Tools &amp; Pop-Out Policy</legend>
@@ -209,6 +217,7 @@
 <script>
     window.SUPABASE_URL = {{ supabase_url | tojson }};
     window.SUPABASE_KEY = {{ supabase_key | tojson }};
+    window.TARGETED_STEP_LABELS = {{ targeted_step_labels | tojson }};
 
     let supabaseClient = null;
     let currentUser = null;
@@ -243,6 +252,45 @@
     function setPolicyFromSelectedClass() {
         const selected = currentClasses.find(item => String(item.id) === document.getElementById('class-select').value);
         setAssessmentToolPolicy(selected?.tool_policy);
+        document.getElementById('corrections-scope-select').value = selected?.tool_policy?.corrections_scope || 'missed_steps';
+    }
+
+    function defaultMasteryPasses() {
+        const selected = currentClasses.find(item => String(item.id) === document.getElementById('class-select').value);
+        return Math.min(4, Math.max(1, Number(selected?.tool_policy?.mastery_required_passes) || 2));
+    }
+
+    function importParentExam() {
+        const parentId = document.getElementById('parent-exam-select').value;
+        const parent = currentAssessments.find(item => String(item.id) === parentId);
+        const banner = document.getElementById('corrections-import-banner');
+        if (!parent || document.getElementById('assessment-type').value !== 'test_correction') {
+            banner.hidden = true;
+            return;
+        }
+        const blocks = Array.isArray(parent.config?.blocks) && parent.config.blocks.length
+            ? parent.config.blocks
+            : (parent.config?.questions || []).map(question => ({ ...question, count: 1 }));
+        if (!blocks.length) {
+            banner.hidden = true;
+            showBuilderError('The selected exam has no configured questions to import.');
+            return;
+        }
+        const passes = defaultMasteryPasses();
+        assessmentBlocks = blocks.map((block, index) => ({
+            ...block,
+            id: `correction_${Date.now()}_${index}`,
+            count: Number(block.count) || 1,
+            mode: 'mastery',
+            required_passes: passes,
+            required_clean_passes: passes,
+            recovery_mode: 'second_chance',
+            max_attempts: 6
+        }));
+        clearBuilderError();
+        banner.textContent = `🩹 Imported ${assessmentBlocks.length} blocks from ${parent.title} in Mastery Mode (1 Guided + ${passes} Unassisted w/ Second Chance).`;
+        banner.hidden = false;
+        renderBlocksList();
     }
 
     const ASSESSABLE_SKILLS = [
@@ -323,6 +371,14 @@
         { id: 'reg_step_slope_conc', title: 'Slope CI Bounds & Test Conclusion', topic: 'Linear Regression Analysis', notation: 'P, \\alpha' }
     ];
 
+    Object.entries(window.TARGETED_STEP_LABELS || {}).forEach(([parentId, labels]) => {
+        const parent = ASSESSABLE_SKILLS.find(skill => skill.id === parentId);
+        if (!parent) return;
+        labels.forEach((label, index) => ASSESSABLE_SKILLS.push({
+            ...parent, id: `step__${parentId}__${index + 1}`, title: `${parent.title}: ${label}`
+        }));
+    });
+
     function showBuilderError(message) {
         const element = document.getElementById('builder-error');
         element.textContent = message;
@@ -371,7 +427,7 @@
             category.appendChild(heading);
             const rows = document.createElement('div');
             rows.className = 'builder-skill-rows';
-            const isDrill = skill => /^(?:eda_(?:five_num|iqr_fences|mean_sd)|rv_(?:transform|combine)$|prob_(?:marginal_joint|conditional)|(?:ci_prop|ci_mean)_(?:cond|crit_se|bounds|interp)|(?:ht_prop|ht_mean)_(?:hypo|cond|stat|pval|conc)|(?:chi|reg)_step_|cond_|drill_)/.test(skill.id);
+            const isDrill = skill => /^(?:step__|eda_(?:five_num|iqr_fences|mean_sd)|rv_(?:transform|combine)$|prob_(?:marginal_joint|conditional)|(?:ci_prop|ci_mean)_(?:cond|crit_se|bounds|interp)|(?:ht_prop|ht_mean)_(?:hypo|cond|stat|pval|conc)|(?:chi|reg)_step_|cond_|drill_)/.test(skill.id);
             const hasDrills = skills.some(isDrill);
             const ordered = [...skills.filter(skill => !isDrill(skill)), ...skills.filter(isDrill)];
             let currentGroup = null;
@@ -436,6 +492,8 @@
             title,
             count: 1,
             mode: 'no_hints',
+            required_passes: defaultMasteryPasses(),
+            required_clean_passes: defaultMasteryPasses(),
             max_step_attempts: null,
             allow_frq_conclusion: false
         });
@@ -622,7 +680,7 @@
             thresholdInput.id = `required-passes-${block.id}`;
             thresholdInput.min = '1';
             thresholdInput.max = '5';
-            thresholdInput.value = String(block.required_clean_passes || 1);
+            thresholdInput.value = String(block.required_passes || block.required_clean_passes || defaultMasteryPasses());
             thresholdInput.style.cssText = 'width: 50px; text-align: center; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 4px;';
             thresholdInput.addEventListener('input', () => updateBlockCleanPasses(block.id, thresholdInput.value));
             const thresholdHelp = document.createElement('span');
@@ -640,6 +698,7 @@
         const parsed = parseInt(value, 10);
         if (block && Number.isInteger(parsed)) {
             block.required_clean_passes = Math.min(5, Math.max(1, parsed));
+            block.required_passes = block.required_clean_passes;
             const input = document.getElementById(`required-passes-${blockId}`);
             if (input && parsed !== block.required_clean_passes) input.value = String(block.required_clean_passes);
         }
@@ -687,7 +746,7 @@
         block.mode = newMode;
         if ((newMode === 'scaffold' || newMode === 'mastery') && block.count < 2) block.count = 2;
         if (newMode === 'mastery' && !block.max_attempts) block.max_attempts = 4;
-        if (newMode === 'mastery' && !block.required_clean_passes) block.required_clean_passes = 1;
+        if (newMode === 'mastery' && !block.required_clean_passes) block.required_clean_passes = defaultMasteryPasses();
         const countInput = document.getElementById(`count-block-${blockId}`);
         if (countInput) countInput.value = String(block.count);
         const masteryLimit = document.getElementById(`mastery-limit-wrap-${blockId}`);
@@ -778,7 +837,7 @@
         });
         if (!response.ok) throw new Error(`Could not load class assessments (${response.status}).`);
         currentAssessments = await response.json();
-        const parentSelect = document.getElementById('parent-test-select');
+        const parentSelect = document.getElementById('parent-exam-select');
         parentSelect.replaceChildren(new Option('Select a test...', ''));
         currentAssessments.filter(item => item.type === 'test').forEach(item => {
             parentSelect.add(new Option(item.title, item.id));
@@ -797,13 +856,14 @@
             return showBuilderError('Add at least one problem block before publishing.');
         }
         const parentId = type === 'test_correction'
-            ? document.getElementById('parent-test-select').value
+            ? document.getElementById('parent-exam-select').value
             : null;
         if (type === 'test_correction' && !parentId) {
             return showBuilderError('Select the exam these corrections are for.');
         }
         const config = {
             ...(editingAssessment?.config || {}),
+            ...(type === 'test_correction' ? { corrections_scope: document.getElementById('corrections-scope-select').value } : {}),
             tool_policy: Object.fromEntries([...document.querySelectorAll('#assessment-tool-policy input')]
                 .map(input => [input.dataset.tool, input.checked])),
             blocks: assessmentBlocks.map(block => ({
@@ -815,7 +875,8 @@
                 mode: block.mode,
                 ...(block.topic.startsWith('reg_') && block.notation_style ? { notation_style: block.notation_style } : {}),
                 max_attempts: parseInt(block.max_attempts, 10) || 4,
-                required_clean_passes: parseInt(block.required_clean_passes, 10) || 1,
+                required_passes: parseInt(block.required_passes || block.required_clean_passes, 10) || defaultMasteryPasses(),
+                required_clean_passes: parseInt(block.required_passes || block.required_clean_passes, 10) || defaultMasteryPasses(),
                 max_step_attempts: Number.isInteger(block.max_step_attempts) &&
                     block.max_step_attempts >= 1 && block.max_step_attempts <= 5
                     ? block.max_step_attempts
@@ -879,12 +940,21 @@
     document.getElementById('class-select').addEventListener('change', () => {
         clearBuilderError();
         setPolicyFromSelectedClass();
+        if (document.getElementById('assessment-type').value === 'test_correction') {
+            assessmentBlocks = [];
+            document.getElementById('corrections-import-banner').hidden = true;
+            renderBlocksList();
+        }
         loadClassAssessments().catch(error => showBuilderError(error.message));
     });
     document.getElementById('assessment-type').addEventListener('change', event => {
         document.getElementById('parent-test-field').style.display =
             event.target.value === 'test_correction' ? 'block' : 'none';
+        document.getElementById('corrections-scope-field').style.display =
+            event.target.value === 'test_correction' ? 'block' : 'none';
+        importParentExam();
     });
+    document.getElementById('parent-exam-select').addEventListener('change', importParentExam);
 
     async function initializeBuilder() {
         renderCatalog();
@@ -931,6 +1001,8 @@
             document.getElementById('assessment-type').value = assessment.type;
             document.getElementById('parent-test-field').style.display =
                 assessment.type === 'test_correction' ? 'block' : 'none';
+            document.getElementById('corrections-scope-field').style.display =
+                assessment.type === 'test_correction' ? 'block' : 'none';
             assessmentBlocks = Array.isArray(assessment.config?.blocks)
                 ? assessment.config.blocks
                 : [];
@@ -939,17 +1011,24 @@
                 classSelect.value = String(assessment.class_id);
                 await loadClassAssessments();
                 if (assessment.parent_assessment_id) {
-                    document.getElementById('parent-test-select').value = assessment.parent_assessment_id;
+                    document.getElementById('parent-exam-select').value = assessment.parent_assessment_id;
                 }
                 setAssessmentToolPolicy(assessment.config?.tool_policy || currentClasses.find(item => String(item.id) === classSelect.value)?.tool_policy);
+                document.getElementById('corrections-scope-select').value =
+                    assessment.config?.corrections_scope || currentClasses.find(item => String(item.id) === classSelect.value)?.tool_policy?.corrections_scope || 'missed_steps';
             }
             renderBlocksList();
+            if (assessment.type === 'test_correction' && assessment.parent_assessment_id && !assessmentBlocks.length) {
+                importParentExam();
+            }
         } else if (urlParams.get('type') === 'test_correction') {
             document.getElementById('assessment-type').value = 'test_correction';
             document.getElementById('parent-test-field').style.display = 'block';
+            document.getElementById('corrections-scope-field').style.display = 'block';
             document.getElementById('assessment-title').value = urlParams.get('title') || '';
             if (urlParams.get('parent_assessment_id')) {
-                document.getElementById('parent-test-select').value = urlParams.get('parent_assessment_id');
+                document.getElementById('parent-exam-select').value = urlParams.get('parent_assessment_id');
+                importParentExam();
             }
         }
     }
