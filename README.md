@@ -18,10 +18,15 @@ An algorithmic practice and step-by-step verification platform designed for coll
 - Calculator, reference tables, and Stats & Plots share dock space; drag a dock's inner edge to resize it. When both sides are occupied, a displaced calculator moves to the bottom and other displaced windows float.
 - Teachers can set class tool defaults and override them per assessment. These controls hide tools in the practice interface; they are not a secure exam lockdown and cannot close tabs already opened independently. Independent practice allows all tools.
 - Exiting a test saves an incomplete session in this browser on this device, not on the server. Reopen the test on the same device and account to resume it; clearing browser storage removes this saved session.
+- Teachers can set class mastery and correction defaults. Corrections import the original blocks and regenerate missed steps or full questions in mastery mode; a perfect original is automatically recorded as exempt when the student's tasks are loaded.
+- Mastery uses guided practice followed by unassisted passes, with a second-chance shield, targeted remediation, and optional practice for missed steps. Only unassisted attempts count toward the attempt cap.
+- Hypothesis-test conclusion steps offer optional free-response evaluation. The deterministic E/P/I rubric checks the decision and P-value comparison, evidence wording, and context and direction; E earns full step credit, P half, and I none on the first attempt. Conclusions are graded against the student's preceding P-value when available, even if it was incorrect. FRQ checks allow two attempts. Credit badges appear immediately; explanations and exemplars appear when the practice step is resolved or the test is submitted. The keyword-based feedback is guidance, not a substitute for teacher review.
 
 ## Database setup
 Apply [the class notation migration](supabase/migrations/20261111000000_class_default_notation.sql) to the Supabase database before deploying this version. It adds the `classes.default_notation` column used by the teacher dashboard and student assignments.
 Also apply [the class tool policy migration](supabase/migrations/20261112000000_class_tool_policy.sql) before deploying the tool permission controls.
+Apply [the assessment details migration](supabase/migrations/20261113000000_assessment_editing_and_details.sql) for personalized corrections and submission breakdowns.
+Apply [the correction exemption migration](supabase/migrations/20261115000000_correction_auto_exempt.sql) after the earlier migrations. It records missed-step arrays and securely creates automatic exemption submissions.
 
 ## Local Setup
 1. Create and activate a virtual environment:
