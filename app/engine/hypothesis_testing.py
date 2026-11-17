@@ -476,6 +476,7 @@ def _test_result(
     sample_sizes: List[int],
     minimum_count: Optional[float] = None,
     count_formula: str = "",
+    scenario_data: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     parameter_symbols = {
         "ht_prop_z": ("p", "p̂"),
@@ -546,6 +547,7 @@ def _test_result(
             "sample_statistic": sample_statistic_value,
             "standard_error": standard_error,
             "degrees_freedom": degrees_freedom,
+            **(scenario_data or {}),
         },
     }, sample_sizes, minimum_count, count_formula, after_hypotheses=True)
 
@@ -607,6 +609,7 @@ def generate_one_sample_prop_z_test() -> Dict[str, Any]:
         p_value_derivation=_normal_tail_formula(z_stat, alternative),
         alpha=alpha,
         decision=decision,
+        scenario_data={"n": n, "x": x, "p0": p0, "phat": phat},
     )
 
 
@@ -681,6 +684,7 @@ def generate_one_sample_mean_t_test() -> Dict[str, Any]:
         p_value_derivation=_t_tail_formula(t_stat, df, alternative),
         alpha=alpha,
         decision=decision,
+        scenario_data={"n": n, "mu0": mu0, "xbar": xbar, "s": s, "df": df},
     )
 
 
@@ -743,6 +747,8 @@ def generate_two_sample_mean_t_test() -> Dict[str, Any]:
         p_value_derivation=_t_tail_formula(t_stat, df, alternative),
         alpha=alpha,
         decision=decision,
+        scenario_data={"n1": n1, "n2": n2, "xbar1": xbar1, "xbar2": xbar2,
+                       "s1": s1, "s2": s2, "df": df},
     )
 
 
@@ -808,6 +814,8 @@ def generate_two_sample_prop_z_test() -> Dict[str, Any]:
         p_value_derivation=_normal_tail_formula(z_stat, alternative),
         alpha=alpha,
         decision=decision,
+        scenario_data={"n1": n1, "n2": n2, "x1": x1, "x2": x2,
+                       "phat1": p1_hat, "phat2": p2_hat, "pooled": pooled},
     )
 
 

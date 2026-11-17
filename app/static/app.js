@@ -44,6 +44,8 @@ window.addEventListener('wheel', () => {
 
 let currentProblem = null;
 let isMultiStage = false;
+let currentFrqAttemptCount = 0;
+let currentFrqEvaluation = null;
 let currentQuestionAnswers = [];
 let currentStepAttemptStates = [];
 let currentUser = null;
@@ -110,38 +112,50 @@ const TOPIC_REGISTRY = [
     { id: 'prob_discrete_rv', title: 'Discrete Random Variables (E(X) & SD)', topic: 'Random Variables & Probability Distributions', notation: 'E(X), σ_X' },
     { id: 'prob_binom_geom', title: 'Binomial & Geometric Distributions', topic: 'Random Variables & Probability Distributions', notation: 'Binom(n, p), Geom(p)' },
     { id: 'sampling_dist', title: 'Sampling Distributions for x̄ and p̂', topic: 'Sampling Distributions (CLT)', notation: 'x̄, p̂' },
+    { id: 'drill_proc_ci_prop', title: 'Naming the Procedure (Intervals for p)', topic: 'Confidence Intervals for Proportions (p)', notation: 'z-Interval' },
     { id: 'cond_check_prop', title: 'Checking Conditions for Proportions', topic: 'Confidence Intervals for Proportions (p)', notation: 'Random, 10%, Large Counts' },
     { id: 'drill_se_prop', title: 'Standard Error for Proportions', topic: 'Confidence Intervals for Proportions (p)', notation: 'SE = √(p̂(1 − p̂)/n)' },
     { id: 'ci_prop_z', title: '1-Sample z-Interval for Proportion', topic: 'Confidence Intervals for Proportions (p)', notation: 'p' },
+    { id: 'frq_ci_prop_1samp', title: 'Full FRQ: 1-Sample z-Interval for Proportion (p)', topic: 'Confidence Intervals for Proportions (p)', notation: 'p' },
     { id: 'ci_prop_z_2samp', title: '2-Sample z-Interval for Proportions', topic: 'Confidence Intervals for Proportions (p)', notation: 'p₁ - p₂' },
+    { id: 'frq_ci_prop_2samp', title: 'Full FRQ: 2-Sample z-Interval for Proportions (p₁ - p₂)', topic: 'Confidence Intervals for Proportions (p)', notation: 'p₁ - p₂' },
     { id: 'ci_prop_cond', title: 'Checking Conditions for Proportion Intervals', topic: 'Confidence Intervals for Proportions (p)', notation: 'Conditions' },
     { id: 'ci_prop_crit_se', title: 'Critical Value (z*) & Standard Error for p', topic: 'Confidence Intervals for Proportions (p)', notation: 'z*, SE' },
     { id: 'ci_prop_bounds', title: 'Margin of Error & Interval Bounds for p', topic: 'Confidence Intervals for Proportions (p)', notation: 'E, L, U' },
     { id: 'ci_prop_interp', title: 'Interpreting a Proportion Confidence Interval', topic: 'Confidence Intervals for Proportions (p)', notation: 'p' },
+    { id: 'drill_proc_ht_prop', title: 'Naming the Procedure (Tests for p)', topic: 'Significance Tests for Proportions (p)', notation: 'z-Test' },
     { id: 'drill_hypo_prop', title: 'Stating Hypotheses for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'H₀, Hₐ' },
     { id: 'drill_stat_prop', title: 'Test Statistic & SE for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'SE₀, z' },
     { id: 'drill_conclusion_prop', title: 'P-Value & Conclusion for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'p-value vs. α' },
     { id: 'ht_prop_z', title: '1-Sample z-Test for Proportion', topic: 'Significance Tests for Proportions (p)', notation: 'H₀: p = p₀' },
+    { id: 'frq_ht_prop_1samp', title: 'Full FRQ: 1-Sample z-Test for Proportion (p)', topic: 'Significance Tests for Proportions (p)', notation: 'H₀, z, P' },
     { id: 'ht_prop_z_2samp', title: '2-Sample z-Test for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'H₀: p₁ = p₂' },
+    { id: 'frq_ht_prop_2samp', title: 'Full FRQ: 2-Sample z-Test for Proportions (p₁ - p₂)', topic: 'Significance Tests for Proportions (p)', notation: 'H₀, z, P' },
     { id: 'ht_prop_hypo', title: 'Stating Hypotheses for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'H₀, Hₐ' },
     { id: 'ht_prop_cond', title: 'Checking Conditions for Proportion Tests', topic: 'Significance Tests for Proportions (p)', notation: 'Conditions' },
     { id: 'ht_prop_stat', title: 'Standard Error (SE₀) & z-Statistic for p', topic: 'Significance Tests for Proportions (p)', notation: 'SE₀, z' },
     { id: 'ht_prop_pval', title: 'P-Value & Interpretation for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'P-value' },
     { id: 'ht_prop_conc', title: 'Decision & Contextual Conclusion for p', topic: 'Significance Tests for Proportions (p)', notation: 'P-value, α' },
+    { id: 'drill_proc_ci_mean', title: 'Naming the Procedure (Intervals for μ)', topic: 'Confidence Intervals for Means (μ)', notation: 't-Interval' },
     { id: 'cond_check_mean', title: 'Checking Conditions for Means', topic: 'Confidence Intervals for Means (μ)', notation: 'Random, 10%, Normality' },
     { id: 'drill_se_mean', title: 'Standard Error & Critical Value (t*) for Means', topic: 'Confidence Intervals for Means (μ)', notation: 'SE = s/√n, t*' },
     { id: 'ci_mean_t', title: '1-Sample t-Interval for Mean', topic: 'Confidence Intervals for Means (μ)', notation: 'μ' },
+    { id: 'frq_ci_mean_1samp', title: 'Full FRQ: 1-Sample t-Interval for Mean (μ)', topic: 'Confidence Intervals for Means (μ)', notation: 'μ' },
     { id: 'ci_mean_t_2samp', title: '2-Sample t-Interval for Means', topic: 'Confidence Intervals for Means (μ)', notation: 'μ₁ - μ₂' },
+    { id: 'frq_ci_mean_2samp', title: 'Full FRQ: 2-Sample t-Interval for Means (μ₁ - μ₂)', topic: 'Confidence Intervals for Means (μ)', notation: 'μ₁ - μ₂' },
     { id: 'ci_matched_pairs_t', title: 'Matched Pairs t-Interval for Mean Difference', topic: 'Confidence Intervals for Means (μ)', notation: 'μ_diff' },
     { id: 'ci_mean_cond', title: 'Checking Conditions for Mean Intervals', topic: 'Confidence Intervals for Means (μ)', notation: 'Conditions' },
     { id: 'ci_mean_crit_se', title: 'Degrees of Freedom, t* & SE for μ', topic: 'Confidence Intervals for Means (μ)', notation: 'df, t*, SE' },
     { id: 'ci_mean_bounds', title: 'Margin of Error & Interval Bounds for μ', topic: 'Confidence Intervals for Means (μ)', notation: 'E, L, U' },
     { id: 'ci_mean_interp', title: 'Interpreting a Mean Confidence Interval', topic: 'Confidence Intervals for Means (μ)', notation: 'μ' },
+    { id: 'drill_proc_ht_mean', title: 'Naming the Procedure (Tests for μ)', topic: 'Significance Tests for Means (μ)', notation: 't-Test' },
     { id: 'drill_hypo_mean', title: 'Stating Hypotheses for Means', topic: 'Significance Tests for Means (μ)', notation: 'H₀, Hₐ' },
     { id: 'drill_stat_mean', title: 'Test Statistic & SE for Means', topic: 'Significance Tests for Means (μ)', notation: 'SE₀, t' },
     { id: 'drill_conclusion_mean', title: 'P-Value & Conclusion for Means', topic: 'Significance Tests for Means (μ)', notation: 'p-value vs. α' },
     { id: 'ht_mean_t', title: '1-Sample t-Test for Mean', topic: 'Significance Tests for Means (μ)', notation: 'H₀: μ = μ₀' },
+    { id: 'frq_ht_mean_1samp', title: 'Full FRQ: 1-Sample t-Test for Mean (μ)', topic: 'Significance Tests for Means (μ)', notation: 'H₀, t, P' },
     { id: 'ht_mean_t_2samp', title: '2-Sample t-Test for Means', topic: 'Significance Tests for Means (μ)', notation: 'H₀: μ₁ = μ₂' },
+    { id: 'frq_ht_mean_2samp', title: 'Full FRQ: 2-Sample t-Test for Means (μ₁ - μ₂)', topic: 'Significance Tests for Means (μ)', notation: 'H₀, t, P' },
     { id: 'ht_matched_pairs_t', title: 'Matched Pairs t-Test', topic: 'Significance Tests for Means (μ)', notation: 'H₀: μ_diff = 0' },
     { id: 'ht_mean_hypo', title: 'Stating Hypotheses for Means', topic: 'Significance Tests for Means (μ)', notation: 'H₀, Hₐ' },
     { id: 'ht_mean_cond', title: 'Checking Conditions for Mean Tests', topic: 'Significance Tests for Means (μ)', notation: 'Conditions' },
@@ -885,6 +899,7 @@ function selectTaskTopic() {
         activeTaskState.selectedTopic = queuedQuestion.topic;
         activeTaskState.allowHints = queuedQuestion.allow_hints;
         activeTaskState.allowFrqConclusion = Boolean(queuedQuestion.allow_frq_conclusion);
+        activeTaskState.frqRetryMode = queuedQuestion.frq_retry_mode || 'revision';
         if (queuedQuestion.blockId) {
             activeTaskState.currentBlockIdx = queuedQuestion.blockIndex ?? 0;
             activeTaskState.currentBlockIndex = activeTaskState.currentBlockIdx;
@@ -1039,7 +1054,8 @@ async function startStudentTask(task) {
                     source_q: block.source_q,
                     step_label: block.step_label,
                     fallback_guided: block.fallback_guided,
-                    allow_frq_conclusion: Boolean(block.allow_frq_conclusion)
+                    allow_frq_conclusion: Boolean(block.allow_frq_conclusion),
+                    frq_retry_mode: block.frq_retry_mode || 'revision'
                 });
             }
         });
@@ -1057,7 +1073,8 @@ async function startStudentTask(task) {
                 allow_hints: typeof question.allow_hints === 'boolean'
                     ? question.allow_hints
                     : task.config?.allow_hints !== false && task.allow_hints !== false,
-                allow_frq_conclusion: Boolean(question.allow_frq_conclusion)
+                allow_frq_conclusion: Boolean(question.allow_frq_conclusion),
+                frq_retry_mode: question.frq_retry_mode || 'revision'
             });
         });
     } else if (Array.isArray(task.config?.skills)) {
@@ -1095,6 +1112,7 @@ async function startStudentTask(task) {
         taskId: task.id || task.assessment_id,
         taskTitle: task.title || 'Assigned Task',
         taskType,
+        frqRetryMode: 'revision',
         correctionsScope: task.config?.corrections_scope || 'missed_steps',
         resetVersion: task.config?._submission_reset_version || null,
         allowHints: task.config?.allow_hints !== false && task.allow_hints !== false,
@@ -1654,7 +1672,28 @@ function renderProblemPrompt(promptEl, problem) {
     }
 
     promptTemplate.content.querySelectorAll('table').forEach(table => table.remove());
-    promptEl.replaceChildren(promptTemplate.content);
+    const promptContent = document.createElement('div');
+    promptContent.className = 'problem-prompt-content';
+    promptContent.appendChild(promptTemplate.content);
+    promptEl.replaceChildren();
+    const isStickyPrompt = Boolean(problem.steps?.length || problem.problem_mode === 'full_frq');
+    promptEl.classList.toggle('problem-prompt-sticky', isStickyPrompt);
+    if (isStickyPrompt) {
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'problem-prompt-toggle';
+        toggle.textContent = 'Collapse Prompt';
+        toggle.setAttribute('aria-expanded', 'true');
+        toggle.addEventListener('click', () => {
+            const collapsed = !promptContent.hidden;
+            promptContent.hidden = collapsed;
+            toggle.textContent = collapsed ? 'Expand Prompt' : 'Collapse Prompt';
+            toggle.setAttribute('aria-expanded', String(!collapsed));
+        });
+        promptEl.append(toggle, promptContent);
+    } else {
+        promptEl.appendChild(promptContent);
+    }
 
     if (tableData && Array.isArray(tableData.headers) && Array.isArray(tableData.rows)) {
         const table = document.createElement('table');
@@ -1678,7 +1717,7 @@ function renderProblemPrompt(promptEl, problem) {
                 if (value === '?') cell.style.fontWeight = '700';
             });
         });
-        promptEl.appendChild(table);
+        promptContent.appendChild(table);
     }
     triggerKaTeX(promptEl);
 }
@@ -1695,7 +1734,7 @@ async function loadProblem(problemToRender = null) {
     currentStepAttemptStates = [];
 
     const topic = state.selectedTopic || 'random';
-    isMultiStage = topic.startsWith('step__') || topic.startsWith('ci_') || topic.startsWith('ht_') || topic.startsWith('chi_') ||
+    isMultiStage = topic.startsWith('frq_') || topic.startsWith('step__') || topic.startsWith('ci_') || topic.startsWith('ht_') || topic.startsWith('chi_') ||
         topic.startsWith('reg_') ||
         topic.startsWith('cond_') || topic.startsWith('drill_') ||
         topic.startsWith('prob_') || topic.startsWith('sampling_') ||
@@ -1708,6 +1747,7 @@ async function loadProblem(problemToRender = null) {
         document.getElementById('graph-wrapper').style.display = 'none';
         
         if (!currentProblem) {
+            const isFullFrq = topic.startsWith('frq_');
             const isHypothesisTest = topic.startsWith('ht_');
             const isChiSquare = topic.startsWith('chi_');
             const isRegression = topic.startsWith('reg_');
@@ -1720,7 +1760,9 @@ async function loadProblem(problemToRender = null) {
                 : topic.startsWith('ci_') && !['ci_prop_cond', 'ci_prop_crit_se', 'ci_prop_bounds', 'ci_prop_interp',
                     'ci_mean_cond', 'ci_mean_crit_se', 'ci_mean_bounds', 'ci_mean_interp'].includes(topic)
                     ? topic.replace('ci_', '') : topic;
-            const endpoint = topic.startsWith('step__')
+            const endpoint = isFullFrq
+                ? '/api/problem/frq'
+                : topic.startsWith('step__')
                 ? '/api/problem/targeted-step'
                 : isInferenceDrill
                 ? '/api/problem/drill'
@@ -1992,9 +2034,270 @@ async function submitFrqConclusion(idx, regrade = false) {
     }
 }
 
+function replaceFrqShorthand(input, force = false) {
+    if (!input || (!force && !/[^\w]/.test(input.value.slice(-1)))) return;
+    const prefix = input.value.slice(0, input.selectionStart || 0);
+    const replacements = [
+        [/\b(?:h0|ho)\b/gi, 'H₀'], [/\bha\b/gi, 'Hₐ'], [/\bphat\b/gi, 'p̂'],
+        [/\bxbar\b/gi, 'x̄'], [/\bmu\b/gi, 'μ'], [/\balpha\b/gi, 'α'],
+        [/!=/g, '≠'], [/\s*<=\s*/g, '≤'], [/\s*>=\s*/g, '≥']
+    ];
+    let value = input.value;
+    let caretPrefix = prefix;
+    replacements.forEach(([pattern, replacement]) => {
+        value = value.replace(pattern, replacement);
+        caretPrefix = caretPrefix.replace(pattern, replacement);
+    });
+    if (value !== input.value) {
+        input.value = value;
+        input.setSelectionRange(caretPrefix.length, caretPrefix.length);
+    }
+}
+
+function insertFrqSymbol(input, symbol) {
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? start;
+    input.setRangeText(symbol, start, end, 'end');
+    input.focus();
+}
+
+function insertFrqInlineCalculation(input) {
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? start;
+    if (start !== end) return false;
+
+    const lineStart = input.value.lastIndexOf('\n', start - 1) + 1;
+    const lineEndIndex = input.value.indexOf('\n', start);
+    const lineEnd = lineEndIndex === -1 ? input.value.length : lineEndIndex;
+    if (input.value.slice(start, lineEnd).trim()) return false;
+
+    const linePrefix = input.value.slice(lineStart, start);
+    const previousEquals = linePrefix.lastIndexOf('=');
+    const expression = linePrefix.slice(previousEquals + 1).trim();
+    if (!expression) return false;
+
+    const result = evaluateMathInput(expression);
+    if (!Number.isFinite(result)) return false;
+    input.setRangeText(`= ${Number(result.toPrecision(10))}`, start, end, 'end');
+    return true;
+}
+
+function renderFullFrqUI(container) {
+    currentFrqAttemptCount = 0;
+    currentFrqEvaluation = null;
+    container.classList.add('full-frq-workspace');
+    container.style.display = 'grid';
+    const symbolBar = document.createElement('div');
+    symbolBar.className = 'frq-symbol-bar';
+    ['p', 'p̂', 'μ', 'x̄', 'p₁ - p₂', 'μ₁ - μ₂', 'H₀', 'Hₐ', 'α', '≠', '≤', '≥'].forEach(symbol => {
+        const pill = document.createElement('button');
+        pill.type = 'button';
+        pill.className = 'frq-symbol-pill';
+        pill.textContent = symbol;
+        pill.addEventListener('click', () => {
+            const input = document.activeElement?.matches('.frq-text-input')
+                ? document.activeElement : container.querySelector('.frq-text-input:not(:disabled)');
+            if (input) insertFrqSymbol(input, symbol);
+        });
+        symbolBar.appendChild(pill);
+    });
+    container.appendChild(symbolBar);
+
+    const stateCard = document.createElement('section');
+    stateCard.className = 'frq-section-card';
+    stateCard.dataset.frqCard = 'state';
+    stateCard.innerHTML = '<h3>1. State</h3>';
+    const stateInput = document.createElement('textarea');
+    stateInput.id = 'frq-state-input';
+    stateInput.className = 'frq-text-input';
+    stateInput.rows = 3;
+    stateInput.placeholder = 'Define the population parameter in context; for a test, state H₀ and Hₐ.';
+    stateCard.appendChild(stateInput);
+    container.appendChild(stateCard);
+
+    const planCard = document.createElement('section');
+    planCard.className = 'frq-section-card';
+    planCard.dataset.frqCard = 'plan';
+    planCard.innerHTML = '<h3>2. Plan</h3>';
+    const procedure = document.createElement('select');
+    procedure.id = 'frq-procedure-name';
+    procedure.className = 'frq-text-input';
+    procedure.add(new Option('Choose the exact inference procedure...', ''));
+    (currentProblem.procedure_options || []).forEach(name => procedure.add(new Option(name, name)));
+    const procedureLabel = document.createElement('label');
+    procedureLabel.textContent = 'Name the inference procedure: ';
+    procedureLabel.appendChild(procedure);
+    const planInput = document.createElement('textarea');
+    planInput.id = 'frq-plan-input';
+    planInput.className = 'frq-text-input';
+    planInput.rows = 4;
+    planInput.placeholder = 'Verify randomization, independence (10%), and success/failure counts or normality using this problem’s numbers.';
+    planCard.append(procedureLabel, planInput);
+    container.appendChild(planCard);
+
+    const doCard = document.createElement('section');
+    doCard.className = 'frq-section-card';
+    doCard.dataset.frqCard = 'do';
+    doCard.innerHTML = '<h3>3. Do</h3>';
+    const data = currentProblem.data || {};
+    const doInput = document.createElement('textarea');
+    doInput.id = 'frq-do-input';
+    doInput.className = 'frq-text-input frq-do-input';
+    doInput.rows = 8;
+    doInput.placeholder = data.is_test
+        ? 'Show your formula setup, test statistic, and P-value (e.g., z = 2.14, p-value = 0.0162)...'
+        : 'Show your formula setup and final confidence interval (e.g., 0.43 ± 2.576√(0.43·0.57/100) = (0.3025, 0.5575))...';
+    doInput.addEventListener('keydown', event => {
+        if (event.key === '=' && insertFrqInlineCalculation(doInput)) {
+            event.preventDefault();
+        }
+    });
+    doCard.appendChild(doInput);
+    container.appendChild(doCard);
+
+    const concludeCard = document.createElement('section');
+    concludeCard.className = 'frq-section-card';
+    concludeCard.dataset.frqCard = 'conclude';
+    concludeCard.innerHTML = '<h3>4. Conclude</h3>';
+    const concludeInput = document.createElement('textarea');
+    concludeInput.id = 'frq-conclude-input';
+    concludeInput.className = 'frq-text-input';
+    concludeInput.rows = 3;
+    concludeInput.placeholder = 'Interpret your result in context using your P-value or interval bounds.';
+    concludeCard.appendChild(concludeInput);
+    container.appendChild(concludeCard);
+
+    const submit = document.createElement('button');
+    submit.type = 'button';
+    submit.id = 'frq-submit-full';
+    submit.className = 'btn-primary';
+    submit.textContent = 'Submit Full Free Response';
+    submit.addEventListener('click', submitFullFrqResponse);
+    const feedback = document.createElement('div');
+    feedback.id = 'frq-full-feedback';
+    feedback.setAttribute('aria-live', 'polite');
+    const exemplar = document.createElement('div');
+    exemplar.id = 'frq-exemplar';
+    exemplar.className = 'frq-exemplar';
+    exemplar.hidden = true;
+    const next = document.createElement('button');
+    next.type = 'button';
+    next.id = 'frq-next-question';
+    next.className = 'btn-secondary';
+    next.textContent = 'Next Question →';
+    next.hidden = true;
+    next.addEventListener('click', () => activeTaskState.active ? advanceToNextOrSummary() : loadProblem());
+    container.append(submit, feedback, exemplar, next);
+    container.querySelectorAll('textarea.frq-text-input').forEach(input => {
+        input.addEventListener('input', event => replaceFrqShorthand(
+            input,
+            event.inputType === 'insertFromPaste' || /[\s,.;:()<>!=]/.test(event.data || '')
+        ));
+        input.addEventListener('paste', () => setTimeout(() => replaceFrqShorthand(input, true), 0));
+    });
+}
+
+async function submitFullFrqResponse() {
+    const panel = document.getElementById('multi-stage-panel');
+    const feedback = document.getElementById('frq-full-feedback');
+    const submit = document.getElementById('frq-submit-full');
+    const payload = {
+        topic: currentProblem.data?.topic,
+        problem: currentProblem,
+        attempt: currentFrqAttemptCount + 1,
+        retry_mode: activeTaskState.active ? activeTaskState.frqRetryMode : 'revision',
+        state_text: document.getElementById('frq-state-input').value,
+        procedure_name: document.getElementById('frq-procedure-name').value,
+        plan_text: document.getElementById('frq-plan-input').value,
+        do_text: document.getElementById('frq-do-input').value,
+        conclude_text: document.getElementById('frq-conclude-input').value,
+    };
+    submit.disabled = true;
+    try {
+        const response = await fetch('/api/evaluate/frq', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.detail || `FRQ evaluation failed (${response.status}).`);
+        currentFrqAttemptCount += 1;
+        currentFrqEvaluation = result;
+        feedback.replaceChildren();
+        const rubric = document.createElement('div');
+        rubric.className = 'frq-rubric-results';
+        Object.entries(result.sections || {}).forEach(([key, item]) => {
+            const card = panel.querySelector(`[data-frq-card="${key}"]`);
+            card.dataset.score = item.score_code;
+            card.classList.toggle('frq-needs-revision', item.score_code !== 'E');
+            const badge = document.createElement('strong');
+            badge.className = `frq-score frq-score-${item.score_code.toLowerCase()}`;
+            badge.textContent = `${key.toUpperCase()}: ${item.score_code}`;
+            const note = document.createElement('p');
+            note.textContent = item.feedback;
+            rubric.append(badge, note);
+            card.querySelectorAll('input, textarea, select').forEach(input => {
+                input.disabled = item.score_code === 'E';
+            });
+        });
+        feedback.appendChild(rubric);
+        const retryMode = payload.retry_mode;
+        const showExemplar = retryMode === 'one_shot' || result.passed || currentFrqAttemptCount >= 2;
+        if (!showExemplar) {
+            submit.textContent = 'Revise Missed Parts and Resubmit';
+            return;
+        }
+        const exemplar = document.getElementById('frq-exemplar');
+        exemplar.hidden = false;
+        exemplar.replaceChildren();
+        const exemplarHeading = document.createElement('h3');
+        exemplarHeading.textContent = 'Exemplar: State, Plan, Do, Conclude';
+        exemplar.appendChild(exemplarHeading);
+        [['state', 'State'], ['plan', 'Plan'], ['do', 'Do'], ['conclude', 'Conclude']].forEach(([key, title]) => {
+            if (!result.exemplar?.[key]) return;
+            const heading = document.createElement('h4');
+            heading.textContent = title;
+            const text = document.createElement('p');
+            text.textContent = result.exemplar[key];
+            exemplar.append(heading, text);
+        });
+        submit.hidden = true;
+        document.getElementById('frq-next-question').hidden = false;
+        panel.querySelectorAll('.frq-text-input, #frq-procedure-name, [data-frq-number]')
+            .forEach(input => { input.disabled = true; });
+        if (activeTaskState.active) {
+            const index = activeTaskState.currentIndex - 1;
+            const earned = Object.values(result.sections).reduce((sum, item) =>
+                sum + (item.score_code === 'E' ? 1 : item.score_code === 'P' ? 0.5 : 0), 0) / 4;
+            const questionState = activeTaskState.questionsState[index] || {};
+            questionState.problem = currentProblem;
+            questionState.completed = true;
+            questionState.correct = Boolean(result.passed);
+            questionState.score = earned;
+            activeTaskState.questionsState[index] = questionState;
+            activeTaskState.responses[index] = {
+                questionIndex: index + 1,
+                prompt: currentProblem.prompt,
+                correct: Boolean(result.passed),
+                score: earned,
+                breakdown: { topic: activeTaskState.questionQueue[index]?.topic, sections: result.sections },
+            };
+        }
+    } catch (error) {
+        feedback.textContent = error.message || 'Could not evaluate this response.';
+    } finally {
+        submit.disabled = false;
+    }
+}
+
 function renderMultiStageUI(topic) {
     const container = document.getElementById('multi-stage-panel');
     container.innerHTML = '';
+    container.style.display = 'block';
+    if (currentProblem.problem_mode === 'full_frq') {
+        renderFullFrqUI(container);
+        return;
+    }
     const isTest = activeTaskState.active && activeTaskState.taskType === 'test';
     const questionState = activeTaskState.active
         ? activeTaskState.questionsState[activeTaskState.currentIndex - 1]

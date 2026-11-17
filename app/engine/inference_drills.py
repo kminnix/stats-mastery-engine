@@ -7,6 +7,94 @@ def _latex_direction(direction: str) -> str:
     return r"\neq" if direction == "!=" else direction
 
 
+PROCEDURE_NAMES = {
+    "ci_prop_1": "1-Sample z-Interval for a Proportion",
+    "ci_prop_2": "2-Sample z-Interval for a Difference in Proportions",
+    "ci_mean_1": "1-Sample t-Interval for a Mean",
+    "ci_mean_2": "2-Sample t-Interval for a Difference in Means",
+    "ht_prop_1": "1-Sample z-Test for a Proportion",
+    "ht_prop_2": "2-Sample z-Test for a Difference in Proportions",
+    "ht_mean_1": "1-Sample t-Test for a Mean",
+    "ht_mean_2": "2-Sample t-Test for a Difference in Means",
+}
+
+
+def procedure_name_for_topic(topic: str) -> str:
+    key = {
+        "ci_prop_z": "ci_prop_1", "ci_prop_z_2samp": "ci_prop_2",
+        "ci_mean_t": "ci_mean_1", "ci_mean_t_2samp": "ci_mean_2",
+        "ht_prop_z": "ht_prop_1", "ht_prop_z_2samp": "ht_prop_2",
+        "ht_mean_t": "ht_mean_1", "ht_mean_t_2samp": "ht_mean_2",
+    }.get(topic)
+    if key is None:
+        raise ValueError(f"Unsupported inference procedure: {topic}")
+    return PROCEDURE_NAMES[key]
+
+
+def generate_procedure_name_drill(category: str = "mixed") -> Dict[str, Any]:
+    generators = {
+        "ci_prop": ("ci_prop_z", "ci_prop_z_2samp"),
+        "ci_mean": ("ci_mean_t", "ci_mean_t_2samp"),
+        "ht_prop": ("ht_prop_z", "ht_prop_z_2samp"),
+        "ht_mean": ("ht_mean_t", "ht_mean_t_2samp"),
+    }
+    if category == "mixed":
+        choices = tuple(topic for topics in generators.values() for topic in topics)
+    elif category in generators:
+        choices = generators[category]
+    else:
+        raise ValueError(f"Unsupported procedure-name drill category: {category}")
+    topic = random.choice(choices)
+    two_sample = topic.endswith("_2samp")
+    is_test = topic.startswith("ht_")
+    is_proportion = "_prop_" in topic
+    procedure = procedure_name_for_topic(topic)
+    scenario = random.choice([
+        ("the proportion of customers who renew their membership", "customers"),
+        ("the proportion of voters who support the proposal", "voters"),
+    ] if is_proportion else [
+        ("the mean battery runtime, in hours", "batteries"),
+        ("the mean exam score, in points", "students"),
+    ])
+    context, _unit = scenario
+    sample_description = (
+        f"Two independent random samples compare {context} for Group 1 and Group 2."
+        if two_sample else f"A random sample is used to study {context}."
+    )
+    intent = (
+        "The goal is to estimate the parameter with a confidence interval."
+        if not is_test else "The research question tests a claim about the parameter."
+    )
+    prompt = f"{sample_description} {intent} Choose the exact inference procedure."
+    distractors = list(PROCEDURE_NAMES.values())
+    options = [procedure] + [name for name in distractors if name != procedure]
+    random.shuffle(options)
+    explanation = (
+        f"<p>This is a <strong>{'two' if two_sample else 'one'}-sample</strong> procedure because "
+        f"{'two independent groups are compared, so there are \\(n_1\\) and \\(n_2\\) samples' if two_sample else 'one sample, \\(n\\), is observed'}.</p>"
+        f"<p>Use <strong>{'z' if is_proportion else 't'}</strong> because the response is "
+        f"{'categorical and the parameter is a proportion \\(p\\)' if is_proportion else 'quantitative and the parameter is a mean \\(\\mu\\)'}.</p>"
+        f"<p>It is an <strong>{'interval' if not is_test else 'test'}</strong> because "
+        f"{'the goal is estimation' if not is_test else 'a claim is being evaluated'}.</p>"
+        f"<p>The procedure is <strong>{procedure}</strong>.</p>"
+    )
+    return {
+        "type": "drill_procedure_name",
+        "title": "Sub-Skill: Naming the Inference Procedure",
+        "prompt": prompt,
+        "steps": [{
+            "step_num": 1,
+            "label": "Name the Procedure:",
+            "input_type": "select",
+            "options": [{"value": name, "label": name} for name in options],
+            "expected": [procedure],
+            "hint": "Identify the parameter, number of samples, and whether the goal is estimation or testing.",
+        }],
+        "solution": explanation,
+        "metadata": {"procedure_name": procedure, "category": category},
+    }
+
+
 def generate_condition_check(kind: str = "random") -> Dict[str, Any]:
     if kind == "proportion" or (kind == "random" and random.choice(["proportion", "mean"]) == "proportion"):
         contexts = [

@@ -6,8 +6,8 @@ window.dockManager = (() => {
         tables: () => document.getElementById('floating-tables-window'),
         calc: () => document.getElementById('calc-dock')
     };
-    const widths = { tables: 460, calc: 460, stats: 460 };
-    let bottomHeight = 330;
+    const widths = { tables: 330, calc: 330, stats: 340 };
+    let bottomHeight = 230;
 
     function maxWidth(side) {
         return Math.max(0, ...slots[side].map(name => widths[name]));
@@ -38,7 +38,7 @@ window.dockManager = (() => {
             ? Math.min(bottomHeight, window.innerHeight * 0.85)
             : 0;
         if (slots.bottom.includes('calc')) {
-            dockHeight = Math.max(320, Math.min(520, dockHeight));
+            dockHeight = Math.max(230, Math.min(420, dockHeight));
         }
         root.setProperty('--bottom-dock-h', `${dockHeight}px`);
 

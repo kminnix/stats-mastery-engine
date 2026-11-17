@@ -2,6 +2,18 @@ from typing import Any, Dict, Optional, Sequence
 import re
 
 
+PROCEDURE_NAMES = {
+    "prop_z": "1-Sample z-Interval for a Proportion",
+    "prop_z_2samp": "2-Sample z-Interval for a Difference in Proportions",
+    "mean_t": "1-Sample t-Interval for a Mean",
+    "mean_t_2samp": "2-Sample t-Interval for a Difference in Means",
+    "ht_prop_z": "1-Sample z-Test for a Proportion",
+    "ht_prop_z_2samp": "2-Sample z-Test for a Difference in Proportions",
+    "ht_mean_t": "1-Sample t-Test for a Mean",
+    "ht_mean_t_2samp": "2-Sample t-Test for a Difference in Means",
+}
+
+
 def add_inference_conditions(
     problem: Dict[str, Any],
     sample_sizes: Sequence[int],
@@ -40,6 +52,14 @@ def add_inference_conditions(
         "expected": [correct],
     }]
     parts = ["Conditions: ", {"component": "inference-conditions"}]
+    procedure = PROCEDURE_NAMES.get(problem.get("type"))
+    if procedure:
+        components.insert(0, {
+            "id": "procedure-name", "type": "select",
+            "options": [{"value": name, "label": name} for name in PROCEDURE_NAMES.values()],
+            "expected": [procedure],
+        })
+        parts = ["Procedure: ", {"component": "procedure-name"}, ". ", *parts]
     if is_proportion:
         components.append({
             "id": "inference-min-count", "type": "number", "input_type": "number",

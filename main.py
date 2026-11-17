@@ -32,11 +32,13 @@ from app.engine.inference_drills import (
     generate_conclusion_drill_proportion,
     generate_hypothesis_drill_mean,
     generate_hypothesis_drill_proportion,
+    generate_procedure_name_drill,
     generate_standard_error_drill_mean,
     generate_standard_error_drill_proportion,
     generate_test_stat_drill_mean,
     generate_test_stat_drill_proportion,
 )
+from app.engine.frq_inference import FRQ_TOPICS, evaluate_full_frq, generate_frq_problem
 
 load_dotenv()
 
@@ -45,7 +47,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "159"
+STATIC_VERSION = "162"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -555,6 +557,16 @@ def slice_problem_to_step(problem_dict: Dict[str, Any], step_selector: Union[str
         context.append(f"Solve only this step: {html.escape(str(selected.get('label', '')))}")
     elif step_selector == "cond":
         selected = find("Check Conditions")
+        selected["components"] = [
+            item for item in selected.get("components", []) if item.get("id") != "procedure-name"
+        ]
+        parts = selected.get("parts", [])
+        condition_start = next(
+            (index for index, part in enumerate(parts) if part == "Conditions: "),
+            None,
+        )
+        if condition_start is not None:
+            selected["parts"] = parts[condition_start:]
     elif step_selector == "hypo":
         selected = find("Hypotheses")
     elif step_selector == "five_num":
@@ -765,6 +777,10 @@ async def get_foundations_problem(topic: str):
 @app.get("/api/problem/drill")
 async def get_inference_drill(topic: str):
     generators = {
+        "drill_proc_ci_prop": lambda: generate_procedure_name_drill("ci_prop"),
+        "drill_proc_ci_mean": lambda: generate_procedure_name_drill("ci_mean"),
+        "drill_proc_ht_prop": lambda: generate_procedure_name_drill("ht_prop"),
+        "drill_proc_ht_mean": lambda: generate_procedure_name_drill("ht_mean"),
         "cond_check_prop": generate_condition_check_proportion,
         "drill_se_prop": generate_standard_error_drill_proportion,
         "drill_hypo_prop": generate_hypothesis_drill_proportion,
@@ -780,6 +796,25 @@ async def get_inference_drill(topic: str):
     if generator is None:
         raise HTTPException(status_code=404, detail=f"Unknown inference drill topic: {topic}")
     return tag_problem_input_types(generator())
+
+
+@app.get("/api/problem/frq")
+async def get_frq_problem(topic: str):
+    try:
+        problem = generate_frq_problem(topic)
+        problem.pop("exemplar", None)
+        problem.pop("solution", None)
+        return problem
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.post("/api/evaluate/frq")
+async def evaluate_frq(payload: Dict[str, Any]):
+    try:
+        return evaluate_full_frq(payload)
+    except (TypeError, ValueError, KeyError) as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 @app.post("/api/verify")
 async def check_answer(payload: VerifyPayload):

@@ -3,15 +3,330 @@ import math
 from scipy.stats import norm, t
 from .inference_conditions import add_inference_conditions
 
+
+PROPORTION_SCENARIOS = [
+    {
+        "sample_units": "household tap-water samples from the city",
+        "success": "met the EPA lead standard",
+        "parameter": "the true proportion of household tap-water samples from city homes that meet the EPA lead standard",
+        "keywords": ["household", "tap-water", "lead", "EPA"],
+    },
+    {
+        "sample_units": "treated heirloom seeds from the farm's seed lot",
+        "success": "sprouted within 14 days",
+        "parameter": "the true proportion of treated heirloom seeds from the farm's seed lot that sprout within 14 days",
+        "keywords": ["treated", "heirloom", "seeds", "sprout"],
+    },
+    {
+        "sample_units": "students enrolled at the university",
+        "success": "used campus transit at least three days per week",
+        "parameter": "the true proportion of university students who use campus transit at least three days per week",
+        "keywords": ["university", "students", "campus", "transit"],
+    },
+    {
+        "sample_units": "circuit boards produced on the assembly line",
+        "success": "passed the final quality inspection",
+        "parameter": "the true proportion of circuit boards from the assembly line that pass final quality inspection",
+        "keywords": ["circuit", "boards", "quality", "inspection"],
+    },
+    {
+        "sample_units": "likely voters registered in the city",
+        "success": "supported the proposed public-transit bond",
+        "parameter": "the true proportion of likely city voters who support the proposed public-transit bond",
+        "keywords": ["voters", "city", "support", "transit", "bond"],
+    },
+    {
+        "sample_units": "patients receiving the new allergy treatment",
+        "success": "reported relief from seasonal-allergy symptoms",
+        "parameter": "the true proportion of patients receiving the new allergy treatment who report relief from seasonal-allergy symptoms",
+        "keywords": ["patients", "allergy", "treatment", "symptoms", "relief"],
+    },
+    {
+        "sample_units": "produce samples collected from the watershed farms",
+        "success": "had pesticide residues below the environmental safety limit",
+        "parameter": "the true proportion of produce samples from watershed farms with pesticide residues below the environmental safety limit",
+        "keywords": ["produce", "watershed", "farms", "pesticide", "residues"],
+    },
+    {
+        "sample_units": "customers who purchased the redesigned reusable bottle",
+        "success": "said they would recommend it to a friend",
+        "parameter": "the true proportion of customers who purchased the redesigned reusable bottle and would recommend it to a friend",
+        "keywords": ["customers", "redesigned", "reusable", "bottle", "recommend"],
+    },
+    {
+        "sample_units": "public high-school seniors in the district",
+        "success": "completed a paid work-based learning placement",
+        "parameter": "the true proportion of public high-school seniors in the district who complete a paid work-based learning placement",
+        "keywords": ["public", "high-school", "seniors", "district", "placement"],
+    },
+    {
+        "sample_units": "electric-vehicle battery cells sampled from the production run",
+        "success": "passed the thermal-safety test",
+        "parameter": "the true proportion of electric-vehicle battery cells from the production run that pass the thermal-safety test",
+        "keywords": ["electric-vehicle", "battery", "cells", "thermal-safety"],
+    },
+]
+
+TWO_SAMPLE_PROPORTION_SCENARIOS = [
+    {
+        "group1": "seeds treated with organic compost",
+        "group2": "seeds treated with conventional fertilizer",
+        "success": "germinated within 14 days",
+        "parameter": "the difference in the true germination proportions for seeds treated with organic compost minus seeds treated with conventional fertilizer",
+        "keywords": ["seeds", "organic", "compost", "conventional", "fertilizer", "germination"],
+    },
+    {
+        "group1": "circuit boards assembled on the day shift",
+        "group2": "circuit boards assembled on the night shift",
+        "success": "failed the final inspection",
+        "parameter": "the difference in the true defect proportions for day-shift circuit boards minus night-shift circuit boards",
+        "keywords": ["circuit", "boards", "day", "night", "shift", "defect"],
+    },
+    {
+        "group1": "patients assigned to Treatment A",
+        "group2": "patients assigned to the placebo",
+        "success": "reported relief from allergy symptoms",
+        "parameter": "the difference in the true symptom-relief proportions for patients receiving Treatment A minus patients receiving the placebo",
+        "keywords": ["patients", "Treatment A", "placebo", "allergy", "symptom-relief"],
+    },
+    {
+        "group1": "students in online sections of the course",
+        "group2": "students in in-person sections of the course",
+        "success": "passed the end-of-term assessment",
+        "parameter": "the difference in the true course pass proportions for students in online sections minus students in in-person sections",
+        "keywords": ["students", "online", "in-person", "course", "passed"],
+    },
+    {
+        "group1": "water samples collected upstream of the treatment plant",
+        "group2": "water samples collected downstream of the treatment plant",
+        "success": "met the dissolved-contaminant safety threshold",
+        "parameter": "the difference in the true safety-compliance proportions for upstream water samples minus downstream water samples",
+        "keywords": ["water", "upstream", "downstream", "treatment", "contaminant"],
+    },
+    {
+        "group1": "customers who tested Brand A's refillable bottle",
+        "group2": "customers who tested Brand B's refillable bottle",
+        "success": "rated the bottle easy to clean",
+        "parameter": "the difference in the true easy-to-clean rating proportions for customers testing Brand A minus customers testing Brand B",
+        "keywords": ["customers", "Brand A", "Brand B", "refillable", "bottle", "clean"],
+    },
+    {
+        "group1": "likely voters in District 1",
+        "group2": "likely voters in District 2",
+        "success": "supported the regional transit measure",
+        "parameter": "the difference in the true support proportions for likely voters in District 1 minus likely voters in District 2",
+        "keywords": ["voters", "District 1", "District 2", "support", "transit"],
+    },
+    {
+        "group1": "tomato plots irrigated with drip lines",
+        "group2": "tomato plots irrigated with sprinklers",
+        "success": "produced marketable fruit",
+        "parameter": "the difference in the true marketable-yield proportions for drip-irrigated tomato plots minus sprinkler-irrigated tomato plots",
+        "keywords": ["tomato", "plots", "drip", "sprinklers", "irrigated", "marketable"],
+    },
+    {
+        "group1": "produce lots screened by Supplier A",
+        "group2": "produce lots screened by Supplier B",
+        "success": "passed the food-safety pathogen test",
+        "parameter": "the difference in the true food-safety pass proportions for Supplier A produce lots minus Supplier B produce lots",
+        "keywords": ["produce", "Supplier A", "Supplier B", "food-safety", "pathogen"],
+    },
+    {
+        "group1": "city bus trips using the priority-lane corridor",
+        "group2": "city bus trips using the standard route",
+        "success": "arrived within five minutes of the scheduled time",
+        "parameter": "the difference in the true on-time arrival proportions for priority-lane bus trips minus standard-route bus trips",
+        "keywords": ["city", "bus", "priority-lane", "standard", "route", "on-time"],
+    },
+]
+
+MEAN_SCENARIOS = [
+    {
+        "sample_units": "smartwatches from the latest production lot",
+        "measure": "battery lifespan",
+        "unit": "hours",
+        "parameter": "the true mean battery lifespan, in hours, of smartwatches from the latest production lot",
+        "keywords": ["smartwatches", "battery", "lifespan", "hours"],
+        "mean_range": (45, 110), "sd_range": (4, 15),
+    },
+    {
+        "sample_units": "water samples collected from the river",
+        "measure": "dissolved oxygen level",
+        "unit": "mg/L",
+        "parameter": "the true mean dissolved oxygen level, in mg/L, in river water samples",
+        "keywords": ["river", "water", "dissolved", "oxygen", "mg/L"],
+        "mean_range": (4.5, 10.5), "sd_range": (0.5, 2),
+    },
+    {
+        "sample_units": "city residents selected from the municipal address registry",
+        "measure": "daily commute time",
+        "unit": "minutes",
+        "parameter": "the true mean daily commute time, in minutes, for city residents",
+        "keywords": ["city", "residents", "daily", "commute", "minutes"],
+        "mean_range": (20, 60), "sd_range": (5, 20),
+    },
+    {
+        "sample_units": "cereal boxes from the morning packaging line",
+        "measure": "net fill weight",
+        "unit": "grams",
+        "parameter": "the true mean net fill weight, in grams, of cereal boxes from the morning packaging line",
+        "keywords": ["cereal", "boxes", "net", "fill", "weight", "grams"],
+        "mean_range": (450, 550), "sd_range": (2, 10),
+    },
+    {
+        "sample_units": "patients completing outpatient physical therapy",
+        "measure": "recovery time",
+        "unit": "days",
+        "parameter": "the true mean recovery time, in days, for patients completing outpatient physical therapy",
+        "keywords": ["patients", "recovery", "outpatient", "physical", "therapy", "days"],
+        "mean_range": (4, 18), "sd_range": (1, 6),
+    },
+    {
+        "sample_units": "wheat plots harvested across the county",
+        "measure": "crop yield",
+        "unit": "bushels per acre",
+        "parameter": "the true mean wheat yield, in bushels per acre, across county farms",
+        "keywords": ["wheat", "plots", "crop", "yield", "bushels", "acre"],
+        "mean_range": (80, 220), "sd_range": (10, 40),
+    },
+    {
+        "sample_units": "students taking the district's algebra assessment",
+        "measure": "assessment score",
+        "unit": "points",
+        "parameter": "the true mean algebra assessment score, in points, for students in the district",
+        "keywords": ["students", "district", "algebra", "assessment", "score", "points"],
+        "mean_range": (60, 90), "sd_range": (5, 20),
+    },
+    {
+        "sample_units": "electric-vehicle charging sessions at public fast chargers",
+        "measure": "charging time from 20% to 80%",
+        "unit": "minutes",
+        "parameter": "the true mean electric-vehicle charging time, in minutes, from 20% to 80% at public fast chargers",
+        "keywords": ["electric-vehicle", "charging", "public", "fast", "chargers", "minutes"],
+        "mean_range": (20, 50), "sd_range": (5, 15),
+    },
+    {
+        "sample_units": "households participating in the city's water-use study",
+        "measure": "weekly household water use",
+        "unit": "gallons",
+        "parameter": "the true mean weekly water use, in gallons, for households in the city study",
+        "keywords": ["households", "city", "water-use", "weekly", "gallons"],
+        "mean_range": (500, 3000), "sd_range": (100, 800),
+    },
+    {
+        "sample_units": "air-monitoring days recorded near the industrial corridor",
+        "measure": "fine-particle concentration",
+        "unit": "µg/m³",
+        "parameter": "the true mean fine-particle concentration, in µg/m³, near the industrial corridor",
+        "keywords": ["air-monitoring", "fine-particle", "concentration", "industrial", "corridor"],
+        "mean_range": (5, 30), "sd_range": (2, 8),
+    },
+]
+
+TWO_SAMPLE_MEAN_SCENARIOS = [
+    {
+        "group1": "fields using drip irrigation",
+        "group2": "fields using sprinkler irrigation",
+        "measure": "wheat yield",
+        "unit": "bushels per acre",
+        "parameter": "the difference in true mean wheat yields, in bushels per acre, for drip-irrigated fields minus sprinkler-irrigated fields",
+        "keywords": ["wheat", "yield", "drip", "sprinkler", "irrigation", "bushels", "acre"],
+        "mean_range": (80, 220), "sd_range": (10, 40),
+    },
+    {
+        "group1": "participants completing the reaction task with background noise",
+        "group2": "participants completing the reaction task in silence",
+        "measure": "reaction time",
+        "unit": "milliseconds",
+        "parameter": "the difference in true mean reaction times, in milliseconds, with background noise minus in silence",
+        "keywords": ["participants", "reaction", "time", "background", "noise", "silence"],
+        "mean_range": (200, 400), "sd_range": (15, 60),
+    },
+    {
+        "group1": "tires made with the new rubber compound",
+        "group2": "tires made with the standard rubber compound",
+        "measure": "tread life",
+        "unit": "thousands of miles",
+        "parameter": "the difference in true mean tire tread lives, in thousands of miles, for the new compound minus the standard compound",
+        "keywords": ["tires", "tread", "life", "new", "standard", "compound"],
+        "mean_range": (30, 70), "sd_range": (4, 12),
+    },
+    {
+        "group1": "servings of Brand A tomato soup",
+        "group2": "servings of Brand B tomato soup",
+        "measure": "sodium content",
+        "unit": "milligrams",
+        "parameter": "the difference in true mean sodium content, in milligrams per serving, for Brand A tomato soup minus Brand B tomato soup",
+        "keywords": ["Brand A", "Brand B", "tomato", "soup", "sodium", "milligrams"],
+        "mean_range": (400, 1000), "sd_range": (50, 200),
+    },
+    {
+        "group1": "patients receiving the new outpatient therapy",
+        "group2": "patients receiving the standard outpatient therapy",
+        "measure": "recovery time",
+        "unit": "days",
+        "parameter": "the difference in true mean recovery times, in days, for patients receiving the new therapy minus the standard therapy",
+        "keywords": ["patients", "outpatient", "therapy", "recovery", "days", "new", "standard"],
+        "mean_range": (5, 25), "sd_range": (2, 8),
+    },
+    {
+        "group1": "water samples collected upstream of the restoration site",
+        "group2": "water samples collected downstream of the restoration site",
+        "measure": "dissolved oxygen level",
+        "unit": "mg/L",
+        "parameter": "the difference in true mean dissolved oxygen levels, in mg/L, for upstream water samples minus downstream samples",
+        "keywords": ["water", "samples", "upstream", "downstream", "dissolved", "oxygen", "restoration"],
+        "mean_range": (4.5, 10.5), "sd_range": (0.5, 2),
+    },
+    {
+        "group1": "students in the district's new mathematics curriculum",
+        "group2": "students in the district's previous mathematics curriculum",
+        "measure": "mathematics assessment score",
+        "unit": "points",
+        "parameter": "the difference in true mean mathematics scores, in points, for students in the new curriculum minus the previous curriculum",
+        "keywords": ["students", "district", "mathematics", "curriculum", "assessment", "score"],
+        "mean_range": (60, 90), "sd_range": (5, 20),
+    },
+    {
+        "group1": "battery packs charged using the fast-charging protocol",
+        "group2": "battery packs charged using the standard protocol",
+        "measure": "battery service life",
+        "unit": "hours",
+        "parameter": "the difference in true mean battery service lives, in hours, for fast-charged packs minus standard-charged packs",
+        "keywords": ["battery", "packs", "fast-charging", "standard", "protocol", "service", "life"],
+        "mean_range": (8, 24), "sd_range": (1, 5),
+    },
+    {
+        "group1": "orders delivered using the electric-van fleet",
+        "group2": "orders delivered using the conventional fleet",
+        "measure": "delivery time",
+        "unit": "hours",
+        "parameter": "the difference in true mean delivery times, in hours, for electric-van deliveries minus conventional-fleet deliveries",
+        "keywords": ["orders", "delivered", "electric-van", "conventional", "fleet", "delivery", "time"],
+        "mean_range": (12, 48), "sd_range": (3, 12),
+    },
+    {
+        "group1": "vehicles tested with the low-emission fuel blend",
+        "group2": "vehicles tested with the standard fuel blend",
+        "measure": "fuel economy",
+        "unit": "miles per gallon",
+        "parameter": "the difference in true mean fuel economies, in miles per gallon, for the low-emission blend minus the standard blend",
+        "keywords": ["vehicles", "low-emission", "standard", "fuel", "blend", "economy", "miles"],
+        "mean_range": (20, 50), "sd_range": (3, 8),
+    },
+]
+
+
 def generate_mean_t_interval():
     """Generates a 1-sample t confidence interval problem for a population mean."""
+    scenario = random.choice(MEAN_SCENARIOS)
     n = random.choice([16, 20, 25, 30, 36, 40, 49, 50])
     df = n - 1
     conf_level = random.choice([90, 95, 98, 99])
     alpha = (100 - conf_level) / 100.0
     
-    xbar = round(random.uniform(45.0, 110.0), 1)
-    s = round(random.uniform(4.0, 15.0), 1)
+    xbar = round(random.uniform(*scenario["mean_range"]), 1)
+    s = round(random.uniform(*scenario["sd_range"]), 1)
     
     # Critical value t*
     t_star_exact = t.ppf(1.0 - alpha / 2.0, df)
@@ -29,6 +344,7 @@ def generate_mean_t_interval():
     upper_table = round(xbar + moe_table, 2)
 
     solution_html = (
+        f"<p><strong>Parameter:</strong> Let \\(\\mu\\) denote {scenario['parameter']}.</p>"
         f"<p><strong>Step 1: Point Estimate & Degrees of Freedom</strong></p>"
         f"$$\\bar{{x}} = {xbar},\\quad n = {n},\\quad s = {s}$$"
         f"$$\\text{{Degrees of freedom: }}\\; df = n - 1 = {n} - 1 = {df}$$"
@@ -47,11 +363,17 @@ def generate_mean_t_interval():
         "type": "mean_t",
         "title": f"1-Sample t-Interval for Mean ({conf_level}%)",
         "metadata": {"se": se, "critical": t_star_rounded, "point": xbar, "margin": moe_table,
-                     "lower": lower_table, "upper": upper_table, "confidence": conf_level, "df": df},
+                     "lower": lower_table, "upper": upper_table, "confidence": conf_level, "df": df,
+                     "sample_sizes": [n], "xbar": xbar, "s": s,
+                     "parameter_description": scenario["parameter"],
+                     "context_keywords": scenario["keywords"]},
+        "parameter_description": scenario["parameter"],
+        "context_keywords": scenario["keywords"],
         "prompt": (
-            f"A simple random sample of size \\(n = {n}\\) yields a sample mean \\(\\bar{{x}} = {xbar}\\) "
-            f"and sample standard deviation \\(s = {s}\\). Construct a <strong>{conf_level}%</strong> "
-            f"confidence interval for the population mean \\(\\mu\\)."
+            f"A simple random sample of {n} {scenario['sample_units']} yields a sample mean "
+            f"\\(\\bar{{x}} = {xbar}\\) {scenario['unit']} and sample standard deviation "
+            f"\\(s = {s}\\) {scenario['unit']}. Construct a <strong>{conf_level}%</strong> "
+            f"confidence interval for \\(\\mu\\), the population mean of {scenario['measure']}."
         ),
         "steps": [
             {
@@ -106,6 +428,7 @@ def generate_mean_t_interval():
 
 def generate_proportion_z_interval():
     """Generates a 1-sample z confidence interval problem for a population proportion."""
+    scenario = random.choice(PROPORTION_SCENARIOS)
     n = random.choice([100, 150, 200, 250, 400, 500])
     p_true = random.uniform(0.25, 0.75)
     x = int(round(n * p_true))
@@ -134,6 +457,7 @@ def generate_proportion_z_interval():
     upper_table = round(phat + moe_table, 4)
 
     solution_html = (
+        f"<p><strong>Parameter:</strong> Let \\(p\\) denote {scenario['parameter']}.</p>"
         f"<p><strong>Step 1: Point Estimate (p̂)</strong></p>"
         f"$$\\hat{{p}} = \\frac{{x}}{{n}} = \\frac{{{x}}}{{{n}}} = \\mathbf{{{phat}}}$$"
         f"<p><strong>Step 2: Find Critical Value \\(z^*\\)</strong></p>"
@@ -151,10 +475,16 @@ def generate_proportion_z_interval():
         "type": "prop_z",
         "title": f"1-Sample z-Interval for Proportion ({conf_level}%)",
         "metadata": {"se": se, "critical": z_star_rounded, "point": phat, "margin": moe_table,
-                     "lower": lower_table, "upper": upper_table, "confidence": conf_level},
+                     "lower": lower_table, "upper": upper_table, "confidence": conf_level,
+                     "sample_sizes": [n], "x": x, "phat": phat,
+                     "parameter_description": scenario["parameter"],
+                     "context_keywords": scenario["keywords"]},
+        "parameter_description": scenario["parameter"],
+        "context_keywords": scenario["keywords"],
         "prompt": (
-            f"In a random sample of \\(n = {n}\\) surveyed individuals, \\(x = {x}\\) responded favorably. "
-            f"Construct a <strong>{conf_level}%</strong> confidence interval for the true population proportion \\(p\\). "
+            f"In a random sample of \\(n = {n}\\) {scenario['sample_units']}, "
+            f"\\(x = {x}\\) {scenario['success']}. Construct a <strong>{conf_level}%</strong> "
+            f"confidence interval for \\(p\\), {scenario['parameter']}. "
             f"Round intermediate decimals and bounds to four places."
         ),
         "steps": [
@@ -210,16 +540,17 @@ def generate_proportion_z_interval():
 
 def generate_two_sample_mean_t_interval():
     """Generates a conservative two-sample t confidence interval for a difference in means."""
+    scenario = random.choice(TWO_SAMPLE_MEAN_SCENARIOS)
     n1 = random.choice([16, 20, 25, 30, 36])
     n2 = random.choice([16, 20, 25, 30, 36])
     df = min(n1 - 1, n2 - 1)
     conf_level = random.choice([90, 95, 99])
     alpha = (100 - conf_level) / 100.0
 
-    xbar1 = round(random.uniform(45.0, 110.0), 1)
-    xbar2 = round(random.uniform(45.0, 110.0), 1)
-    s1 = round(random.uniform(4.0, 15.0), 1)
-    s2 = round(random.uniform(4.0, 15.0), 1)
+    xbar1 = round(random.uniform(*scenario["mean_range"]), 1)
+    xbar2 = round(random.uniform(*scenario["mean_range"]), 1)
+    s1 = round(random.uniform(*scenario["sd_range"]), 1)
+    s2 = round(random.uniform(*scenario["sd_range"]), 1)
     difference = xbar1 - xbar2
     se = math.sqrt((s1 ** 2 / n1) + (s2 ** 2 / n2))
     t_star_exact = t.ppf(1.0 - alpha / 2.0, df)
@@ -230,6 +561,8 @@ def generate_two_sample_mean_t_interval():
     point_estimate = round(difference, 2)
 
     solution_html = (
+        f"<p><strong>Parameter:</strong> Let \\(\\mu_1 - \\mu_2\\) denote "
+        f"{scenario['parameter']}.</p>"
         f"<p><strong>Step 1: Point Estimate (x̄₁ - x̄₂)</strong></p>"
         f"$$\\bar{{x}}_1 - \\bar{{x}}_2 = {xbar1} - {xbar2} = \\mathbf{{{point_estimate}}}$$"
         f"<p><strong>Step 2: Conservative Degrees of Freedom</strong></p>"
@@ -251,13 +584,21 @@ def generate_two_sample_mean_t_interval():
         "type": "mean_t_2samp",
         "title": f"2-Sample t-Interval for Means ({conf_level}%)",
         "metadata": {"se": se, "critical": t_star, "point": point_estimate, "margin": moe,
-                     "lower": lower, "upper": upper, "confidence": conf_level, "df": df},
+                     "lower": lower, "upper": upper, "confidence": conf_level, "df": df,
+                     "sample_sizes": [n1, n2], "xbar1": xbar1, "xbar2": xbar2, "s1": s1, "s2": s2,
+                     "parameter_description": scenario["parameter"],
+                     "context_keywords": scenario["keywords"]},
+        "parameter_description": scenario["parameter"],
+        "context_keywords": scenario["keywords"],
         "prompt": (
-            f"Independent random samples have \\(n_1 = {n1}\\), "
-            f"\\(\\bar{{x}}_1 = {xbar1}\\), and \\(s_1 = {s1}\\), and "
-            f"\\(n_2 = {n2}\\), \\(\\bar{{x}}_2 = {xbar2}\\), and \\(s_2 = {s2}\\). "
-            f"Construct a <strong>{conf_level}%</strong> confidence interval for "
-            f"\\(\\mu_1 - \\mu_2\\) using the conservative degrees of freedom "
+            f"Independent random samples were taken from {scenario['group1']} and "
+            f"{scenario['group2']}. The first sample has \\(n_1 = {n1}\\), "
+            f"\\(\\bar{{x}}_1 = {xbar1}\\) {scenario['unit']}, and "
+            f"\\(s_1 = {s1}\\) {scenario['unit']}; the second has \\(n_2 = {n2}\\), "
+            f"\\(\\bar{{x}}_2 = {xbar2}\\) {scenario['unit']}, and "
+            f"\\(s_2 = {s2}\\) {scenario['unit']}. Construct a <strong>{conf_level}%</strong> "
+            f"confidence interval for \\(\\mu_1 - \\mu_2\\), {scenario['parameter']}, "
+            f"using the conservative degrees of freedom "
             f"\\(df = \\min(n_1 - 1, n_2 - 1)\\). Round the point estimate and bounds to "
             f"two decimals, the critical value to three decimals, and the margin of error to two decimals."
         ),
@@ -286,6 +627,7 @@ def generate_two_sample_mean_t_interval():
 
 def generate_two_sample_prop_z_interval():
     """Generates a two-sample z confidence interval for a difference in proportions."""
+    scenario = random.choice(TWO_SAMPLE_PROPORTION_SCENARIOS)
     n1 = random.choice([100, 150, 200, 250, 300])
     n2 = random.choice([100, 150, 200, 250, 300])
     x1 = random.randint(int(n1 * 0.2), int(n1 * 0.8))
@@ -307,6 +649,8 @@ def generate_two_sample_prop_z_interval():
     p2_display = round(p2_hat, 4)
 
     solution_html = (
+        f"<p><strong>Parameter:</strong> Let \\(p_1 - p_2\\) denote "
+        f"{scenario['parameter']}.</p>"
         f"<p><strong>Step 1: Point Estimate (p̂₁ - p̂₂)</strong></p>"
         f"$$\\hat{{p}}_1 - \\hat{{p}}_2 = \\frac{{{x1}}}{{{n1}}} - \\frac{{{x2}}}{{{n2}}}"
         f" = {p1_display} - {p2_display} = \\mathbf{{{point_estimate}}}$$"
@@ -327,12 +671,18 @@ def generate_two_sample_prop_z_interval():
         "type": "prop_z_2samp",
         "title": f"2-Sample z-Interval for Proportions ({conf_level}%)",
         "metadata": {"se": se, "critical": z_star, "point": point_estimate, "margin": moe,
-                     "lower": lower, "upper": upper, "confidence": conf_level},
+                     "lower": lower, "upper": upper, "confidence": conf_level,
+                     "sample_sizes": [n1, n2], "x1": x1, "x2": x2,
+                     "phat1": p1_hat, "phat2": p2_hat,
+                     "parameter_description": scenario["parameter"],
+                     "context_keywords": scenario["keywords"]},
+        "parameter_description": scenario["parameter"],
+        "context_keywords": scenario["keywords"],
         "prompt": (
-            f"In two independent random samples, {x1} of {n1} individuals in group 1 and "
-            f"{x2} of {n2} individuals in group 2 have the characteristic of interest. "
-            f"Construct a <strong>{conf_level}%</strong> confidence interval for "
-            f"\\(p_1 - p_2\\). Round the point estimate, margin of error, and bounds to four decimals."
+            f"In independent random samples, {x1} of {n1} from {scenario['group1']} and "
+            f"{x2} of {n2} from {scenario['group2']} {scenario['success']}. Construct a "
+            f"<strong>{conf_level}%</strong> confidence interval for \\(p_1 - p_2\\), "
+            f"{scenario['parameter']}. Round the point estimate, margin of error, and bounds to four decimals."
         ),
         "steps": [
             {"step_num": 1, "label": "Point Estimate (p̂₁ - p̂₂):", "input_type": "number", "placeholder": "e.g. 0.0525",

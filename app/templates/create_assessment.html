@@ -312,38 +312,50 @@
         { id: 'prob_discrete_rv', title: 'Discrete Random Variables (E(X) & SD)', topic: 'Random Variables & Probability Distributions', notation: 'E(X), σ_X' },
         { id: 'prob_binom_geom', title: 'Binomial & Geometric Distributions', topic: 'Random Variables & Probability Distributions', notation: 'Binom(n, p), Geom(p)' },
         { id: 'sampling_dist', title: 'Sampling Distributions for x̄ and p̂', topic: 'Sampling Distributions (CLT)', notation: 'x̄, p̂' },
+        { id: 'drill_proc_ci_prop', title: 'Naming the Procedure (Intervals for p)', topic: 'Confidence Intervals for Proportions (p)', notation: 'z-Interval' },
         { id: 'cond_check_prop', title: 'Checking Conditions for Proportions', topic: 'Confidence Intervals for Proportions (p)', notation: 'Random, 10%, Large Counts' },
         { id: 'drill_se_prop', title: 'Standard Error for Proportions', topic: 'Confidence Intervals for Proportions (p)', notation: 'SE = √(p̂(1 − p̂)/n)' },
         { id: 'ci_prop_z', title: '1-Sample z-Interval for Proportion', topic: 'Confidence Intervals for Proportions (p)', notation: 'p' },
+        { id: 'frq_ci_prop_1samp', title: 'Full FRQ: 1-Sample z-Interval for Proportion (p)', topic: 'Confidence Intervals for Proportions (p)', notation: 'p' },
         { id: 'ci_prop_z_2samp', title: '2-Sample z-Interval for Proportions', topic: 'Confidence Intervals for Proportions (p)', notation: 'p_1 - p_2' },
+        { id: 'frq_ci_prop_2samp', title: 'Full FRQ: 2-Sample z-Interval for Proportions (p₁ - p₂)', topic: 'Confidence Intervals for Proportions (p)', notation: 'p_1 - p_2' },
         { id: 'ci_prop_cond', title: 'Checking Conditions for Proportion Intervals', topic: 'Confidence Intervals for Proportions (p)', notation: 'Conditions' },
         { id: 'ci_prop_crit_se', title: 'Critical Value (z*) & Standard Error for p', topic: 'Confidence Intervals for Proportions (p)', notation: 'z^*, SE' },
         { id: 'ci_prop_bounds', title: 'Margin of Error & Interval Bounds for p', topic: 'Confidence Intervals for Proportions (p)', notation: 'E, L, U' },
         { id: 'ci_prop_interp', title: 'Interpreting a Proportion Confidence Interval', topic: 'Confidence Intervals for Proportions (p)', notation: 'p' },
+        { id: 'drill_proc_ht_prop', title: 'Naming the Procedure (Tests for p)', topic: 'Significance Tests for Proportions (p)', notation: 'z-Test' },
         { id: 'drill_hypo_prop', title: 'Stating Hypotheses for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'H_0, H_a' },
         { id: 'drill_stat_prop', title: 'Test Statistic & SE for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'SE_0, z' },
         { id: 'drill_conclusion_prop', title: 'P-Value & Conclusion for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'p-value vs. α' },
         { id: 'ht_prop_z', title: '1-Sample z-Test for Proportion', topic: 'Significance Tests for Proportions (p)', notation: 'H_0: p = p_0' },
+        { id: 'frq_ht_prop_1samp', title: 'Full FRQ: 1-Sample z-Test for Proportion (p)', topic: 'Significance Tests for Proportions (p)', notation: 'H₀, z, P' },
         { id: 'ht_prop_z_2samp', title: '2-Sample z-Test for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'H_0: p_1 = p_2' },
+        { id: 'frq_ht_prop_2samp', title: 'Full FRQ: 2-Sample z-Test for Proportions (p₁ - p₂)', topic: 'Significance Tests for Proportions (p)', notation: 'H₀, z, P' },
         { id: 'ht_prop_hypo', title: 'Stating Hypotheses for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'H_0, H_a' },
         { id: 'ht_prop_cond', title: 'Checking Conditions for Proportion Tests', topic: 'Significance Tests for Proportions (p)', notation: 'Conditions' },
         { id: 'ht_prop_stat', title: 'Standard Error (SE₀) & z-Statistic for p', topic: 'Significance Tests for Proportions (p)', notation: 'SE_0, z' },
         { id: 'ht_prop_pval', title: 'P-Value & Interpretation for Proportions', topic: 'Significance Tests for Proportions (p)', notation: 'P' },
         { id: 'ht_prop_conc', title: 'Decision & Contextual Conclusion for p', topic: 'Significance Tests for Proportions (p)', notation: 'P, \\alpha' },
+        { id: 'drill_proc_ci_mean', title: 'Naming the Procedure (Intervals for μ)', topic: 'Confidence Intervals for Means (μ)', notation: 't-Interval' },
         { id: 'cond_check_mean', title: 'Checking Conditions for Means', topic: 'Confidence Intervals for Means (μ)', notation: 'Random, 10%, Normality' },
         { id: 'drill_se_mean', title: 'Standard Error & Critical Value (t*) for Means', topic: 'Confidence Intervals for Means (μ)', notation: 'SE = s/√n, t*' },
         { id: 'ci_mean_t', title: '1-Sample t-Interval for Mean', topic: 'Confidence Intervals for Means (μ)', notation: '\\mu' },
+        { id: 'frq_ci_mean_1samp', title: 'Full FRQ: 1-Sample t-Interval for Mean (μ)', topic: 'Confidence Intervals for Means (μ)', notation: '\\mu' },
         { id: 'ci_mean_t_2samp', title: '2-Sample t-Interval for Means', topic: 'Confidence Intervals for Means (μ)', notation: '\\mu_1 - \\mu_2' },
+        { id: 'frq_ci_mean_2samp', title: 'Full FRQ: 2-Sample t-Interval for Means (μ₁ - μ₂)', topic: 'Confidence Intervals for Means (μ)', notation: '\\mu_1 - \\mu_2' },
         { id: 'ci_matched_pairs_t', title: 'Matched Pairs t-Interval for Mean Difference', topic: 'Confidence Intervals for Means (μ)', notation: '\\mu_{\\text{diff}}' },
         { id: 'ci_mean_cond', title: 'Checking Conditions for Mean Intervals', topic: 'Confidence Intervals for Means (μ)', notation: 'Conditions' },
         { id: 'ci_mean_crit_se', title: 'Degrees of Freedom, t* & SE for μ', topic: 'Confidence Intervals for Means (μ)', notation: 'df, t^*, SE' },
         { id: 'ci_mean_bounds', title: 'Margin of Error & Interval Bounds for μ', topic: 'Confidence Intervals for Means (μ)', notation: 'E, L, U' },
         { id: 'ci_mean_interp', title: 'Interpreting a Mean Confidence Interval', topic: 'Confidence Intervals for Means (μ)', notation: '\\mu' },
+        { id: 'drill_proc_ht_mean', title: 'Naming the Procedure (Tests for μ)', topic: 'Significance Tests for Means (μ)', notation: 't-Test' },
         { id: 'drill_hypo_mean', title: 'Stating Hypotheses for Means', topic: 'Significance Tests for Means (μ)', notation: 'H_0, H_a' },
         { id: 'drill_stat_mean', title: 'Test Statistic & SE for Means', topic: 'Significance Tests for Means (μ)', notation: 'SE_0, t' },
         { id: 'drill_conclusion_mean', title: 'P-Value & Conclusion for Means', topic: 'Significance Tests for Means (μ)', notation: 'p-value vs. α' },
         { id: 'ht_mean_t', title: '1-Sample t-Test for Mean', topic: 'Significance Tests for Means (μ)', notation: 'H_0: \\mu = \\mu_0' },
+        { id: 'frq_ht_mean_1samp', title: 'Full FRQ: 1-Sample t-Test for Mean (μ)', topic: 'Significance Tests for Means (μ)', notation: 'H₀, t, P' },
         { id: 'ht_mean_t_2samp', title: '2-Sample t-Test for Means', topic: 'Significance Tests for Means (μ)', notation: 'H_0: \\mu_1 = \\mu_2' },
+        { id: 'frq_ht_mean_2samp', title: 'Full FRQ: 2-Sample t-Test for Means (μ₁ - μ₂)', topic: 'Significance Tests for Means (μ)', notation: 'H₀, t, P' },
         { id: 'ht_matched_pairs_t', title: 'Matched Pairs t-Test', topic: 'Significance Tests for Means (μ)', notation: 'H_0: \\mu_{\\text{diff}} = 0' },
         { id: 'ht_mean_hypo', title: 'Stating Hypotheses for Means', topic: 'Significance Tests for Means (μ)', notation: 'H_0, H_a' },
         { id: 'ht_mean_cond', title: 'Checking Conditions for Mean Tests', topic: 'Significance Tests for Means (μ)', notation: 'Conditions' },
@@ -492,6 +504,7 @@
             title,
             count: 1,
             mode: 'no_hints',
+            ...(skillId.startsWith('frq_') ? { frq_retry_mode: 'revision' } : {}),
             required_passes: defaultMasteryPasses(),
             required_clean_passes: defaultMasteryPasses(),
             max_step_attempts: null,
@@ -617,6 +630,17 @@
             );
             stepAttemptsLabel.appendChild(stepAttemptsInput);
             controls.append(countLabel, modeLabel, stepAttemptsLabel);
+            if (block.topic.startsWith('frq_')) {
+                const retryLabel = document.createElement('label');
+                retryLabel.textContent = 'FRQ Grading Policy: ';
+                const retry = document.createElement('select');
+                retry.add(new Option('🔄 Revision Loop (Revise Missed Parts)', 'revision'));
+                retry.add(new Option('📝 One-Shot Exam Mode', 'one_shot'));
+                retry.value = block.frq_retry_mode || 'revision';
+                retry.addEventListener('change', () => { block.frq_retry_mode = retry.value; });
+                retryLabel.appendChild(retry);
+                controls.appendChild(retryLabel);
+            }
             if (block.topic.startsWith('ht_') || block.topic === 'reg_slope_test' ||
                 block.topic.startsWith('chi_') || block.topic.startsWith('drill_conclusion_')) {
                 const frqLabel = document.createElement('label');
@@ -889,7 +913,8 @@
                 topic: block.topic,
                 allow_hints: type === 'test_correction' || (type !== 'test' &&
                     (block.mode === 'all_hints' || (['scaffold', 'mastery'].includes(block.mode) && index === 0))),
-                allow_frq_conclusion: Boolean(block.allow_frq_conclusion)
+                allow_frq_conclusion: Boolean(block.allow_frq_conclusion),
+                frq_retry_mode: block.frq_retry_mode || (block.topic.startsWith('frq_') ? 'revision' : null)
             }))
         );
         const publishButton = document.getElementById('publish-assessment-btn');
