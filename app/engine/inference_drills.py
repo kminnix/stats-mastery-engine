@@ -66,14 +66,22 @@ def generate_procedure_name_drill(category: str = "mixed") -> Dict[str, Any]:
         if not is_test else "The research question tests a claim about the parameter."
     )
     prompt = f"{sample_description} {intent} Choose the exact inference procedure."
+    sample_count_explanation = (
+        "two independent groups are compared, so there are \\(n_1\\) and \\(n_2\\) samples"
+        if two_sample else "one sample, \\(n\\), is observed"
+    )
+    response_type_explanation = (
+        "categorical and the parameter is a proportion \\(p\\)"
+        if is_proportion else "quantitative and the parameter is a mean \\(\\mu\\)"
+    )
     distractors = list(PROCEDURE_NAMES.values())
     options = [procedure] + [name for name in distractors if name != procedure]
     random.shuffle(options)
     explanation = (
         f"<p>This is a <strong>{'two' if two_sample else 'one'}-sample</strong> procedure because "
-        f"{'two independent groups are compared, so there are \\(n_1\\) and \\(n_2\\) samples' if two_sample else 'one sample, \\(n\\), is observed'}.</p>"
+        f"{sample_count_explanation}.</p>"
         f"<p>Use <strong>{'z' if is_proportion else 't'}</strong> because the response is "
-        f"{'categorical and the parameter is a proportion \\(p\\)' if is_proportion else 'quantitative and the parameter is a mean \\(\\mu\\)'}.</p>"
+        f"{response_type_explanation}.</p>"
         f"<p>It is an <strong>{'interval' if not is_test else 'test'}</strong> because "
         f"{'the goal is estimation' if not is_test else 'a claim is being evaluated'}.</p>"
         f"<p>The procedure is <strong>{procedure}</strong>.</p>"
