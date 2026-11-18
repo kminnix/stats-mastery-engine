@@ -237,10 +237,11 @@ def _number_near_pattern(
     target: float,
     marker_pattern: str,
     window: int = 120,
+    tolerance: float = 0.005,
 ) -> bool:
     number_pattern = re.compile(rf"(?<![\w.])({_NUMBER_PATTERN})(?![\w.])")
     for match in number_pattern.finditer(text):
-        if abs(float(match.group(1)) - target) > 0.005:
+        if abs(float(match.group(1)) - target) > tolerance:
             continue
         context = text[max(0, match.start() - window):match.end() + window]
         if re.search(marker_pattern, context):
@@ -254,9 +255,23 @@ def _contains_number(text: str, target: float, tolerance: float = 0.005) -> bool
 
 def _mentions_parameter(text: str, parameter: str) -> bool:
     if parameter == "p":
-        return bool(re.search(r"\bp\b(?!\s*[- ]?\s*value)", text))
+        return bool(
+            re.search(r"\bp\b(?!\s*[- ]?\s*value)", text)
+            or re.search(r"\b(?:true|population)\s+(?:population\s+)?proportion\b", text)
+        )
     if parameter == "mu":
-        return bool(re.search(r"\bmu\b", text))
+        return bool(
+            re.search(r"\bmu\b", text)
+            or re.search(r"\b(?:true|population)\s+(?:population\s+)?mean\b", text)
+        )
+    if parameter in ("p1 - p2", "mu1 - mu2"):
+        quantity = "proportions" if parameter.startswith("p") else "means"
+        defined_difference = re.search(
+            rf"\b(?:true\s+)?difference\s+(?:in|between)\s+"
+            rf"(?:the\s+)?(?:(?:true|population)\s+)?(?:population\s+)?{quantity}\b",
+            text,
+        )
+        return bool(defined_difference) or parameter.replace(" ", "") in text.replace(" ", "")
     return parameter.replace(" ", "") in text.replace(" ", "")
 
 
@@ -370,13 +385,29 @@ def _parse_interval_bounds(text: str) -> Tuple[Optional[float], Optional[float]]
         margin = abs(float(plus_minus[-1].group(2)))
         return center - margin, center + margin
 
+    inequality_pattern = re.compile(
+        rf"(?<![\w.])({_NUMBER_PATTERN})\s*(?:<=|<)\s*"
+        rf"[a-zA-Z_][\w₀₁₂ₐ]*\s*(?:<=|<)\s*({_NUMBER_PATTERN})(?![\w.])"
+    )
+    inequalities = list(inequality_pattern.finditer(text))
+    if inequalities:
+        return float(inequalities[-1].group(1)), float(inequalities[-1].group(2))
+
     range_pattern = re.compile(
-        rf"(?<![\w.])({_NUMBER_PATTERN})\s+to\s+({_NUMBER_PATTERN})(?![\w.])",
+        rf"(?<![\w.])(?:from\s+)?({_NUMBER_PATTERN})\s+to\s+({_NUMBER_PATTERN})(?![\w.])",
         re.IGNORECASE,
     )
     ranges = list(range_pattern.finditer(text))
     if ranges:
         return float(ranges[-1].group(1)), float(ranges[-1].group(2))
+
+    between_pattern = re.compile(
+        rf"\bbetween\s+({_NUMBER_PATTERN})\s+and\s+({_NUMBER_PATTERN})(?![\w.])",
+        re.IGNORECASE,
+    )
+    between = list(between_pattern.finditer(text))
+    if between:
+        return float(between[-1].group(1)), float(between[-1].group(2))
     return None, None
 
 
@@ -549,12 +580,14 @@ def evaluate_full_frq(payload: Dict[str, Any], use_ai_grading: bool = False) -> 
         count_numbers = expected_numbers[len(sample_sizes) * 2:]
         count_marker = r"(?:large counts?|at least\s+10|(?:>=|>)\s*10)"
         counts_ok = bool(count_numbers) and all(
-            _contains_number(normalized_plan, number, 0.005)
-            and _number_near_pattern(normalized_plan, number, count_marker)
+            _contains_number(normalized_plan, number, 1.5)
+            and _number_near_pattern(
+                normalized_plan, number, count_marker, tolerance=1.5
+            )
             for number in count_numbers
         )
         numeric_conditions_ok = sample_numbers_ok and bool(count_numbers) and all(
-            _contains_number(normalized_plan, number, 0.005)
+            _contains_number(normalized_plan, number, 1.5)
             for number in count_numbers
         )
         model_ok = counts_ok
@@ -656,12 +689,54 @@ def evaluate_full_frq(payload: Dict[str, Any], use_ai_grading: bool = False) -> 
             and abs(conclusion_upper - entered_upper) <= 0.01
         )
         confidence_ok = _contains_number(conclude, confidence, 0.01)
+        confidence_word_ok = bool(re.search(r"\bconfident\b|\bconfidence\b", conclude))
         captures = any(word in conclude for word in ("capture", "contains", "contain", "includes"))
         true_parameter = "true" in conclude and any(_clean(word) in conclude for word in context_words)
-        conclude_code = _grade([bounds_match, confidence_ok, captures, true_parameter])
-        conclude_feedback = _feedback(conclude_code, "Your interpretation matches the interval and parameter context.",
-                                      "Revise the confidence level, carried-through bounds, or contextual interpretation.",
-                                      "Interpret the interval using your entered bounds and the true population parameter.")
+        sample_statistic_claim = bool(
+            re.search(
+                r"\b(?:captures?|contains?|includes?)\b.{0,50}"
+                r"\b(?:sample\s+(?:proportion|mean)|phat|xbar)\b",
+                conclude,
+            )
+            or re.search(
+                r"\b(?:sample\s+(?:proportion|mean)|phat|xbar)\b.{0,50}"
+                r"\b(?:is|falls|lies)\b.{0,30}\b(?:in|inside|within)\b.{0,20}\binterval\b",
+                conclude,
+            )
+        )
+        probability_misconception = bool(
+            re.search(r"\b(?:probability|chance)\b", conclude)
+            and "interval" in conclude
+            and (
+                re.search(r"\b(?:captures?|contains?|includes?)\b", conclude)
+                or re.search(
+                    r"\b(?:true|population|parameter|p|mu|phat|xbar)\b.{0,50}"
+                    r"\b(?:is|lies|falls)\s+(?:in|inside|within)\b",
+                    conclude,
+                )
+            )
+        )
+        conclude_code = _grade(
+            [bounds_match, confidence_ok, confidence_word_ok, captures, true_parameter]
+        )
+        if sample_statistic_claim or probability_misconception:
+            conclude_code = "P"
+        if sample_statistic_claim:
+            conclude_feedback = (
+                "Confidence intervals estimate the population parameter, not the sample statistic."
+            )
+        elif probability_misconception:
+            conclude_feedback = (
+                "Use confidence language: a confidence interval does not give the probability "
+                "that the fixed population parameter is in this interval."
+            )
+        else:
+            conclude_feedback = _feedback(
+                conclude_code,
+                "Your interpretation matches the interval and parameter context.",
+                "Revise the confidence wording, carried-through bounds, or contextual interpretation.",
+                "Interpret the interval using your entered bounds and the true population parameter.",
+            )
 
     results = {
         "state": {"score_code": state_code, "score_label": _score_label(state_code), "feedback": state_feedback},

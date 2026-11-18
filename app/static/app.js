@@ -2041,7 +2041,7 @@ function replaceFrqShorthand(input) {
     if (!input) return;
     const prefix = input.value.slice(0, input.selectionStart || 0);
     const replacements = [
-        [/\b(?:h0|ho)\b/gi, 'H₀'], [/\bha\b/gi, 'Hₐ'], [/\bphat\b/gi, 'p̂'],
+        [/\b(?:h0|ho)(?=\s*:|\b)/gi, 'H₀'], [/\bha(?=\s*:|\b)/gi, 'Hₐ'], [/\bphat\b/gi, 'p̂'],
         [/\bxbar\b/gi, 'x̄'], [/\bmu\b/gi, 'μ'], [/\balpha\b/gi, 'α'],
         [/\bsqrt\s*\(/gi, '√('], [/\+\-/g, '±'], [/\^2(?!\d)/g, '²'], [/\^3(?!\d)/g, '³'],
         [/!=/g, '≠'], [/\s*<=\s*/g, '≤'], [/\s*>=\s*/g, '≥'], [/~=/g, '≈']
