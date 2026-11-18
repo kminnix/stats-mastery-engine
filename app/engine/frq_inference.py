@@ -35,6 +35,15 @@ def _clean(text: Any) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def _normalize_plan_text(text: str) -> str:
+    value = _clean(text)
+    value = re.sub(r"(?<=[a-z0-9])-(?=[a-z])", " ", value)
+    value = value.replace(",", "")
+    value = re.sub(r"\s*(<=|>=|<|>)\s*", r" \1 ", value)
+    value = re.sub(r"(?<=\d)%(?=[a-z])", "% ", value)
+    return re.sub(r"\s+", " ", value).strip()
+
+
 def _keywords(description: str) -> List[str]:
     ignored = {
         "the", "true", "population", "proportion", "mean", "difference", "in", "of",
@@ -223,8 +232,32 @@ def _number_list(value: Any) -> List[float]:
     return found
 
 
+def _number_near_pattern(
+    text: str,
+    target: float,
+    marker_pattern: str,
+    window: int = 120,
+) -> bool:
+    number_pattern = re.compile(rf"(?<![\w.])({_NUMBER_PATTERN})(?![\w.])")
+    for match in number_pattern.finditer(text):
+        if abs(float(match.group(1)) - target) > 0.005:
+            continue
+        context = text[max(0, match.start() - window):match.end() + window]
+        if re.search(marker_pattern, context):
+            return True
+    return False
+
+
 def _contains_number(text: str, target: float, tolerance: float = 0.005) -> bool:
     return any(abs(value - target) <= tolerance for value in _number_list(text))
+
+
+def _mentions_parameter(text: str, parameter: str) -> bool:
+    if parameter == "p":
+        return bool(re.search(r"\bp\b(?!\s*[- ]?\s*value)", text))
+    if parameter == "mu":
+        return bool(re.search(r"\bmu\b", text))
+    return parameter.replace(" ", "") in text.replace(" ", "")
 
 
 def _parse_number(value: Any) -> Optional[float]:
@@ -254,6 +287,14 @@ def _parse_number(value: Any) -> Optional[float]:
                 ast.Pow: lambda: left ** right,
             }
             return operations[type(node.op)]()
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "sqrt"
+            and len(node.args) == 1
+            and not node.keywords
+        ):
+            return math.sqrt(evaluate(node.args[0]))
         raise ValueError("Unsupported numeric expression")
     try:
         result = evaluate(tree)
@@ -265,13 +306,20 @@ def _parse_number(value: Any) -> Optional[float]:
 _NUMBER_PATTERN = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
 
 
+def _normalize_do_text(text: str) -> str:
+    value = _clean(text)
+    value = re.sub(r"√\s*\(", "sqrt(", value)
+    value = value.replace("²", "**2").replace("³", "**3")
+    return value.replace("±", "+/-")
+
+
 def _extract_labeled_number(
     text: str,
     label_pattern: str,
     stop_label_pattern: str = "",
 ) -> Optional[float]:
     pattern = re.compile(
-        rf"\b(?:{label_pattern})\s*=\s*",
+        rf"\b(?:{label_pattern})\s*(?:=|≈|~|:|\bis\b)\s*",
         re.IGNORECASE,
     )
     result = None
@@ -279,7 +327,7 @@ def _extract_labeled_number(
         expression = text[match.end():]
         if stop_label_pattern:
             boundary = re.search(
-                rf"(?:[,;]|\band\b)?\s*(?=\b(?:{stop_label_pattern})\s*=)",
+                rf"(?:[,;]|\band\b)?\s*(?=\b(?:{stop_label_pattern})\s*(?:=|≈|~|:|\bis\b))",
                 expression,
                 re.IGNORECASE,
             )
@@ -289,6 +337,10 @@ def _extract_labeled_number(
             expression = expression.splitlines()[0] if expression.splitlines() else ""
         if ";" in expression:
             expression = expression.split(";", 1)[0]
+        parsed = _parse_number(expression)
+        if parsed is not None:
+            result = parsed
+            continue
         values = _number_list(expression)
         if values:
             result = values[-1]
@@ -296,6 +348,7 @@ def _extract_labeled_number(
 
 
 def _parse_interval_bounds(text: str) -> Tuple[Optional[float], Optional[float]]:
+    text = _normalize_do_text(text)
     lower = _extract_labeled_number(text, "L", r"U|df")
     upper = _extract_labeled_number(text, "U", "df")
     if lower is not None and upper is not None:
@@ -307,6 +360,15 @@ def _parse_interval_bounds(text: str) -> Tuple[Optional[float], Optional[float]]
     pairs = list(pair_pattern.finditer(text))
     if pairs:
         return float(pairs[-1].group(1)), float(pairs[-1].group(2))
+
+    plus_minus_pattern = re.compile(
+        rf"({_NUMBER_PATTERN})\s*\+/\-\s*({_NUMBER_PATTERN})(?!\s*[A-Za-z0-9.+*/^√(\-])"
+    )
+    plus_minus = list(plus_minus_pattern.finditer(text))
+    if plus_minus:
+        center = float(plus_minus[-1].group(1))
+        margin = abs(float(plus_minus[-1].group(2)))
+        return center - margin, center + margin
 
     range_pattern = re.compile(
         rf"(?<![\w.])({_NUMBER_PATTERN})\s+to\s+({_NUMBER_PATTERN})(?![\w.])",
@@ -320,11 +382,11 @@ def _parse_interval_bounds(text: str) -> Tuple[Optional[float], Optional[float]]
 
 def _parse_conclusion_p_value(text: str) -> Optional[float]:
     match = re.search(
-        rf"\b(?:p\s*[- ]?\s*value|pval)\s*(?:=|:|is)?\s*({_NUMBER_PATTERN})",
+        rf"\b(?:p\s*[- ]?\s*value|pval)\s*(?:=|≈|~|:|\bis\b)?\s*({_NUMBER_PATTERN})",
         text,
         re.IGNORECASE,
     )
-    return float(match.group(1)) if match else None
+    return float(match.group(1)) if match else _extract_labeled_number(text, "p")
 
 
 def _parse_do_results(
@@ -333,6 +395,7 @@ def _parse_do_results(
     do_text: str,
     legacy_values: Dict[str, Any],
 ) -> Dict[str, Optional[float]]:
+    do_text = _normalize_do_text(do_text)
     if do_text.strip():
         if topic.startswith("ht_"):
             stat_name = re.escape(str(data["stat_name"]))
@@ -381,6 +444,10 @@ def _feedback(code: str, good: str, needs_work: str, incorrect: str) -> str:
     return good if code == "E" else needs_work if code == "P" else incorrect
 
 
+def _score_label(code: str) -> str:
+    return {"E": "Full Credit", "P": "Partial Credit", "I": "Needs Revision"}[code]
+
+
 def evaluate_full_frq(payload: Dict[str, Any], use_ai_grading: bool = False) -> Dict[str, Any]:
     del use_ai_grading
     problem = payload.get("problem") if isinstance(payload.get("problem"), dict) else {}
@@ -391,31 +458,46 @@ def evaluate_full_frq(payload: Dict[str, Any], use_ai_grading: bool = False) -> 
     if topic not in PARAMETER_SYMBOLS:
         raise ValueError("A supported FRQ problem payload is required.")
     sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else payload
-    state = _clean(sections.get("state_text", sections.get("state", "")))
+    response_text = payload.get("response_text")
+    has_unified_response = isinstance(response_text, str)
+    if has_unified_response:
+        state = plan = do_text = conclude = _clean(response_text)
+    else:
+        state = _clean(sections.get("state_text", sections.get("state", "")))
+        plan_value = sections.get("plan") if isinstance(sections.get("plan"), dict) else {}
+        plan = _clean(plan_value.get("text", sections.get("plan_text", "")))
+        do_text = _clean(sections.get("do_text", payload.get("do_text", "")))
+        conclude = _clean(sections.get("conclude_text", sections.get("conclude", "")))
+
     plan_value = sections.get("plan") if isinstance(sections.get("plan"), dict) else {}
-    plan = _clean(plan_value.get("text", sections.get("plan_text", "")))
     procedure = _clean(
         plan_value.get("procedure_name", sections.get("procedure_name", ""))
     )
     do_value = sections.get("do") if isinstance(sections.get("do"), dict) else {}
-    do_text = _clean(sections.get("do_text", payload.get("do_text", "")))
-    conclude = _clean(sections.get("conclude_text", sections.get("conclude", "")))
     combined_setup_text = f"{state}\n{plan}"
     parameter = _clean(PARAMETER_SYMBOLS[topic])
     context_words = data.get("context_keywords") or _keywords(data.get("parameter_description", ""))
     context_ok = (
         any(_clean(word) in combined_setup_text for word in context_words)
-        and parameter.replace(" ", "") in combined_setup_text.replace(" ", "")
+        and _mentions_parameter(combined_setup_text, parameter)
     )
     if topic.startswith("ht_"):
-        h0 = re.search(r"\bh0\b([^;\n]{0,80})", combined_setup_text)
-        ha = re.search(r"\bha\b([^;\n]{0,80})", combined_setup_text)
+        h0 = re.search(
+            r"\bh0\b(.*?)(?=\bha\b|[;\n]|$)", combined_setup_text, re.DOTALL
+        )
+        ha = re.search(
+            r"\bha\b(.*?)(?=\.\s+[a-z]|[;\n]|$)", combined_setup_text, re.DOTALL
+        )
         expected_null = float(data.get("null_value", data.get("p0", data.get("mu0", 0))))
-        equality_ok = bool(h0 and "=" in h0.group(1) and _contains_number(h0.group(1), expected_null, 0.005))
+        equality_ok = bool(
+            h0
+            and re.search(r"(?<![<>!])=(?!=)|\bis\b", h0.group(1))
+            and _contains_number(h0.group(1), expected_null, 0.0005)
+        )
         direction = str(data.get("direction", ""))
         direction_tokens = {"<": ("<", "less"), ">": (">", "greater"), "!=": ("!=", "different", "not equal")}
         alt_ok = bool(ha and any(token in ha.group(1) for token in direction_tokens.get(direction, ()))
-                      and _contains_number(ha.group(1), expected_null, 0.005))
+                      and _contains_number(ha.group(1), expected_null, 0.0005))
         state_code = _grade([context_ok, equality_ok, alt_ok])
         state_feedback = _feedback(state_code, "Parameter and hypotheses are stated in context.",
                                    "Define the population parameter in context and check both hypotheses.",
@@ -431,22 +513,57 @@ def evaluate_full_frq(payload: Dict[str, Any], use_ai_grading: bool = False) -> 
                                    "Include the population parameter and the requested confidence level.",
                                    "Define the population parameter in context and state the confidence level.")
 
-    proc_expected = _clean(data["procedure_name"])
-    procedure_ok = procedure == proc_expected or proc_expected in plan
-    random_ok = any(word in combined_setup_text for word in ("random", "randomly"))
-    independence_ok = any(
-        word in combined_setup_text for word in ("independ", "10%", "10 percent", "ten percent")
+    normalized_plan = _normalize_plan_text(combined_setup_text)
+    proc_expected = _normalize_plan_text(data["procedure_name"])
+    procedure_ok = (
+        _normalize_plan_text(procedure) == proc_expected
+        or proc_expected in normalized_plan
+    )
+    sample_sizes = data.get("sample_sizes") or [
+        value for value in (data.get("n"), data.get("n1"), data.get("n2"))
+        if value is not None
+    ]
+    context_in_response = any(
+        _clean(word) in normalized_plan for word in context_words
+    )
+    random_marker = r"\b(?:random|randomly|srs)\b"
+    random_evidence = context_in_response or any(
+        _contains_number(normalized_plan, float(size))
+        or _contains_number(normalized_plan, float(size) * 10)
+        for size in sample_sizes
+    )
+    random_ok = bool(re.search(random_marker, normalized_plan)) and random_evidence
+    independence_marker = r"(?:10\s*%|10\s*percent|0\.10|10\s+times|ten\s+times)"
+    independence_ok = bool(sample_sizes) and all(
+        _number_near_pattern(normalized_plan, float(size), independence_marker)
+        or _number_near_pattern(normalized_plan, float(size) * 10, independence_marker)
+        for size in sample_sizes
     )
     expected_numbers = _condition_numbers(topic, data)
-    numeric_conditions_ok = bool(expected_numbers) and all(
-        _contains_number(combined_setup_text, number, 0.005)
-        for number in expected_numbers
+    sample_numbers_ok = bool(sample_sizes) and all(
+        _contains_number(normalized_plan, float(size))
+        or _contains_number(normalized_plan, float(size) * 10)
+        for size in sample_sizes
     )
-    model_ok = (
-        any(word in combined_setup_text for word in ("large count", "success", "failure", "expected count"))
-        if "prop" in topic
-        else any(word in combined_setup_text for word in ("normal", "clt", "central limit", "approximately bell"))
-    )
+    if "prop" in topic:
+        count_numbers = expected_numbers[len(sample_sizes) * 2:]
+        count_marker = r"(?:large counts?|at least\s+10|(?:>=|>)\s*10)"
+        counts_ok = bool(count_numbers) and all(
+            _contains_number(normalized_plan, number, 0.005)
+            and _number_near_pattern(normalized_plan, number, count_marker)
+            for number in count_numbers
+        )
+        numeric_conditions_ok = sample_numbers_ok and bool(count_numbers) and all(
+            _contains_number(normalized_plan, number, 0.005)
+            for number in count_numbers
+        )
+        model_ok = counts_ok
+    else:
+        numeric_conditions_ok = sample_numbers_ok
+        model_ok = any(
+            word in normalized_plan
+            for word in ("normal", "clt", "central limit", "approximately bell")
+        )
     checks_claimed = random_ok and independence_ok and model_ok
     plan_code = _grade([procedure_ok, checks_claimed, numeric_conditions_ok])
     plan_feedback = _feedback(plan_code, "Procedure and conditions are identified with numerical checks.",
@@ -547,10 +664,10 @@ def evaluate_full_frq(payload: Dict[str, Any], use_ai_grading: bool = False) -> 
                                       "Interpret the interval using your entered bounds and the true population parameter.")
 
     results = {
-        "state": {"score_code": state_code, "feedback": state_feedback},
-        "plan": {"score_code": plan_code, "feedback": plan_feedback},
-        "do": {"score_code": do_code, "feedback": do_feedback},
-        "conclude": {"score_code": conclude_code, "feedback": conclude_feedback},
+        "state": {"score_code": state_code, "score_label": _score_label(state_code), "feedback": state_feedback},
+        "plan": {"score_code": plan_code, "score_label": _score_label(plan_code), "feedback": plan_feedback},
+        "do": {"score_code": do_code, "score_label": _score_label(do_code), "feedback": do_feedback},
+        "conclude": {"score_code": conclude_code, "score_label": _score_label(conclude_code), "feedback": conclude_feedback},
     }
     overall = _grade([item["score_code"] == "E" for item in results.values()])
     try:

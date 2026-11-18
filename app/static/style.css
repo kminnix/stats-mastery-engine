@@ -90,7 +90,14 @@ body.stats-docked-bottom #page-wrapper {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
 }
-.frq-symbol-bar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 5px; }
+.frq-notation-toolbar {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+.frq-symbol-bar { display: flex; flex: 1 1 420px; flex-wrap: wrap; gap: 5px; }
 .frq-symbol-pill {
     padding: 4px 9px;
     border: 1px solid #cbd5e1;
@@ -98,6 +105,34 @@ body.stats-docked-bottom #page-wrapper {
     background: #f8fafc;
     cursor: pointer;
 }
+.frq-equation-builder {
+    display: flex;
+    flex: 1 1 440px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+}
+.frq-equation-builder .frq-equation-mathfield {
+    box-sizing: border-box;
+    flex: 1 1 180px;
+    min-width: 180px;
+    max-width: 300px;
+    min-height: 38px;
+}
+.frq-equation-button {
+    min-height: 32px;
+    padding: 4px 9px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #fff;
+    color: #1e293b;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.frq-equation-button:hover { background: #f1f5f9; }
+.frq-equation-insert { border-color: #93c5fd; background: #eff6ff; }
+.frq-equation-status { flex-basis: 100%; color: #b91c1c; font-size: 0.8rem; }
+.frq-equation-status:empty { display: none; }
 .frq-section-card {
     min-width: 0;
     padding: 12px;
@@ -134,7 +169,7 @@ body.stats-docked-bottom #page-wrapper {
 
 @media (max-width: 760px) {
     .full-frq-workspace { grid-template-columns: minmax(0, 1fr); }
-    .frq-symbol-bar,
+    .frq-notation-toolbar,
     .frq-section-card[data-frq-card="do"],
     .frq-section-card[data-frq-card="conclude"],
     #frq-submit-full,

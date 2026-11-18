@@ -4,7 +4,10 @@ const taskId = urlParams.get('task_id');
 
 function evaluateMathInput(rawStringOrLatex) {
     if (!rawStringOrLatex || !rawStringOrLatex.trim()) return NaN;
-    const str = rawStringOrLatex.trim();
+    const str = rawStringOrLatex.trim()
+        .replace(/√\s*\(/g, 'sqrt(')
+        .replace(/²/g, '^2')
+        .replace(/³/g, '^3');
     try {
         if (!isNaN(Number(str))) return Number(str);
         if (typeof math === 'undefined') return NaN;
@@ -2034,13 +2037,14 @@ async function submitFrqConclusion(idx, regrade = false) {
     }
 }
 
-function replaceFrqShorthand(input, force = false) {
-    if (!input || (!force && !/[^\w]/.test(input.value.slice(-1)))) return;
+function replaceFrqShorthand(input) {
+    if (!input) return;
     const prefix = input.value.slice(0, input.selectionStart || 0);
     const replacements = [
         [/\b(?:h0|ho)\b/gi, 'H₀'], [/\bha\b/gi, 'Hₐ'], [/\bphat\b/gi, 'p̂'],
         [/\bxbar\b/gi, 'x̄'], [/\bmu\b/gi, 'μ'], [/\balpha\b/gi, 'α'],
-        [/!=/g, '≠'], [/\s*<=\s*/g, '≤'], [/\s*>=\s*/g, '≥']
+        [/\bsqrt\s*\(/gi, '√('], [/\+\-/g, '±'], [/\^2(?!\d)/g, '²'], [/\^3(?!\d)/g, '³'],
+        [/!=/g, '≠'], [/\s*<=\s*/g, '≤'], [/\s*>=\s*/g, '≥'], [/~=/g, '≈']
     ];
     let value = input.value;
     let caretPrefix = prefix;
@@ -2059,6 +2063,71 @@ function insertFrqSymbol(input, symbol) {
     const end = input.selectionEnd ?? start;
     input.setRangeText(symbol, start, end, 'end');
     input.focus();
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function insertFrqEquation(mathfield, responseInput, status) {
+    const latex = mathfield.getValue();
+    if (!latex.trim()) {
+        status.textContent = 'Enter an equation first.';
+        mathfield.focus();
+        return false;
+    }
+
+    try {
+        if (typeof latexToMathJs !== 'function' || typeof math === 'undefined') {
+            throw new Error('The equation evaluator is unavailable.');
+        }
+        const toReadableExpression = expression => expression
+            .replace(/\(\(([^()]+)\)\/\(([^()]+)\)\)/g, '$1/$2')
+            .replace(/\bsqrt\(/g, '√(')
+            .replace(/([0-9)])([+\-*/])(?=[0-9(])/g, '$1 $2 ');
+        const plusMinusParts = latex.split(/\\pm/);
+        let readableExpression;
+        let resultText;
+        if (plusMinusParts.length === 2) {
+            const centerExpression = latexToMathJs(plusMinusParts[0]);
+            const marginExpression = latexToMathJs(plusMinusParts[1]);
+            const center = math.evaluate(centerExpression);
+            const margin = math.evaluate(marginExpression);
+            if (typeof center !== 'number' || !Number.isFinite(center)
+                || typeof margin !== 'number' || !Number.isFinite(margin)) {
+                throw new Error('Enter an equation with a finite numeric result.');
+            }
+            const interval = [center - Math.abs(margin), center + Math.abs(margin)]
+                .map(value => Number(value.toPrecision(10)));
+            readableExpression = `${toReadableExpression(centerExpression)} ± ${toReadableExpression(marginExpression)}`;
+            resultText = `(${interval[0]}, ${interval[1]})`;
+        } else {
+            if (plusMinusParts.length > 2) {
+                throw new Error('Use one ± symbol per equation.');
+            }
+            const expression = latexToMathJs(latex);
+            const result = math.evaluate(expression);
+            if (typeof result !== 'number' || !Number.isFinite(result)) {
+                throw new Error('Enter an equation with a finite numeric result.');
+            }
+            readableExpression = toReadableExpression(expression);
+            resultText = Number(result.toPrecision(10));
+        }
+        const line = `${readableExpression} = ${resultText}`;
+        const start = responseInput.selectionStart ?? responseInput.value.length;
+        const end = responseInput.selectionEnd ?? start;
+        const before = responseInput.value.slice(0, start);
+        const after = responseInput.value.slice(end);
+        const prefix = before && !before.endsWith('\n') ? '\n' : '';
+        const suffix = after && !after.startsWith('\n') ? '\n' : '';
+        responseInput.setRangeText(`${prefix}${line}${suffix}`, start, end, 'end');
+        responseInput.dispatchEvent(new Event('input', { bubbles: true }));
+        mathfield.setValue('');
+        status.textContent = '';
+        responseInput.focus();
+        return true;
+    } catch (error) {
+        status.textContent = error.message || 'Could not evaluate this equation.';
+        mathfield.focus();
+        return false;
+    }
 }
 
 function insertFrqInlineCalculation(input) {
@@ -2076,9 +2145,22 @@ function insertFrqInlineCalculation(input) {
     const expression = linePrefix.slice(previousEquals + 1).trim();
     if (!expression) return false;
 
+    const plusMinusParts = expression.split('±');
+    if (plusMinusParts.length === 2) {
+        const center = evaluateMathInput(plusMinusParts[0]);
+        const margin = evaluateMathInput(plusMinusParts[1]);
+        if (!Number.isFinite(center) || !Number.isFinite(margin)) return false;
+        const values = [center - Math.abs(margin), center + Math.abs(margin)]
+            .map(value => Number(value.toPrecision(10)));
+        input.setRangeText(`= (${values[0]}, ${values[1]})`, start, end, 'end');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        return true;
+    }
+
     const result = evaluateMathInput(expression);
     if (!Number.isFinite(result)) return false;
     input.setRangeText(`= ${Number(result.toPrecision(10))}`, start, end, 'end');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
     return true;
 }
 
@@ -2087,9 +2169,11 @@ function renderFullFrqUI(container) {
     currentFrqEvaluation = null;
     container.classList.add('full-frq-workspace');
     container.style.display = 'grid';
+    const toolbarRow = document.createElement('div');
+    toolbarRow.className = 'frq-notation-toolbar';
     const symbolBar = document.createElement('div');
     symbolBar.className = 'frq-symbol-bar';
-    ['p', 'p̂', 'μ', 'x̄', 'p₁ - p₂', 'μ₁ - μ₂', 'H₀', 'Hₐ', 'α', '≠', '≤', '≥'].forEach(symbol => {
+    ['p', 'p̂', 'μ', 'x̄', 'p₁ - p₂', 'μ₁ - μ₂', 'H₀', 'Hₐ', 'α', '≠', '≤', '≥', '≈'].forEach(symbol => {
         const pill = document.createElement('button');
         pill.type = 'button';
         pill.className = 'frq-symbol-pill';
@@ -2101,71 +2185,89 @@ function renderFullFrqUI(container) {
         });
         symbolBar.appendChild(pill);
     });
-    container.appendChild(symbolBar);
 
-    const stateCard = document.createElement('section');
-    stateCard.className = 'frq-section-card';
-    stateCard.dataset.frqCard = 'state';
-    stateCard.innerHTML = '<h3>1. State</h3>';
-    const stateInput = document.createElement('textarea');
-    stateInput.id = 'frq-state-input';
-    stateInput.className = 'frq-text-input';
-    stateInput.rows = 3;
-    stateInput.placeholder = 'Define the population parameter in context; for a test, state H₀ and Hₐ.';
-    stateCard.appendChild(stateInput);
-    container.appendChild(stateCard);
+    const equationBuilder = document.createElement('div');
+    equationBuilder.id = 'frq-equation-builder';
+    equationBuilder.className = 'frq-equation-builder';
+    equationBuilder.setAttribute('aria-label', '2D Equation Builder');
+    const mathfield = document.createElement('math-field');
+    mathfield.id = 'frq-mathfield';
+    mathfield.className = 'question-mathfield frq-equation-mathfield';
+    mathfield.setAttribute('virtual-keyboard-mode', 'manual');
+    mathfield.setAttribute('aria-label', 'Enter a mathematical expression');
+    const equationStatus = document.createElement('span');
+    equationStatus.className = 'frq-equation-status';
+    equationStatus.setAttribute('aria-live', 'polite');
+    const insertBuilderSymbol = (label, latex, accessibleLabel = label) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'frq-equation-button';
+        button.textContent = label;
+        button.setAttribute('aria-label', accessibleLabel);
+        button.addEventListener('click', () => {
+            mathfield.executeCommand(['insert', latex]);
+            mathfield.focus();
+            equationStatus.textContent = '';
+        });
+        equationBuilder.appendChild(button);
+    };
+    equationBuilder.appendChild(mathfield);
+    insertBuilderSymbol('√', '\\sqrt{#0}', 'Insert square root');
+    insertBuilderSymbol('a/b', '\\frac{#?}{#?}', 'Insert fraction');
+    insertBuilderSymbol('±', '\\pm', 'Insert plus or minus');
+    const insertEquation = document.createElement('button');
+    insertEquation.type = 'button';
+    insertEquation.className = 'frq-equation-button frq-equation-insert';
+    insertEquation.textContent = 'Insert (=)';
+    insertEquation.addEventListener('click', () =>
+        insertFrqEquation(mathfield, document.getElementById('frq-response-input'), equationStatus)
+    );
+    equationBuilder.appendChild(insertEquation);
+    equationBuilder.appendChild(equationStatus);
+    mathfield.addEventListener('keydown', event => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            insertFrqEquation(mathfield, document.getElementById('frq-response-input'), equationStatus);
+        }
+    });
+    mathfield.addEventListener('input', () => { equationStatus.textContent = ''; });
+    toolbarRow.append(symbolBar, equationBuilder);
+    container.appendChild(toolbarRow);
 
-    const planCard = document.createElement('section');
-    planCard.className = 'frq-section-card';
-    planCard.dataset.frqCard = 'plan';
-    planCard.innerHTML = '<h3>2. Plan</h3>';
-    const procedure = document.createElement('select');
-    procedure.id = 'frq-procedure-name';
-    procedure.className = 'frq-text-input';
-    procedure.add(new Option('Choose the exact inference procedure...', ''));
-    (currentProblem.procedure_options || []).forEach(name => procedure.add(new Option(name, name)));
-    const procedureLabel = document.createElement('label');
-    procedureLabel.textContent = 'Name the inference procedure: ';
-    procedureLabel.appendChild(procedure);
-    const planInput = document.createElement('textarea');
-    planInput.id = 'frq-plan-input';
-    planInput.className = 'frq-text-input';
-    planInput.rows = 4;
-    planInput.placeholder = 'Verify randomization, independence (10%), and success/failure counts or normality using this problem’s numbers.';
-    planCard.append(procedureLabel, planInput);
-    container.appendChild(planCard);
-
-    const doCard = document.createElement('section');
-    doCard.className = 'frq-section-card';
-    doCard.dataset.frqCard = 'do';
-    doCard.innerHTML = '<h3>3. Do</h3>';
-    const data = currentProblem.data || {};
-    const doInput = document.createElement('textarea');
-    doInput.id = 'frq-do-input';
-    doInput.className = 'frq-text-input frq-do-input';
-    doInput.rows = 8;
-    doInput.placeholder = data.is_test
-        ? 'Show your formula setup, test statistic, and P-value (e.g., z = 2.14, p-value = 0.0162)...'
-        : 'Show your formula setup and final confidence interval (e.g., 0.43 ± 2.576√(0.43·0.57/100) = (0.3025, 0.5575))...';
-    doInput.addEventListener('keydown', event => {
-        if (event.key === '=' && insertFrqInlineCalculation(doInput)) {
+    const responseCard = document.createElement('section');
+    responseCard.className = 'frq-section-card';
+    responseCard.style.gridColumn = '1 / -1';
+    responseCard.innerHTML = '<h3>Free Response</h3>';
+    const responseInput = document.createElement('textarea');
+    responseInput.id = 'frq-response-input';
+    responseInput.className = 'frq-text-input frq-do-input';
+    responseInput.rows = 16;
+    responseInput.addEventListener('keydown', event => {
+        if (event.key === '=' && insertFrqInlineCalculation(responseInput)) {
             event.preventDefault();
         }
     });
-    doCard.appendChild(doInput);
-    container.appendChild(doCard);
+    responseCard.appendChild(responseInput);
+    container.appendChild(responseCard);
 
-    const concludeCard = document.createElement('section');
-    concludeCard.className = 'frq-section-card';
-    concludeCard.dataset.frqCard = 'conclude';
-    concludeCard.innerHTML = '<h3>4. Conclude</h3>';
-    const concludeInput = document.createElement('textarea');
-    concludeInput.id = 'frq-conclude-input';
-    concludeInput.className = 'frq-text-input';
-    concludeInput.rows = 3;
-    concludeInput.placeholder = 'Interpret your result in context using your P-value or interval bounds.';
-    concludeCard.appendChild(concludeInput);
-    container.appendChild(concludeCard);
+    const checklist = document.createElement('details');
+    checklist.className = 'frq-structure-checklist';
+    checklist.style.gridColumn = '1 / -1';
+    const checklistSummary = document.createElement('summary');
+    checklistSummary.textContent = 'Need structure? Show State / Plan / Do / Conclude checklist';
+    const checklistItems = document.createElement('ul');
+    [
+        'State: parameter in context and hypotheses or confidence level.',
+        'Plan: procedure and condition checks, supported by the problem’s numbers.',
+        'Do: calculations, test statistic and P-value or confidence interval.',
+        'Conclude: decision and interpretation in context.'
+    ].forEach(item => {
+        const listItem = document.createElement('li');
+        listItem.textContent = item;
+        checklistItems.appendChild(listItem);
+    });
+    checklist.append(checklistSummary, checklistItems);
+    container.appendChild(checklist);
 
     const submit = document.createElement('button');
     submit.type = 'button';
@@ -2189,11 +2291,10 @@ function renderFullFrqUI(container) {
     next.addEventListener('click', () => activeTaskState.active ? advanceToNextOrSummary() : loadProblem());
     container.append(submit, feedback, exemplar, next);
     container.querySelectorAll('textarea.frq-text-input').forEach(input => {
-        input.addEventListener('input', event => replaceFrqShorthand(
-            input,
-            event.inputType === 'insertFromPaste' || /[\s,.;:()<>!=]/.test(event.data || '')
-        ));
-        input.addEventListener('paste', () => setTimeout(() => replaceFrqShorthand(input, true), 0));
+        input.addEventListener('input', () => replaceFrqShorthand(input));
+        input.addEventListener('paste', () => setTimeout(() => {
+            replaceFrqShorthand(input);
+        }, 0));
     });
 }
 
@@ -2201,16 +2302,17 @@ async function submitFullFrqResponse() {
     const panel = document.getElementById('multi-stage-panel');
     const feedback = document.getElementById('frq-full-feedback');
     const submit = document.getElementById('frq-submit-full');
+    const responseText = document.getElementById('frq-response-input').value;
     const payload = {
         topic: currentProblem.data?.topic,
         problem: currentProblem,
         attempt: currentFrqAttemptCount + 1,
         retry_mode: activeTaskState.active ? activeTaskState.frqRetryMode : 'revision',
-        state_text: document.getElementById('frq-state-input').value,
-        procedure_name: document.getElementById('frq-procedure-name').value,
-        plan_text: document.getElementById('frq-plan-input').value,
-        do_text: document.getElementById('frq-do-input').value,
-        conclude_text: document.getElementById('frq-conclude-input').value,
+        response_text: responseText,
+        state_text: responseText,
+        plan_text: responseText,
+        do_text: responseText,
+        conclude_text: responseText,
     };
     submit.disabled = true;
     try {
@@ -2226,19 +2328,22 @@ async function submitFullFrqResponse() {
         feedback.replaceChildren();
         const rubric = document.createElement('div');
         rubric.className = 'frq-rubric-results';
+        const sectionTitles = {
+            state: currentProblem.data?.is_test ? 'Parameter & Hypotheses' : 'Parameter & Confidence Level',
+            plan: 'Procedure & Conditions',
+            do: 'Calculations & Results',
+            conclude: 'Conclusion in Context'
+        };
         Object.entries(result.sections || {}).forEach(([key, item]) => {
-            const card = panel.querySelector(`[data-frq-card="${key}"]`);
-            card.dataset.score = item.score_code;
-            card.classList.toggle('frq-needs-revision', item.score_code !== 'E');
+            const row = document.createElement('section');
+            row.className = 'frq-rubric-section';
             const badge = document.createElement('strong');
             badge.className = `frq-score frq-score-${item.score_code.toLowerCase()}`;
-            badge.textContent = `${key.toUpperCase()}: ${item.score_code}`;
+            badge.textContent = `${sectionTitles[key] || key}: ${item.score_label}`;
             const note = document.createElement('p');
             note.textContent = item.feedback;
-            rubric.append(badge, note);
-            card.querySelectorAll('input, textarea, select').forEach(input => {
-                input.disabled = item.score_code === 'E';
-            });
+            row.append(badge, note);
+            rubric.appendChild(row);
         });
         feedback.appendChild(rubric);
         const retryMode = payload.retry_mode;
@@ -2263,8 +2368,10 @@ async function submitFullFrqResponse() {
         });
         submit.hidden = true;
         document.getElementById('frq-next-question').hidden = false;
-        panel.querySelectorAll('.frq-text-input, #frq-procedure-name, [data-frq-number]')
+        panel.querySelectorAll('.frq-text-input, [data-frq-number], #frq-equation-builder button')
             .forEach(input => { input.disabled = true; });
+        const equationField = panel.querySelector('#frq-mathfield');
+        if (equationField) equationField.readOnly = true;
         if (activeTaskState.active) {
             const index = activeTaskState.currentIndex - 1;
             const earned = Object.values(result.sections).reduce((sum, item) =>
