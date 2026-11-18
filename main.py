@@ -47,7 +47,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "167"
+STATIC_VERSION = "170"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -557,15 +557,17 @@ def slice_problem_to_step(problem_dict: Dict[str, Any], step_selector: Union[str
         context.append(f"Solve only this step: {html.escape(str(selected.get('label', '')))}")
     elif step_selector == "cond":
         selected = find("Check Conditions")
-        selected["components"] = [
-            item for item in selected.get("components", []) if item.get("id") != "procedure-name"
-        ]
+        if kind != "matched_pairs_t":
+            selected["components"] = [
+                item for item in selected.get("components", [])
+                if item.get("id") != "procedure-name"
+            ]
         parts = selected.get("parts", [])
         condition_start = next(
             (index for index, part in enumerate(parts) if part == "Conditions: "),
             None,
         )
-        if condition_start is not None:
+        if condition_start is not None and kind != "matched_pairs_t":
             selected["parts"] = parts[condition_start:]
     elif step_selector == "hypo":
         selected = find("Hypotheses")
@@ -781,6 +783,9 @@ async def get_inference_drill(topic: str):
         "drill_proc_ci_mean": lambda: generate_procedure_name_drill("ci_mean"),
         "drill_proc_ht_prop": lambda: generate_procedure_name_drill("ht_prop"),
         "drill_proc_ht_mean": lambda: generate_procedure_name_drill("ht_mean"),
+        "drill_proc_matched_pairs": lambda: generate_procedure_name_drill("matched_pairs"),
+        "drill_proc_chi_square": lambda: generate_procedure_name_drill("chi_square"),
+        "drill_proc_slope": lambda: generate_procedure_name_drill("regression_slope"),
         "cond_check_prop": generate_condition_check_proportion,
         "drill_se_prop": generate_standard_error_drill_proportion,
         "drill_hypo_prop": generate_hypothesis_drill_proportion,

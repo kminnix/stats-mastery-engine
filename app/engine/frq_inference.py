@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from .confidence_intervals import generate_ci_problem
 from .hypothesis_testing import generate_ht_problem
 from .inference_drills import PROCEDURE_NAMES, procedure_name_for_topic
+from .chi_square import generate_chi_problem
+from .linear_regression import generate_regression_problem
 
 
 FRQ_TOPICS = {
@@ -17,6 +19,13 @@ FRQ_TOPICS = {
     "frq_ht_prop_2samp": ("ht_prop_z_2samp", "Full FRQ: 2-Sample z-Test for Proportions (p₁ - p₂)"),
     "frq_ht_mean_1samp": ("ht_mean_t", "Full FRQ: 1-Sample t-Test for Mean (μ)"),
     "frq_ht_mean_2samp": ("ht_mean_t_2samp", "Full FRQ: 2-Sample t-Test for Means (μ₁ - μ₂)"),
+    "frq_ci_matched_pairs": ("matched_pairs_t", "Full FRQ: Matched Pairs t-Interval for Mean Difference (μ_diff)"),
+    "frq_ht_matched_pairs": ("ht_matched_pairs_t", "Full FRQ: Matched Pairs t-Test for Mean Difference (μ_diff)"),
+    "frq_chi_gof": ("chi_gof", "Full FRQ: Chi-Square Goodness-of-Fit Test"),
+    "frq_chi_independence": ("chi_independence", "Full FRQ: Chi-Square Test for Independence"),
+    "frq_chi_homogeneity": ("chi_homogeneity", "Full FRQ: Chi-Square Test for Homogeneity"),
+    "frq_ci_slope": ("reg_slope_ci", "Full FRQ: Linear Regression t-Interval for Slope (β₁)"),
+    "frq_ht_slope": ("reg_slope_test", "Full FRQ: Linear Regression t-Test for Slope (β₁)"),
 }
 
 PARAMETER_SYMBOLS = {
@@ -24,15 +33,40 @@ PARAMETER_SYMBOLS = {
     "ci_prop_z_2samp": "p₁ - p₂", "ht_prop_z_2samp": "p₁ - p₂",
     "ci_mean_t": "μ", "ht_mean_t": "μ",
     "ci_mean_t_2samp": "μ₁ - μ₂", "ht_mean_t_2samp": "μ₁ - μ₂",
+    "ci_matched_pairs_t": "μ_diff", "ht_matched_pairs_t": "μ_diff",
+    "chi_gof": "distribution", "chi_independence": "association",
+    "chi_homogeneity": "distribution",
+    "reg_slope_ci": "β₁", "reg_slope_test": "β₁",
 }
 
 
 def _clean(text: Any) -> str:
     value = str(text or "").lower().replace("₀", "0").replace("₁", "1").replace("₂", "2").replace("ₐ", "a")
+    value = value.replace("χ²", "chi2").replace("β₁", "beta1").replace("β", "beta")
     value = value.replace("μ", "mu").replace("−", "-").replace("–", "-").replace("≠", "!=")
     value = value.replace("≤", "<=").replace("≥", ">=").replace("α", "alpha")
     value = value.replace("p̂", "phat").replace("x̄", "xbar")
     return re.sub(r"\s+", " ", value).strip()
+
+
+def _clean_lines(text: Any) -> str:
+    return "\n".join(_clean(line) for line in str(text or "").splitlines())
+
+
+def _normalize_context_text(text: Any) -> str:
+    value = _clean(text)
+    value = re.sub(r"<[^>]*>", " ", value)
+    value = re.sub(r"(?<=\w)'s\b", "", value)
+    value = re.sub(r"(?<=\w)&(?=\w)", "", value)
+    tokens = re.findall(r"[a-z0-9]+", value)
+    normalized = []
+    for token in tokens:
+        if token.endswith("ies") and len(token) > 4:
+            token = token[:-3] + "y"
+        elif token.endswith("s") and len(token) > 3 and not token.endswith(("ss", "us", "is")):
+            token = token[:-1]
+        normalized.append(token)
+    return " ".join(normalized)
 
 
 def _normalize_plan_text(text: str) -> str:
@@ -46,10 +80,55 @@ def _normalize_plan_text(text: str) -> str:
 
 def _keywords(description: str) -> List[str]:
     ignored = {
-        "the", "true", "population", "proportion", "mean", "difference", "in", "of",
-        "for", "and", "who", "that", "is", "are", "with", "between", "group",
+        "a", "an", "the", "true", "population", "proportion", "mean", "difference",
+        "in", "of", "for", "and", "who", "that", "is", "are", "with", "between",
+        "group", "researcher", "study", "studies", "under", "null", "alternative",
+        "hypothesis", "random", "sample", "samples", "observed", "count", "shown",
+        "below", "test", "whether", "from", "each", "taken", "across", "single",
+        "cross", "classified", "preferred",
     }
-    return [word for word in re.findall(r"[a-z]{3,}", description.lower()) if word not in ignored][:8]
+    return [
+        word for word in _normalize_context_text(description).split()
+        if len(word) >= 2 and word not in ignored
+    ][:12]
+
+
+def _matches_context(text: str, keywords: List[str]) -> bool:
+    normalized_text = f" {_normalize_context_text(text)} "
+    for keyword in keywords:
+        normalized_keyword = _normalize_context_text(keyword)
+        if normalized_keyword and f" {normalized_keyword} " in normalized_text:
+            return True
+    return False
+
+
+def _extract_hypothesis_text(
+    text: str,
+    label_pattern: str,
+    stop_label_pattern: str = "",
+) -> Optional[str]:
+    stop_pattern = (
+        rf"(?<![a-z0-9_])(?:{stop_label_pattern})(?![a-z0-9_])|"
+        if stop_label_pattern else ""
+    )
+    ending = (
+        rf"(?={stop_pattern}\n[ \t]*\n|"
+        r"\bplan[ \t]*:|\bconditions?[ \t]*:|\balpha[ \t]*=|"
+        r"(?:^|\n)[ \t]*(?:plan(?:\s*[:.]|\b)|conditions?\s*:|"
+        r"alpha\s*=|chi[\s-]*square\b|matched\s+pairs\b|"
+        r"linear\s+regression\b|random\b)|\Z)"
+    )
+    match = re.search(
+        rf"(?<![a-z0-9_])(?:{label_pattern})(?![a-z0-9_])[ \t]*(?::|=)?[ \t]*"
+        rf"(.*?){ending}",
+        text,
+        re.DOTALL | re.IGNORECASE | re.MULTILINE,
+    )
+    return match.group(1).strip() if match else None
+
+
+_NULL_LABEL = r"h[ \t]*[_-]?[ \t]*[0₀]|ho|null(?:[ \t]+hypothesis)?"
+_ALTERNATIVE_LABEL = r"h[ \t]*[_-]?[ \t]*[aₐ]|alt(?:ernative)?(?:[ \t]+hypothesis)?"
 
 
 def _condition_numbers(topic: str, data: Dict[str, Any]) -> List[float]:
@@ -80,7 +159,108 @@ def _condition_numbers(topic: str, data: Dict[str, Any]) -> List[float]:
     return numbers
 
 
+def _extended_exemplar(data: Dict[str, Any]) -> Dict[str, str]:
+    kind = data["frq_kind"]
+    procedure = data["procedure_name"]
+    description = data["parameter_description"]
+    sample_sizes = data.get("sample_sizes", [])
+
+    if kind.startswith("chi_"):
+        null = data["null_statement"]
+        alternative = data["alternative_statement"]
+        state = f"H₀: {null}. Hₐ: {alternative}."
+        sample_parts = []
+        population_sizes = data.get("population_sizes") or [data["population_size"]]
+        for index, (size, population) in enumerate(zip(sample_sizes, population_sizes), 1):
+            sample_label = f"n{index}" if len(sample_sizes) > 1 else "n"
+            population_label = f"N{index}" if len(sample_sizes) > 1 else "N"
+            sample_parts.append(
+                f"{sample_label} = {size} ≤ 0.10{population_label} = {population * 0.1:g}"
+            )
+        expected = ", ".join(f"{value:.2f}" for value in data["expected_counts"])
+        plan = (
+            f"{procedure}. The sample design is random. The 10% checks are "
+            f"{'; '.join(sample_parts)}. Expected counts: E_min = "
+            f"{data['minimum_expected_count']:.2f} ≥ 5; all expected counts "
+            f"({expected}) are at least 5."
+        )
+        do = (
+            f"df = {data['df']}; χ² = {data['stat']:.4f}; "
+            f"P-value = {data['p_val']:.5f}."
+        )
+        p_value, alpha = data["p_val"], data["alpha"]
+        reject = p_value <= alpha
+        comparison = "less than or equal to" if reject else "greater than"
+        decision = "reject" if reject else "fail to reject"
+        evidence = "convincing" if reject else "not convincing"
+        conclude = (
+            f"Since the P-value {p_value:.5f} is {comparison} α = {alpha:g}, "
+            f"we {decision} H₀. There is {evidence} evidence that {alternative}."
+        )
+        return {"state": state, "plan": plan, "do": do, "conclude": conclude}
+
+    is_matched = kind.startswith("matched_")
+    parameter = "μ_diff" if is_matched else "β₁"
+    if kind.endswith("_ci"):
+        confidence = data["conf_level"]
+        state = (
+            f"Let {parameter} represent {description}. "
+            f"The confidence level is {confidence:g}%."
+        )
+    else:
+        direction = {"<": "<", ">": ">", "!=": "≠"}[data["direction"]]
+        state = (
+            f"Let {parameter} represent {description}. "
+            f"H₀: {parameter} = 0; Hₐ: {parameter} {direction} 0."
+        )
+
+    size = int(sample_sizes[0])
+    population = int(data["population_size"])
+    ten_percent = f"n = {size} ≤ 0.10N = {population * 0.1:g}"
+    if is_matched:
+        model_condition = (
+            "The paired differences show no strong skewness or outliers."
+        )
+        design = "The observations are matched pairs from a random sample."
+        plan = (
+            f"{procedure}. {design} For independence, {ten_percent}. "
+            f"{model_condition}"
+        )
+    else:
+        plan = (
+            f"{procedure}. The sample is random. LINER: the relationship is linear; "
+            f"for independence, {ten_percent}; residuals are normal; equal variance; "
+            f"and the sample is random."
+        )
+
+    if kind.endswith("_ci"):
+        lower, upper = data["ci_lower"], data["ci_upper"]
+        do = f"df = {data['df']}; Interval bounds: L = {lower:.4f}, U = {upper:.4f}."
+        conclude = (
+            f"We are {data['conf_level']:g}% confident that the interval from "
+            f"{lower:.4f} to {upper:.4f} captures the true {description}."
+        )
+    else:
+        do = (
+            f"t = {data['stat']:.4f}; P-value = {data['p_val']:.5f}; "
+            f"df = {data['df']}."
+        )
+        p_value, alpha = data["p_val"], data["alpha"]
+        reject = p_value <= alpha
+        comparison = "less than or equal to" if reject else "greater than"
+        decision = "reject" if reject else "fail to reject"
+        evidence = "convincing" if reject else "not convincing"
+        conclude = (
+            f"Since the P-value {p_value:.5f} is {comparison} α = {alpha:g}, "
+            f"we {decision} H₀. There is {evidence} evidence that "
+            f"{data['alternative_statement']}."
+        )
+    return {"state": state, "plan": plan, "do": do, "conclude": conclude}
+
+
 def _exemplar(topic: str, data: Dict[str, Any], procedure: str) -> Dict[str, str]:
+    if data.get("frq_kind"):
+        return _extended_exemplar(data)
     parameter = PARAMETER_SYMBOLS[topic]
     context = data.get("parameter_description", "the population parameter in the scenario")
     is_test = topic.startswith("ht_")
@@ -144,8 +324,19 @@ def generate_frq_problem(topic: str) -> Dict[str, Any]:
     if topic not in FRQ_TOPICS:
         raise ValueError(f"Unknown full FRQ topic: {topic}")
     source_topic, title = FRQ_TOPICS[topic]
-    problem = generate_ht_problem(source_topic) if source_topic.startswith("ht_") else generate_ci_problem(source_topic)
-    analysis_topic = source_topic if source_topic.startswith("ht_") else f"ci_{source_topic}"
+    if source_topic.startswith("chi_"):
+        problem = generate_chi_problem(source_topic)
+        analysis_topic = source_topic
+    elif source_topic.startswith("reg_slope"):
+        problem = generate_regression_problem(source_topic, "b0b1")
+        analysis_topic = source_topic
+    else:
+        problem = (
+            generate_ht_problem(source_topic)
+            if source_topic.startswith("ht_")
+            else generate_ci_problem(source_topic)
+        )
+        analysis_topic = source_topic if source_topic.startswith("ht_") else f"ci_{source_topic}"
     data = dict(problem.get("metadata") or {})
     data["topic"] = analysis_topic
     data["procedure_name"] = procedure_name_for_topic(analysis_topic)
@@ -158,17 +349,76 @@ def generate_frq_problem(topic: str) -> Dict[str, Any]:
             "ci_prop_z_2samp": "the difference in true population proportions for Group 1 minus Group 2",
             "ci_mean_t": "the true population mean of the measured variable",
             "ci_mean_t_2samp": "the difference in true population means for Group 1 minus Group 2",
+            "ci_matched_pairs_t": "the true mean paired difference in the measured outcome",
+            "ht_matched_pairs_t": "the true mean paired difference in the measured outcome",
+            "reg_slope_ci": "the true slope of the population regression line",
+            "reg_slope_test": "the true slope of the population regression line",
         }.get(analysis_topic, "the population parameter in the scenario")
     )
     context_keywords = problem.get("context_keywords") or data.get("context_keywords")
-    data["context_keywords"] = (
-        list(context_keywords) if context_keywords
-        else _keywords(data["parameter_description"])
-    )
+    if analysis_topic.startswith("chi_"):
+        context_keywords = list(context_keywords or _keywords(data["parameter_description"]))
+        context_keywords.extend(_keywords(problem.get("prompt", "")))
+        context_keywords.extend(_keywords(data.get("null_statement", "")))
+        context_keywords.extend(_keywords(data.get("alternative_statement", "")))
+        if analysis_topic in ("chi_gof", "chi_homogeneity"):
+            context_keywords.extend(["category", "distribution"])
+        data["context_keywords"] = list(dict.fromkeys(context_keywords))
+    else:
+        data["context_keywords"] = (
+            list(context_keywords) if context_keywords
+            else _keywords(data["parameter_description"])
+        )
     data["sample_sizes"] = data.get("sample_sizes") or [
         value for value in (data.get("n"), data.get("n1"), data.get("n2")) if value is not None
     ]
-    if analysis_topic == "ci_prop_z":
+    if analysis_topic.startswith("chi_"):
+        data["frq_kind"] = analysis_topic
+        data["parameter_symbol"] = PARAMETER_SYMBOLS[analysis_topic]
+        data["stat"] = data["statistic"]
+        data["p_val"] = data["p_value"]
+        data["is_test"] = True
+    elif analysis_topic == "ci_matched_pairs_t":
+        data.update(
+            frq_kind="matched_ci",
+            parameter_symbol=PARAMETER_SYMBOLS[analysis_topic],
+            conf_level=data["confidence"],
+            ci_lower=data["lower"],
+            ci_upper=data["upper"],
+            is_test=False,
+        )
+    elif analysis_topic == "ht_matched_pairs_t":
+        data.update(
+            frq_kind="matched_ht",
+            parameter_symbol=PARAMETER_SYMBOLS[analysis_topic],
+            stat=data["test_statistic"],
+            stat_name="t",
+            p_val=data["p_value"],
+            direction=data["alternative"],
+            alpha=data["alpha"],
+            is_test=True,
+        )
+    elif analysis_topic == "reg_slope_ci":
+        data.update(
+            frq_kind="slope_ci",
+            parameter_symbol=PARAMETER_SYMBOLS[analysis_topic],
+            conf_level=data["confidence"],
+            ci_lower=data["lower"],
+            ci_upper=data["upper"],
+            is_test=False,
+        )
+    elif analysis_topic == "reg_slope_test":
+        data.update(
+            frq_kind="slope_ht",
+            parameter_symbol=PARAMETER_SYMBOLS[analysis_topic],
+            stat=data["stat"],
+            stat_name="t",
+            p_val=data["p_val"],
+            direction=data["direction"],
+            alpha=data["alpha"],
+            is_test=True,
+        )
+    elif analysis_topic == "ci_prop_z":
         data.update(n=data["sample_sizes"][0], phat=data["point"])
     elif analysis_topic == "ci_prop_z_2samp":
         data.update(n1=data["sample_sizes"][0], n2=data["sample_sizes"][1])
@@ -177,25 +427,25 @@ def generate_frq_problem(topic: str) -> Dict[str, Any]:
     elif analysis_topic == "ci_mean_t_2samp":
         data.update(n1=data["sample_sizes"][0], n2=data["sample_sizes"][1])
     is_test = analysis_topic.startswith("ht_")
-    data["is_test"] = is_test
-    if is_test:
-        data["stat"] = data["test_statistic"]
-        data["stat_name"] = "z" if analysis_topic.startswith("ht_prop") else "t"
-        data["p_val"] = data["p_value"]
-        data["direction"] = data["alternative"]
-        data["alpha"] = data["alpha"]
-        data["conf_level"] = None
-        data["ci_lower"] = None
-        data["ci_upper"] = None
-    else:
-        data["stat"] = None
-        data["stat_name"] = None
-        data["p_val"] = None
-        data["direction"] = None
-        data["alpha"] = (100 - data["confidence"]) / 100
-        data["conf_level"] = data["confidence"]
-        data["ci_lower"] = data["lower"]
-        data["ci_upper"] = data["upper"]
+    if "frq_kind" not in data:
+        data["is_test"] = is_test
+        if is_test:
+            data["stat"] = data["test_statistic"]
+            data["stat_name"] = "z" if analysis_topic.startswith("ht_prop") else "t"
+            data["p_val"] = data["p_value"]
+            data["direction"] = data["alternative"]
+            data["conf_level"] = None
+            data["ci_lower"] = None
+            data["ci_upper"] = None
+        else:
+            data["stat"] = None
+            data["stat_name"] = None
+            data["p_val"] = None
+            data["direction"] = None
+            data["alpha"] = (100 - data["confidence"]) / 100
+            data["conf_level"] = data["confidence"]
+            data["ci_lower"] = data["lower"]
+            data["ci_upper"] = data["upper"]
     exemplar = _exemplar(analysis_topic, data, data["procedure_name"])
     prompt = re.sub(
         r"<p>\s*Assume the samples or pairs were randomly selected.*?</p>",
@@ -264,6 +514,26 @@ def _mentions_parameter(text: str, parameter: str) -> bool:
             re.search(r"\bmu\b", text)
             or re.search(r"\b(?:true|population)\s+(?:population\s+)?mean\b", text)
         )
+    if parameter == "mu_diff":
+        return bool(
+            re.search(r"\bmu[_ ]?d(?:iff)?\b", text)
+            or re.search(
+                r"\b(?:mean|average)\s+(?:paired\s+)?difference\b"
+                r"|\bpaired\s+(?:mean\s+)?difference\b"
+                r"|\bmatched\s+pairs?\s+difference\b",
+                text,
+            )
+        )
+    if parameter == "beta1":
+        return bool(
+            re.search(r"\bbeta\s*1?\b", text)
+            or re.search(
+                r"\b(?:population\s+)?regression\s+slope\b"
+                r"|\bslope\s+of\s+(?:the\s+)?(?:population\s+)?regression\s+line\b"
+                r"|\bpopulation\s+regression\s+line\b",
+                text,
+            )
+        )
     if parameter in ("p1 - p2", "mu1 - mu2"):
         quantity = "proportions" if parameter.startswith("p") else "means"
         defined_difference = re.search(
@@ -322,7 +592,9 @@ _NUMBER_PATTERN = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
 
 
 def _normalize_do_text(text: str) -> str:
-    value = _clean(text)
+    value = _clean_lines(text)
+    value = re.sub(r"χ\s*\^\s*2\b", "chi2", value)
+    value = re.sub(r"\bchi\s*[- ]?(?:square|squared)\b", "chi2", value)
     value = re.sub(r"√\s*\(", "sqrt(", value)
     value = value.replace("²", "**2").replace("³", "**3")
     return value.replace("±", "+/-")
@@ -333,29 +605,31 @@ def _extract_labeled_number(
     label_pattern: str,
     stop_label_pattern: str = "",
 ) -> Optional[float]:
+    separator = r"(?:=|≈|~|:|\bis\b)"
+    p_value = r"p[ \t]*[- ]?[ \t]*value|pval"
     pattern = re.compile(
-        rf"\b(?:{label_pattern})\s*(?:=|≈|~|:|\bis\b)\s*",
+        rf"\b(?P<label>{label_pattern})(?:[ \t]*{separator}[ \t]*|"
+        rf"[ \t]+(?={_NUMBER_PATTERN}))",
         re.IGNORECASE,
     )
     result = None
     for match in pattern.finditer(text):
-        expression = text[match.end():]
-        if stop_label_pattern:
-            boundary = re.search(
-                rf"(?:[,;]|\band\b)?\s*(?=\b(?:{stop_label_pattern})\s*(?:=|≈|~|:|\bis\b))",
-                expression,
-                re.IGNORECASE,
-            )
-            if boundary:
-                expression = expression[:boundary.start()]
-        else:
-            expression = expression.splitlines()[0] if expression.splitlines() else ""
-        if ";" in expression:
-            expression = expression.split(";", 1)[0]
-        parsed = _parse_number(expression)
-        if parsed is not None:
-            result = parsed
+        if not re.search(separator, match.group(0)[len(match.group("label")):]) and not re.fullmatch(
+            p_value, match.group("label"), re.IGNORECASE
+        ):
             continue
+        expression = text[match.end():]
+        stop = (
+            rf"|\b(?:{stop_label_pattern})[ \t]*{separator}"
+            rf"|(?=\b(?:{stop_label_pattern})\b)\b(?:{p_value})[ \t]+"
+            rf"(?={_NUMBER_PATTERN})"
+            if stop_label_pattern else ""
+        )
+        boundary = re.search(rf"\n[ \t]*\n{stop}", expression, re.IGNORECASE)
+        if boundary:
+            expression = expression[:boundary.start()]
+        expression = re.sub(r"(?:\^|\*\*)[ \t]*[-+]?\d+|[²³]", "", expression)
+        expression = re.sub(rf"(?<![\w.]){_NUMBER_PATTERN}[ \t]*%", "", expression)
         values = _number_list(expression)
         if values:
             result = values[-1]
@@ -479,6 +753,526 @@ def _score_label(code: str) -> str:
     return {"E": "Full Credit", "P": "Partial Credit", "I": "Needs Revision"}[code]
 
 
+def _extended_do_results(
+    kind: str,
+    data: Dict[str, Any],
+    do_text: str,
+    legacy_values: Dict[str, Any],
+) -> Dict[str, Optional[float]]:
+    normalized = _normalize_do_text(do_text)
+    if kind.endswith("_ci"):
+        lower, upper = _parse_interval_bounds(normalized)
+        return {
+            "lower": lower if lower is not None else _parse_number(legacy_values.get("lower")),
+            "upper": upper if upper is not None else _parse_number(legacy_values.get("upper")),
+            "df": _extract_labeled_number(normalized, "df")
+            if normalized else _parse_number(legacy_values.get("df")),
+        }
+    if kind.startswith("chi_"):
+        statistic_label = r"\bchi2\b|chi\s*[- ]?square(?:d)?(?:\s+statistic)?|test\s+statistic"
+    else:
+        statistic_label = r"\bt\b|test\s+statistic"
+    p_value_label = r"p\s*[- ]?\s*value|pval|\bp\b"
+    other_result_label = r"df|chi2|t|z|p\s*[- ]?\s*value|pval|\bp\b"
+    return {
+        "stat": _extract_labeled_number(
+            normalized, statistic_label, other_result_label
+        ) if normalized else _parse_number(legacy_values.get("stat")),
+        "p_value": _extract_labeled_number(
+            normalized, p_value_label, r"df|chi2|t|z"
+        ) if normalized else _parse_number(legacy_values.get("p_value")),
+        "df": _extract_labeled_number(
+            normalized, "df", r"chi2|t|z|p\s*[- ]?\s*value|pval|\bp\b"
+        )
+        if normalized else _parse_number(legacy_values.get("df")),
+    }
+
+
+def _has_number_near_marker(
+    text: str,
+    number: float,
+    marker: str,
+    tolerance: float = 0.06,
+) -> bool:
+    return _number_near_pattern(text, number, marker, tolerance=tolerance)
+
+
+def _ten_percent_ok(
+    text: str,
+    sample_sizes: List[float],
+    population_sizes: List[float],
+) -> bool:
+    if not sample_sizes or len(sample_sizes) != len(population_sizes):
+        return False
+    percent_marker = r"(?:10\s*%|10\s*percent|0\.10|10\s+times|ten\s+times)"
+    if not re.search(percent_marker, text):
+        return False
+    return all(
+        _contains_number(text, sample_size)
+        and (
+            _contains_number(text, population_size)
+            or _contains_number(text, population_size * 0.1)
+        )
+        for sample_size, population_size in zip(sample_sizes, population_sizes)
+    )
+
+
+def _evaluate_extended_frq(
+    payload: Dict[str, Any],
+    sections: Dict[str, Any],
+    data: Dict[str, Any],
+) -> Dict[str, Any]:
+    kind = data["frq_kind"]
+    response_text = payload.get("response_text")
+    if isinstance(response_text, str):
+        state = plan = do_text = conclude = _clean(response_text)
+    else:
+        state = _clean(sections.get("state_text", sections.get("state", "")))
+        plan_value = sections.get("plan") if isinstance(sections.get("plan"), dict) else {}
+        plan = _clean(plan_value.get("text", sections.get("plan_text", "")))
+        do_text = _clean(sections.get("do_text", payload.get("do_text", "")))
+        conclude = _clean(sections.get("conclude_text", sections.get("conclude", "")))
+    plan_value = sections.get("plan") if isinstance(sections.get("plan"), dict) else {}
+    procedure = _clean(
+        plan_value.get("procedure_name", sections.get("procedure_name", ""))
+    )
+    do_value = sections.get("do") if isinstance(sections.get("do"), dict) else {}
+    combined_setup = f"{state}\n{plan}"
+    normalized_plan = _normalize_plan_text(combined_setup)
+    is_chi = kind.startswith("chi_")
+    is_test = kind.endswith("_ht") or is_chi
+    context_words = list(data.get("context_keywords") or _keywords(
+        data.get("parameter_description", "")
+    ))
+    if is_chi:
+        problem_value = payload.get("problem")
+        problem_prompt = (
+            problem_value.get("prompt", "")
+            if isinstance(problem_value, dict) else ""
+        )
+        context_words.extend(_keywords(problem_prompt))
+        context_words.extend(_keywords(data.get("null_statement", "")))
+        context_words.extend(_keywords(data.get("alternative_statement", "")))
+        if kind in ("chi_gof", "chi_homogeneity"):
+            context_words.extend(["category", "distribution"])
+    context_ok = _matches_context(combined_setup, context_words)
+
+    if is_chi:
+        hypothesis_source = (
+            _clean_lines(response_text)
+            if isinstance(response_text, str)
+            else f"{_clean_lines(sections.get('state_text', sections.get('state', '')))}\n\n"
+                 f"{_clean_lines(plan_value.get('text', sections.get('plan_text', '')))}"
+        )
+        null_text = _clean(_extract_hypothesis_text(
+            hypothesis_source, _NULL_LABEL, _ALTERNATIVE_LABEL
+        ))
+        alternative_text = _clean(_extract_hypothesis_text(
+            hypothesis_source, _ALTERNATIVE_LABEL
+        ))
+        if kind == "chi_gof":
+            assignments = re.findall(
+                rf"\bp(?:_[a-z0-9]+|[0-9]+)\s*=\s*({_NUMBER_PATTERN})",
+                null_text,
+            )
+            listed_proportions = (
+                "=" in null_text
+                and sum(
+                    _contains_number(null_text, float(value), 0.0005)
+                    for value in (data.get("null_proportions") or [])
+                ) >= 2
+            )
+            explicit_proportions = (
+                sum(0 <= float(value) <= 1 for value in assignments) >= 2
+                or listed_proportions
+            )
+            null_semantics = any(
+                phrase in null_text
+                for phrase in (
+                    "match", "follow", "same as", "specified distribution",
+                    "claimed distribution", "hypothesized distribution", "proportions are",
+                )
+            ) or bool(re.search(
+                r"\bdistribution\b.{0,80}\b(?:is|are)\b",
+                null_text,
+            ))
+            null_semantics = (
+                explicit_proportions
+                or (null_semantics and any(
+                    term in null_text for term in ("proportion", "distribution")
+                ))
+            ) and not bool(re.search(
+                r"\b(?:not|does not|doesn't)\s+(?:match|follow|conform)\b",
+                null_text,
+            ))
+            alternative_semantics = any(
+                phrase in alternative_text
+                for phrase in (
+                    "differ", "different", "at least one", "does not match",
+                    "not match", "does not follow", "not follow",
+                )
+            )
+        elif kind == "chi_independence":
+            null_semantics = (
+                "no association" in null_text
+                or "not associated" in null_text
+                or ("independent" in null_text and "not independent" not in null_text)
+            )
+            alternative_semantics = (
+                "not independent" in alternative_text
+                or bool(re.search(r"\bdependent\b", alternative_text))
+                or (
+                    bool(re.search(r"\bassociated\b", alternative_text))
+                    and "not associated" not in alternative_text
+                )
+                or (
+                    "association" in alternative_text
+                    and "no association" not in alternative_text
+                )
+            )
+        else:
+            null_semantics = (
+                "same distribution" in null_text
+                or "same across" in null_text
+                or "distributions are the same" in null_text
+                or "identical distribution" in null_text
+            )
+            alternative_semantics = (
+                "differ" in alternative_text
+                or "different" in alternative_text
+                or "not the same" in alternative_text
+                or "not identical" in alternative_text
+            )
+        state_code = _grade([
+            bool(null_text) and null_semantics,
+            bool(alternative_text) and alternative_semantics,
+            context_ok,
+        ])
+        state_feedback = _feedback(
+            state_code,
+            "Both contextual hypotheses match the selected Chi-Square procedure.",
+            "Revise the null/alternative statements or identify the variables and populations in context.",
+            "State contextual null and alternative hypotheses for this Chi-Square procedure.",
+        )
+    else:
+        parameter = _clean(data["parameter_symbol"])
+        parameter_ok = _mentions_parameter(combined_setup, parameter) and context_ok
+        if kind.endswith("_ci"):
+            confidence = float(data["conf_level"])
+            confidence_ok = (
+                _contains_number(combined_setup, confidence, 0.01)
+                or _contains_number(combined_setup, confidence / 100, 0.0001)
+            )
+            state_code = _grade([parameter_ok, confidence_ok])
+            state_feedback = _feedback(
+                state_code,
+                "The population parameter and confidence level are stated in context.",
+                "Include the population parameter in context and the requested confidence level.",
+                "Define the population parameter and state the confidence level.",
+            )
+        else:
+            h0 = re.search(
+                r"\bh0\b(.*?)(?=\bha\b|[;\n]|$)", combined_setup, re.DOTALL
+            )
+            ha = re.search(
+                r"\bha\b(.*?)(?=\.\s+[a-z]|[;\n]|$)", combined_setup, re.DOTALL
+            )
+            null_value = float(data.get("null_value", 0))
+            equality_ok = bool(
+                h0
+                and re.search(r"(?<![<>!])=(?!=)|\bis\b", h0.group(1))
+                and _contains_number(h0.group(1), null_value, 0.0005)
+            )
+            direction = str(data["direction"])
+            direction_tokens = {
+                "<": ("<", "less"),
+                ">": (">", "greater"),
+                "!=": ("!=", "different", "not equal"),
+            }
+            alternative_ok = bool(
+                ha
+                and any(token in ha.group(1) for token in direction_tokens[direction])
+                and _contains_number(ha.group(1), null_value, 0.0005)
+            )
+            state_code = _grade([parameter_ok, equality_ok, alternative_ok])
+            state_feedback = _feedback(
+                state_code,
+                "The population parameter and both hypotheses are stated in context.",
+                "Revise the population parameter or the null and alternative hypotheses.",
+                "Define the population parameter and state both hypotheses.",
+            )
+
+    expected_procedure = _normalize_plan_text(data["procedure_name"])
+    procedure_ok = (
+        _normalize_plan_text(procedure) == expected_procedure
+        or expected_procedure in normalized_plan
+    )
+    sample_sizes = [float(value) for value in data.get("sample_sizes", [])]
+    population_sizes = data.get("population_sizes") or (
+        [data["population_size"]] if data.get("population_size") is not None else []
+    )
+    population_sizes = [float(value) for value in population_sizes]
+    random_ok = bool(
+        re.search(r"\b(?:random|randomly|srs)\b", normalized_plan)
+    ) and (
+        "sample" in normalized_plan or "assignment" in normalized_plan
+    )
+    ten_percent_ok = _ten_percent_ok(
+        normalized_plan, sample_sizes, population_sizes
+    )
+
+    if is_chi:
+        expected_counts = [float(value) for value in data["expected_counts"]]
+        minimum_expected = float(data["minimum_expected_count"])
+        expected_marker = bool(
+            re.search(r"(?:e[_ ]?min|minimum expected|expected counts?)", normalized_plan)
+        )
+        at_least_five = bool(
+            re.search(r"(?:>=|at least)\s*5|at least five", normalized_plan)
+        )
+        minimum_present = _contains_number(normalized_plan, minimum_expected, 0.06)
+        all_expected_present = all(
+            _contains_number(normalized_plan, value, 0.06)
+            for value in expected_counts
+        )
+        large_counts_ok = (
+            expected_marker and at_least_five
+            and (minimum_present or all_expected_present)
+        )
+        plan_code = _grade([
+            procedure_ok, random_ok, ten_percent_ok, large_counts_ok
+        ])
+        plan_feedback = _feedback(
+            plan_code,
+            "The exact procedure, sampling design, 10% condition, and all expected-count checks are addressed.",
+            "Add the exact procedure and numerical checks for randomization, independence, and all expected counts ≥ 5.",
+            "Name the Chi-Square procedure and check randomization, the 10% condition, and expected counts ≥ 5.",
+        )
+    elif kind.startswith("matched_"):
+        paired_design_ok = bool(
+            re.search(r"\b(?:matched pairs?|paired differences?|same subjects|same units)\b", normalized_plan)
+        )
+        if sample_sizes and sample_sizes[0] >= 30:
+            normality_ok = _contains_number(normalized_plan, sample_sizes[0])
+        else:
+            normality_ok = (
+                ("no strong skew" in normalized_plan and "outlier" in normalized_plan)
+                or ("approximately normal" in normalized_plan and "difference" in normalized_plan)
+            )
+        plan_code = _grade([
+            procedure_ok, random_ok, paired_design_ok, ten_percent_ok, normality_ok
+        ])
+        plan_feedback = _feedback(
+            plan_code,
+            "The matched-pairs procedure and paired-difference conditions are supported.",
+            "Add the exact matched-pairs procedure, paired/random design, 10% check, or difference normality/CLT evidence.",
+            "Identify the matched-pairs design and check randomization, independence, and the distribution of differences.",
+        )
+    else:
+        linear_ok = "linear" in normalized_plan or "no curved" in normalized_plan
+        residual_normal_ok = (
+            "residual" in normalized_plan
+            and any(word in normalized_plan for word in ("normal", "normality"))
+        )
+        equal_variance_ok = (
+            "equal variance" in normalized_plan
+            or "constant spread" in normalized_plan
+            or "roughly constant" in normalized_plan
+        )
+        independent_marker = (
+            "independence" in normalized_plan or "independent" in normalized_plan
+        )
+        plan_code = _grade([
+            procedure_ok, random_ok, independent_marker, ten_percent_ok,
+            linear_ok, residual_normal_ok, equal_variance_ok,
+        ])
+        plan_feedback = _feedback(
+            plan_code,
+            "The slope procedure and all LINER conditions are addressed.",
+            "Revise the slope procedure or check linearity, independence/10%, normal residuals, equal variance, and randomization.",
+            "Name the slope procedure and address every LINER condition with the 10% check.",
+        )
+
+    raw_do_text = response_text if isinstance(response_text, str) else sections.get(
+        "do_text", payload.get("do_text", "")
+    )
+    do_results = _extended_do_results(kind, data, str(raw_do_text or ""), do_value)
+    do_checks = []
+    if kind.endswith("_ci"):
+        for key in ("lower", "upper"):
+            actual = do_results[key]
+            expected = float(data[f"ci_{key}"])
+            do_checks.append(actual is not None and abs(actual - expected) <= 0.01)
+    else:
+        actual_stat = do_results["stat"]
+        actual_p = do_results["p_value"]
+        do_checks.extend([
+            actual_stat is not None and abs(actual_stat - float(data["stat"])) <= 0.05,
+            actual_p is not None and abs(actual_p - float(data["p_val"])) <= 0.005,
+        ])
+    actual_df = do_results["df"]
+    do_checks.append(
+        actual_df is not None and abs(actual_df - float(data["df"])) <= 0.02
+    )
+    do_code = _grade(do_checks)
+    do_feedback = _feedback(
+        do_code,
+        "Your degrees of freedom and calculated results are within the accepted tolerances.",
+        "Review the degrees of freedom, statistic/P-value, or interval bounds and rounding.",
+        "Show the requested degrees of freedom and correct test results or interval bounds.",
+    )
+
+    if kind.endswith("_ci"):
+        conclusion_lower, conclusion_upper = _parse_interval_bounds(conclude)
+        bounds_match = (
+            conclusion_lower is not None and conclusion_upper is not None
+            and abs(conclusion_lower - float(data["ci_lower"])) <= 0.01
+            and abs(conclusion_upper - float(data["ci_upper"])) <= 0.01
+        )
+        confidence = float(data["conf_level"])
+        confidence_ok = (
+            _contains_number(conclude, confidence, 0.01)
+            and bool(re.search(r"\bconfident\b|\bconfidence\b", conclude))
+        )
+        captures = any(word in conclude for word in ("capture", "contains", "contain", "includes"))
+        true_parameter = "true" in conclude and _matches_context(conclude, context_words)
+        conclude_code = _grade([
+            bounds_match, confidence_ok, captures, true_parameter
+        ])
+        conclude_feedback = _feedback(
+            conclude_code,
+            "The confidence interpretation matches the interval and population parameter.",
+            "Revise the confidence level, bounds, or contextual interpretation.",
+            "Interpret the interval with the correct bounds and true population parameter.",
+        )
+    else:
+        entered_p = do_results["p_value"]
+        alpha = float(data["alpha"])
+        expected_reject = entered_p is not None and entered_p <= alpha
+        null_reference = r"(?:h\s*[_-]?\s*0|ho|the\s+null|null)"
+        says_reject = bool(
+            re.search(rf"\breject(?:\s+{null_reference})?\b", conclude)
+        )
+        says_fail = bool(re.search(
+            r"(?:fail(?:ed)?\s+to\s+reject|do\s+not\s+reject|don't\s+reject|cannot\s+reject|can't\s+reject)",
+            conclude,
+        ))
+        decision_ok = (says_reject and not says_fail) if expected_reject else says_fail
+        comparison_terms = (
+            ("less than", "smaller than", "below", "<=", "at most")
+            if expected_reject
+            else ("greater than", "larger than", "above", ">", "exceeds")
+        )
+        comparison_ok = (
+            any(term in conclude for term in comparison_terms)
+            and bool(re.search(r"\balpha\b", conclude))
+            and bool(re.search(r"\b(?:p\s*[- ]?\s*value|pval|p)\b", conclude))
+        )
+        conclusion_p = _parse_conclusion_p_value(conclude)
+        p_in_text = (
+            entered_p is not None and conclusion_p is not None
+            and abs(conclusion_p - entered_p) <= 0.01
+        )
+        alpha_in_text = _contains_number(conclude, alpha, 0.005)
+        negative_evidence = any(
+            phrase in conclude
+            for phrase in (
+                "not convincing", "insufficient", "no convincing",
+                "not enough evidence",
+            )
+        )
+        positive_evidence = any(
+            phrase in conclude
+            for phrase in (
+                "convincing evidence", "sufficient evidence", "strong evidence",
+                "enough evidence",
+            )
+        ) or bool(re.search(r"\b(?:is|are)\s+convincing\b", conclude))
+        evidence_ok = (
+            not negative_evidence and positive_evidence
+            if expected_reject else negative_evidence
+        )
+        if kind == "chi_independence":
+            context_claim_ok = (
+                "not independent" in conclude
+                or bool(re.search(r"\bdependent\b", conclude))
+                or (
+                    bool(re.search(r"\bassociated\b", conclude))
+                    and "not associated" not in conclude
+                )
+                or (
+                    "association" in conclude
+                    and "no association" not in conclude
+                )
+            )
+        elif kind == "chi_homogeneity":
+            context_claim_ok = any(
+                word in conclude
+                for word in (
+                    "differ", "different", "not the same", "not identical",
+                )
+            )
+        elif kind == "chi_gof":
+            context_claim_ok = any(
+                word in conclude
+                for word in (
+                    "differ", "different", "at least one", "not match",
+                    "does not match", "not follow",
+                )
+            )
+        else:
+            context_claim_ok = any(
+                word in conclude for word in ("differ", "different", "greater", "less", "positive", "negative")
+            )
+        context_conclude_ok = (
+            _matches_context(conclude, context_words)
+            and context_claim_ok
+        )
+        fatal = bool(re.search(r"\b(?:prove|proves|proved|proven)\b", conclude)) or bool(
+            re.search(
+                rf"\b(?:accept|accepting)\s+{null_reference}\b"
+                rf"|\b{null_reference}\s+is\s+true\b",
+                conclude,
+            )
+        )
+        conclude_code = _grade([
+            entered_p is not None, decision_ok, comparison_ok, evidence_ok,
+            context_conclude_ok, alpha_in_text, p_in_text, not fatal,
+        ])
+        conclude_feedback = _feedback(
+            conclude_code,
+            "Your decision, P-value comparison, and conclusion are consistent and contextual.",
+            "Revise the decision, comparison, evidence wording, or context to agree with your P-value and α.",
+            "State a decision based on your P-value and α with an appropriate contextual conclusion.",
+        )
+
+    results = {
+        "state": {"score_code": state_code, "score_label": _score_label(state_code), "feedback": state_feedback},
+        "plan": {"score_code": plan_code, "score_label": _score_label(plan_code), "feedback": plan_feedback},
+        "do": {"score_code": do_code, "score_label": _score_label(do_code), "feedback": do_feedback},
+        "conclude": {"score_code": conclude_code, "score_label": _score_label(conclude_code), "feedback": conclude_feedback},
+    }
+    overall = _grade([item["score_code"] == "E" for item in results.values()])
+    try:
+        attempt = max(1, int(payload.get("attempt", 1)))
+    except (TypeError, ValueError, OverflowError):
+        attempt = 1
+    reveal_exemplar = payload.get("retry_mode") == "one_shot" or all(
+        item["score_code"] == "E" for item in results.values()
+    ) or attempt >= 2
+    exemplar = (
+        _exemplar(data["topic"], data, data["procedure_name"])
+        if reveal_exemplar else {}
+    )
+    return {
+        "score_code": overall,
+        "passed": all(item["score_code"] == "E" for item in results.values()),
+        "sections": results,
+        "exemplar": exemplar,
+        "model_conclusion": exemplar.get("conclude", ""),
+    }
+
+
 def evaluate_full_frq(payload: Dict[str, Any], use_ai_grading: bool = False) -> Dict[str, Any]:
     del use_ai_grading
     problem = payload.get("problem") if isinstance(payload.get("problem"), dict) else {}
@@ -489,6 +1283,8 @@ def evaluate_full_frq(payload: Dict[str, Any], use_ai_grading: bool = False) -> 
     if topic not in PARAMETER_SYMBOLS:
         raise ValueError("A supported FRQ problem payload is required.")
     sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else payload
+    if data.get("frq_kind"):
+        return _evaluate_extended_frq(payload, sections, data)
     response_text = payload.get("response_text")
     has_unified_response = isinstance(response_text, str)
     if has_unified_response:
@@ -603,7 +1399,10 @@ def evaluate_full_frq(payload: Dict[str, Any], use_ai_grading: bool = False) -> 
                               "Correct procedure; add the problem's numerical evidence to each condition check.",
                               "Name the exact procedure and address randomization, independence, and the model condition.")
 
-    do_results = _parse_do_results(topic, data, do_text, do_value)
+    raw_do_text = response_text if has_unified_response else sections.get(
+        "do_text", payload.get("do_text", "")
+    )
+    do_results = _parse_do_results(topic, data, str(raw_do_text or ""), do_value)
     do_checks: List[bool] = []
     if topic.startswith("ht_"):
         for key, expected, tolerance in (

@@ -146,7 +146,9 @@ const TOPIC_REGISTRY = [
     { id: 'frq_ci_mean_1samp', title: 'Full FRQ: 1-Sample t-Interval for Mean (μ)', topic: 'Confidence Intervals for Means (μ)', notation: 'μ' },
     { id: 'ci_mean_t_2samp', title: '2-Sample t-Interval for Means', topic: 'Confidence Intervals for Means (μ)', notation: 'μ₁ - μ₂' },
     { id: 'frq_ci_mean_2samp', title: 'Full FRQ: 2-Sample t-Interval for Means (μ₁ - μ₂)', topic: 'Confidence Intervals for Means (μ)', notation: 'μ₁ - μ₂' },
+    { id: 'drill_proc_matched_pairs', title: 'Naming the Procedure (Matched Pairs)', topic: 'Confidence Intervals for Means (μ)', notation: 'Matched Pairs t' },
     { id: 'ci_matched_pairs_t', title: 'Matched Pairs t-Interval for Mean Difference', topic: 'Confidence Intervals for Means (μ)', notation: 'μ_diff' },
+    { id: 'frq_ci_matched_pairs', title: 'Full FRQ: Matched Pairs t-Interval for Mean Difference (μ_diff)', topic: 'Confidence Intervals for Means (μ)', notation: 'μ_diff' },
     { id: 'ci_mean_cond', title: 'Checking Conditions for Mean Intervals', topic: 'Confidence Intervals for Means (μ)', notation: 'Conditions' },
     { id: 'ci_mean_crit_se', title: 'Degrees of Freedom, t* & SE for μ', topic: 'Confidence Intervals for Means (μ)', notation: 'df, t*, SE' },
     { id: 'ci_mean_bounds', title: 'Margin of Error & Interval Bounds for μ', topic: 'Confidence Intervals for Means (μ)', notation: 'E, L, U' },
@@ -160,14 +162,19 @@ const TOPIC_REGISTRY = [
     { id: 'ht_mean_t_2samp', title: '2-Sample t-Test for Means', topic: 'Significance Tests for Means (μ)', notation: 'H₀: μ₁ = μ₂' },
     { id: 'frq_ht_mean_2samp', title: 'Full FRQ: 2-Sample t-Test for Means (μ₁ - μ₂)', topic: 'Significance Tests for Means (μ)', notation: 'H₀, t, P' },
     { id: 'ht_matched_pairs_t', title: 'Matched Pairs t-Test', topic: 'Significance Tests for Means (μ)', notation: 'H₀: μ_diff = 0' },
+    { id: 'frq_ht_matched_pairs', title: 'Full FRQ: Matched Pairs t-Test for Mean Difference (μ_diff)', topic: 'Significance Tests for Means (μ)', notation: 'μ_diff, H₀, t, P' },
     { id: 'ht_mean_hypo', title: 'Stating Hypotheses for Means', topic: 'Significance Tests for Means (μ)', notation: 'H₀, Hₐ' },
     { id: 'ht_mean_cond', title: 'Checking Conditions for Mean Tests', topic: 'Significance Tests for Means (μ)', notation: 'Conditions' },
     { id: 'ht_mean_stat', title: 'Standard Error & t-Statistic for μ', topic: 'Significance Tests for Means (μ)', notation: 'SE, t' },
     { id: 'ht_mean_pval', title: 'P-Value & Interpretation for Means', topic: 'Significance Tests for Means (μ)', notation: 'P-value' },
     { id: 'ht_mean_conc', title: 'Decision & Contextual Conclusion for μ', topic: 'Significance Tests for Means (μ)', notation: 'P-value, α' },
+    { id: 'drill_proc_chi_square', title: 'Naming the Procedure (Chi-Square)', topic: 'Chi-Square Tests (χ²)', notation: 'Chi-Square Tests' },
     { id: 'chi_gof', title: 'Chi-Square Goodness-of-Fit Test', topic: 'Chi-Square Tests (χ²)', notation: 'df = k - 1' },
+    { id: 'frq_chi_gof', title: 'Full FRQ: Chi-Square Goodness-of-Fit Test', topic: 'Chi-Square Tests (χ²)', notation: 'χ², P-value' },
     { id: 'chi_independence', title: 'Chi-Square Test for Independence', topic: 'Chi-Square Tests (χ²)', notation: 'df = (r-1)(c-1)' },
+    { id: 'frq_chi_independence', title: 'Full FRQ: Chi-Square Test for Independence', topic: 'Chi-Square Tests (χ²)', notation: 'χ², P-value' },
     { id: 'chi_homogeneity', title: 'Chi-Square Test for Homogeneity', topic: 'Chi-Square Tests (χ²)', notation: 'df = (r-1)(c-1)' },
+    { id: 'frq_chi_homogeneity', title: 'Full FRQ: Chi-Square Test for Homogeneity', topic: 'Chi-Square Tests (χ²)', notation: 'χ², P-value' },
     { id: 'chi_step_hypo', title: 'Stating Chi-Square Hypotheses', topic: 'Chi-Square Tests (χ²)', notation: 'H₀, Hₐ' },
     { id: 'chi_step_cond', title: 'Chi-Square Conditions & Minimum Expected Count (E_min)', topic: 'Chi-Square Tests (χ²)', notation: 'E_min' },
     { id: 'chi_step_df', title: 'Chi-Square Degrees of Freedom (df)', topic: 'Chi-Square Tests (χ²)', notation: 'df' },
@@ -178,7 +185,10 @@ const TOPIC_REGISTRY = [
     { id: 'reg_comp_output', title: 'Reading Regression Computer Output', topic: 'Linear Regression Analysis', notation: 'Coef, SE Coef, T, P' },
     { id: 'reg_raw_data', title: 'Regression from Raw Data Table', topic: 'Linear Regression Analysis', notation: 'Data Table → LSRL' },
     { id: 'reg_slope_ci', title: 'Confidence Interval for Slope (β₁)', topic: 'Linear Regression Analysis', notation: 'b₁ ± t*SE_b₁' },
+    { id: 'drill_proc_slope', title: 'Naming the Procedure (Regression Slope)', topic: 'Linear Regression Analysis', notation: 'Regression t' },
+    { id: 'frq_ci_slope', title: 'Full FRQ: Linear Regression t-Interval for Slope (β₁)', topic: 'Linear Regression Analysis', notation: 'β₁, t, df' },
     { id: 'reg_slope_test', title: 'Significance Test for Slope (β₁)', topic: 'Linear Regression Analysis', notation: 'H₀: β₁ = 0' },
+    { id: 'frq_ht_slope', title: 'Full FRQ: Linear Regression t-Test for Slope (β₁)', topic: 'Linear Regression Analysis', notation: 'β₁, H₀, t, P' },
     { id: 'reg_step_slope_int', title: 'Calculating Slope & y-Intercept', topic: 'Linear Regression Analysis', notation: 'b₀, b₁' },
     { id: 'reg_step_equation', title: 'Writing the LSRL Equation', topic: 'Linear Regression Analysis', notation: 'ŷ = b₀ + b₁x' },
     { id: 'reg_step_pred_res', title: 'Calculating Predicted Value (ŷ) & Residual', topic: 'Linear Regression Analysis', notation: 'ŷ, e' },
@@ -1725,7 +1735,23 @@ function renderProblemPrompt(promptEl, problem) {
     triggerKaTeX(promptEl);
 }
 
+function showKeepPracticingButton(afterElement) {
+    if (activeTaskState.active) return;
+    let button = document.getElementById('keep-practicing-btn');
+    if (!button) {
+        button = document.createElement('button');
+        button.type = 'button';
+        button.id = 'keep-practicing-btn';
+        button.className = 'btn-primary';
+        button.style.marginTop = '15px';
+        button.textContent = 'Keep Practicing This Skill →';
+        button.addEventListener('click', () => loadProblem());
+    }
+    afterElement.insertAdjacentElement('afterend', button);
+}
+
 async function loadProblem(problemToRender = null) {
+    document.getElementById('keep-practicing-btn')?.remove();
     const feedbackBanner = document.getElementById('feedback-banner');
     const solutionCard = document.getElementById('solution-card');
     const nextBtn = document.getElementById('next-btn');
@@ -2041,6 +2067,8 @@ function replaceFrqShorthand(input) {
     if (!input) return;
     const prefix = input.value.slice(0, input.selectionStart || 0);
     const replacements = [
+        [/\bmudiff\b/gi, 'μ_diff'], [/\bxbardiff\b/gi, 'x̄_diff'],
+        [/\b(?:chi2|chisq)\b/gi, 'χ²'], [/\bbeta1\b/gi, 'β₁'],
         [/\b(?:h0|ho)(?=\s*:|\b)/gi, 'H₀'], [/\bha(?=\s*:|\b)/gi, 'Hₐ'], [/\bphat\b/gi, 'p̂'],
         [/\bxbar\b/gi, 'x̄'], [/\bmu\b/gi, 'μ'], [/\balpha\b/gi, 'α'],
         [/\bsqrt\s*\(/gi, '√('], [/\+\-/g, '±'], [/\^2(?!\d)/g, '²'], [/\^3(?!\d)/g, '³'],
@@ -2173,7 +2201,7 @@ function renderFullFrqUI(container) {
     toolbarRow.className = 'frq-notation-toolbar';
     const symbolBar = document.createElement('div');
     symbolBar.className = 'frq-symbol-bar';
-    ['p', 'p̂', 'μ', 'x̄', 'p₁ - p₂', 'μ₁ - μ₂', 'H₀', 'Hₐ', 'α', '≠', '≤', '≥', '≈'].forEach(symbol => {
+    ['p', 'p̂', 'μ', 'x̄', 'μ_diff', 'x̄_diff', 'p₁ - p₂', 'μ₁ - μ₂', 'β₁', 'χ²', 'H₀', 'Hₐ', 'α', '≠', '≤', '≥', '≈'].forEach(symbol => {
         const pill = document.createElement('button');
         pill.type = 'button';
         pill.className = 'frq-symbol-pill';
@@ -2346,6 +2374,7 @@ async function submitFullFrqResponse() {
             rubric.appendChild(row);
         });
         feedback.appendChild(rubric);
+        showKeepPracticingButton(feedback);
         const retryMode = payload.retry_mode;
         const showExemplar = retryMode === 'one_shot' || result.passed || currentFrqAttemptCount >= 2;
         if (!showExemplar) {
@@ -2366,8 +2395,9 @@ async function submitFullFrqResponse() {
             text.textContent = result.exemplar[key];
             exemplar.append(heading, text);
         });
+        showKeepPracticingButton(exemplar);
         submit.hidden = true;
-        document.getElementById('frq-next-question').hidden = false;
+        document.getElementById('frq-next-question').hidden = !activeTaskState.active;
         panel.querySelectorAll('.frq-text-input, [data-frq-number], #frq-equation-builder button')
             .forEach(input => { input.disabled = true; });
         const equationField = panel.querySelector('#frq-mathfield');
@@ -2570,6 +2600,11 @@ function renderMultiStageUI(topic) {
                 appendComponent(inputRow, 'parameter-symbol');
                 inputRow.append(' represent ');
                 appendComponent(inputRow, 'parameter-context');
+                inputRow.append('.');
+            }
+            if (step.components.some(component => component.id === 'procedure-name')) {
+                inputRow.append(' Procedure: ');
+                appendComponent(inputRow, 'procedure-name');
                 inputRow.append('.');
             }
         } else if (step.input_type === 'hypotheses') {
@@ -3217,8 +3252,11 @@ async function finalizeProblem(isSuccess, answer = null, questionScore = null) {
     }
 
     if (!activeTaskState.active) {
-        nextBtn.style.display = 'inline-block';
-        nextBtn.focus();
+        showKeepPracticingButton(
+            document.getElementById('solution-card').style.display === 'block'
+                ? document.getElementById('solution-card') : feedback
+        );
+        document.getElementById('keep-practicing-btn').focus();
         return;
     }
 
