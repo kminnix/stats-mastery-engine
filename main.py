@@ -25,6 +25,7 @@ from app.engine.linear_regression import generate_regression_problem
 from app.engine.probability_sampling import generate_prob_sampling_problem
 from app.engine.foundations import generate_foundations_problem
 from app.engine.input_types import tag_problem_input_types
+from app.engine.reading_difficulty import apply_reading_difficulty
 from app.engine.inference_drills import (
     generate_condition_check_mean,
     generate_condition_check_proportion,
@@ -47,7 +48,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "170"
+STATIC_VERSION = "171"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -306,12 +307,16 @@ async def health_check():
     }
 
 @app.get("/api/problem/normal")
-async def get_normal_problem(topic: str = "random", problem_type: str = "random"):
+async def get_normal_problem(
+    topic: str = "random", problem_type: str = "random",
+    reading_difficulty: Literal["standard", "advanced"] = "standard",
+):
     selected = topic if topic != "random" else problem_type
     try:
-        return generate_normal_problem(selected)
+        problem = generate_normal_problem(selected)
     except TypeError:
-        return generate_normal_problem()
+        problem = generate_normal_problem()
+    return apply_reading_difficulty(problem, reading_difficulty)
 
 SINGLE_STEP_TOPICS = {
     "eda_five_num": ("foundations", "eda_summary", "five_num"),
@@ -695,7 +700,9 @@ def slice_problem_to_step(problem_dict: Dict[str, Any], step_selector: Union[str
     return problem
 
 
-def generate_single_step(topic: str, notation: str = "ab") -> Dict[str, Any]:
+def generate_single_step(
+    topic: str, notation: str = "ab", reading_difficulty: str = "standard"
+) -> Dict[str, Any]:
     engine, parent, selector = SINGLE_STEP_TOPICS[topic]
     parent_families = {
         "ci_prop_": ["prop_z", "prop_z_2samp"],
@@ -720,30 +727,36 @@ def generate_single_step(topic: str, notation: str = "ab") -> Dict[str, Any]:
         parent = random.choice(["reg_slope_ci", "reg_slope_test"])
         selector = "slope_interval" if parent == "reg_slope_ci" else "conc"
     result = slice_problem_to_step(generators[engine](), selector)
-    return tag_problem_input_types(result)
+    return tag_problem_input_types(apply_reading_difficulty(result, reading_difficulty))
 
 @app.get("/api/problem/targeted-step")
-async def get_targeted_step(topic: str, notation: str = "ab"):
+async def get_targeted_step(
+    topic: str, notation: str = "ab",
+    reading_difficulty: Literal["standard", "advanced"] = "standard",
+):
     if not topic.startswith("step__") or topic not in SINGLE_STEP_TOPICS:
         raise HTTPException(status_code=404, detail="Unknown targeted step topic")
-    return generate_single_step(topic, notation)
+    return generate_single_step(topic, notation, reading_difficulty)
 
 @app.get("/api/problem/ci")
-async def get_ci_problem(topic: str = "mean_t", problem_type: str = "mean_t"):
+async def get_ci_problem(
+    topic: str = "mean_t", problem_type: str = "mean_t",
+    reading_difficulty: Literal["standard", "advanced"] = "standard",
+):
     selected = topic if topic != "mean_t" else problem_type
     if selected in SINGLE_STEP_TOPICS:
-        return generate_single_step(selected)
-    try:
-        return tag_problem_input_types(generate_ci_problem(selected))
-    except TypeError:
-        return tag_problem_input_types(generate_ci_problem())
+        return generate_single_step(selected, reading_difficulty=reading_difficulty)
+    return tag_problem_input_types(generate_ci_problem(selected, reading_difficulty))
 
 @app.get("/api/problem/ht")
-async def get_ht_problem(topic: str = "ht_prop_z"):
+async def get_ht_problem(
+    topic: str = "ht_prop_z",
+    reading_difficulty: Literal["standard", "advanced"] = "standard",
+):
     try:
         if topic in SINGLE_STEP_TOPICS:
-            return generate_single_step(topic)
-        return tag_problem_input_types(generate_ht_problem(topic or "ht_prop_z"))
+            return generate_single_step(topic, reading_difficulty=reading_difficulty)
+        return tag_problem_input_types(generate_ht_problem(topic or "ht_prop_z", reading_difficulty))
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(
@@ -752,32 +765,48 @@ async def get_ht_problem(topic: str = "ht_prop_z"):
         ) from e
 
 @app.get("/api/problem/chi")
-async def get_chi_problem(topic: str = "random"):
+async def get_chi_problem(
+    topic: str = "random",
+    reading_difficulty: Literal["standard", "advanced"] = "standard",
+):
     if topic in SINGLE_STEP_TOPICS:
-        return generate_single_step(topic)
-    return tag_problem_input_types(generate_chi_problem(topic or "random"))
+        return generate_single_step(topic, reading_difficulty=reading_difficulty)
+    return tag_problem_input_types(generate_chi_problem(topic or "random", reading_difficulty))
 
 @app.get("/api/problem/regression")
-async def get_regression_problem(topic: str = "reg_lsrl", notation: str = "ab"):
+async def get_regression_problem(
+    topic: str = "reg_lsrl", notation: str = "ab",
+    reading_difficulty: Literal["standard", "advanced"] = "standard",
+):
     if topic in SINGLE_STEP_TOPICS:
-        return generate_single_step(topic, notation)
-    return tag_problem_input_types(generate_regression_problem(topic or "reg_lsrl", notation))
+        return generate_single_step(topic, notation, reading_difficulty)
+    return tag_problem_input_types(generate_regression_problem(topic or "reg_lsrl", notation, reading_difficulty))
 
 @app.get("/api/problem/prob_sampling")
-async def get_prob_sampling_problem(topic: str):
-    return tag_problem_input_types(generate_prob_sampling_problem(topic))
+async def get_prob_sampling_problem(
+    topic: str, reading_difficulty: Literal["standard", "advanced"] = "standard"
+):
+    return tag_problem_input_types(apply_reading_difficulty(
+        generate_prob_sampling_problem(topic), reading_difficulty
+    ))
 
 @app.get("/api/problem/foundations")
-async def get_foundations_problem(topic: str):
+async def get_foundations_problem(
+    topic: str, reading_difficulty: Literal["standard", "advanced"] = "standard"
+):
     try:
         if topic in SINGLE_STEP_TOPICS:
-            return generate_single_step(topic)
-        return tag_problem_input_types(generate_foundations_problem(topic))
+            return generate_single_step(topic, reading_difficulty=reading_difficulty)
+        return tag_problem_input_types(apply_reading_difficulty(
+            generate_foundations_problem(topic), reading_difficulty
+        ))
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 @app.get("/api/problem/drill")
-async def get_inference_drill(topic: str):
+async def get_inference_drill(
+    topic: str, reading_difficulty: Literal["standard", "advanced"] = "standard"
+):
     generators = {
         "drill_proc_ci_prop": lambda: generate_procedure_name_drill("ci_prop"),
         "drill_proc_ci_mean": lambda: generate_procedure_name_drill("ci_mean"),
@@ -800,13 +829,15 @@ async def get_inference_drill(topic: str):
     generator = generators.get(topic)
     if generator is None:
         raise HTTPException(status_code=404, detail=f"Unknown inference drill topic: {topic}")
-    return tag_problem_input_types(generator())
+    return tag_problem_input_types(apply_reading_difficulty(generator(), reading_difficulty))
 
 
 @app.get("/api/problem/frq")
-async def get_frq_problem(topic: str):
+async def get_frq_problem(
+    topic: str, reading_difficulty: Literal["standard", "advanced"] = "standard"
+):
     try:
-        problem = generate_frq_problem(topic)
+        problem = generate_frq_problem(topic, reading_difficulty)
         problem.pop("exemplar", None)
         problem.pop("solution", None)
         return problem
@@ -1283,6 +1314,7 @@ async def create_test_corrections(assessment_id: str, authorization: Optional[st
     blocks = [
         {
             **block,
+            "source_block_id": block.get("source_block_id") or block.get("id"),
             "id": f"correction-{index}",
             "mode": "mastery",
             "required_passes": passes,
@@ -1844,7 +1876,14 @@ async def get_student_tasks(student_id: str, authorization: Optional[str] = Head
                                 break
                             topic = question["topic"]
                             blocks = config.get("blocks") or []
-                            block = next((b for b in blocks if isinstance(b, dict) and b.get("topic") == topic), {})
+                            source_block_id = question.get("block_id") or response.get("blockId")
+                            block = next((
+                                b for b in blocks
+                                if isinstance(b, dict) and source_block_id
+                                and b.get("source_block_id") == source_block_id
+                            ), None)
+                            if block is None:
+                                block = next((b for b in blocks if isinstance(b, dict) and b.get("topic") == topic), {})
                             passes = block.get("required_passes", block.get("required_clean_passes",
                                 config.get("mastery_required_passes", (task["tool_policy"] or {}).get("mastery_required_passes", 2))))
                             if not isinstance(passes, int) or isinstance(passes, bool) or not 1 <= passes <= 5:
@@ -1856,7 +1895,7 @@ async def get_student_tasks(student_id: str, authorization: Optional[str] = Head
                                 "source_q": question.get("q_num", response.get("questionIndex")),
                                 "allow_frq_conclusion": bool(block.get("allow_frq_conclusion")),
                             }
-                            for setting in ("notation_style", "max_step_attempts"):
+                            for setting in ("notation_style", "max_step_attempts", "reading_difficulty"):
                                 if setting in block:
                                     base[setting] = block[setting]
                             if scope == "missed_steps" and missed_steps:

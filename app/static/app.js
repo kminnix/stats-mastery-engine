@@ -228,7 +228,8 @@ function mergeStudentToolPermissions(assignmentPolicy = null, classPolicy = null
 let state = {
     selectedTopic: 'random',
     previousView: 'catalog',
-    lsrlNotationStyle: 'ab'
+    lsrlNotationStyle: 'ab',
+    readingDifficulty: 'standard'
 };
 
 try {
@@ -255,6 +256,17 @@ function getActiveLsrlNotation() {
     return blockNotation || classNotation || state.lsrlNotationStyle;
 }
 window.getActiveLsrlNotation = getActiveLsrlNotation;
+
+function getActiveReadingDifficulty() {
+    if (!activeTaskState.active) return state.readingDifficulty;
+    const question = activeTaskState.questionQueue[activeTaskState.currentIndex - 1];
+    return question?.reading_difficulty || activeTaskState.currentBlock?.reading_difficulty || 'standard';
+}
+
+function updateReadingDifficultyControl() {
+    const control = document.getElementById('reading-difficulty-control');
+    if (control) control.hidden = activeTaskState.active || getActivePracticeView() !== 'practice';
+}
 
 function applyStudentToolPermissions(policy = {}) {
     // Default policy: students have full unrestricted access unless explicitly restricted
@@ -454,6 +466,7 @@ function switchPracticeView(targetView, skipHistoryPush = false) {
     Object.entries(buttons).forEach(([name, button]) => {
         if (button) button.classList.toggle('active', name === targetView);
     });
+    updateReadingDifficultyControl();
     if (targetView === 'tasks' && !skipHistoryPush && typeof fetchStudentTasks === 'function') {
         fetchStudentTasks();
     } else if (targetView === 'catalog') {
@@ -514,6 +527,7 @@ function startPracticingTopic(topicId, title) {
 }
 
 function updateTaskRunnerUI() {
+    updateReadingDifficultyControl();
     const banner = document.getElementById('task-runner-banner');
     const topicsButton = document.getElementById('nav-topics-btn');
     const tasksButton = document.getElementById('nav-tasks-btn');
@@ -1067,6 +1081,7 @@ async function startStudentTask(task) {
                     source_q: block.source_q,
                     step_label: block.step_label,
                     fallback_guided: block.fallback_guided,
+                    reading_difficulty: block.reading_difficulty || 'standard',
                     allow_frq_conclusion: Boolean(block.allow_frq_conclusion),
                     frq_retry_mode: block.frq_retry_mode || 'revision'
                 });
@@ -1083,6 +1098,7 @@ async function startStudentTask(task) {
             }
             questionQueue.push({
                 topic: question.topic,
+                reading_difficulty: question.reading_difficulty || 'standard',
                 allow_hints: typeof question.allow_hints === 'boolean'
                     ? question.allow_hints
                     : task.config?.allow_hints !== false && task.allow_hints !== false,
@@ -1100,6 +1116,7 @@ async function startStudentTask(task) {
             for (let index = 0; index < count; index += 1) {
                 questionQueue.push({
                     topic: skill.topic,
+                    reading_difficulty: skill.reading_difficulty || 'standard',
                     allow_hints: typeof skill.hints === 'boolean'
                         ? skill.hints
                         : task.config?.allow_hints !== false && task.allow_hints !== false
@@ -1332,6 +1349,7 @@ function buildQuestionBreakdown(questionIndex, points, steps, totalSteps) {
     return {
         q_num: questionIndex,
         topic,
+        block_id: question.blockId || null,
         title,
         mode: question.mode || (question.allow_hints ? 'all_hints' : 'no_hints'),
         attempts_used: totalSteps === null ? null : totalSteps
@@ -1580,18 +1598,22 @@ function loadSavedState() {
         if (saved) {
             const parsed = JSON.parse(saved);
             state.selectedTopic = parsed.selectedTopic || 'random';
+            state.readingDifficulty = parsed.readingDifficulty === 'advanced' ? 'advanced' : 'standard';
         }
     } catch (e) {
         console.warn('localStorage not accessible');
     }
     updateCurrentTopicName();
+    const difficultySelect = document.getElementById('reading-difficulty-select');
+    if (difficultySelect) difficultySelect.value = state.readingDifficulty;
     saveState();
 }
 
 function saveState() {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            selectedTopic: state.selectedTopic || 'random'
+            selectedTopic: state.selectedTopic || 'random',
+            readingDifficulty: state.readingDifficulty
         }));
     } catch (e) {}
 }
@@ -1802,7 +1824,8 @@ async function loadProblem(problemToRender = null) {
                             : isProbSampling ? '/api/problem/prob_sampling' : '/api/problem/ci';
             const notation = getActiveLsrlNotation();
             const notationParam = isRegression || topic.startsWith('step__') ? `&notation=${encodeURIComponent(notation)}` : '';
-            const res = await fetch(`${endpoint}?topic=${encodeURIComponent(problemTopic)}${notationParam}`);
+            const difficultyParam = `&reading_difficulty=${encodeURIComponent(getActiveReadingDifficulty())}`;
+            const res = await fetch(`${endpoint}?topic=${encodeURIComponent(problemTopic)}${notationParam}${difficultyParam}`);
             if (!res.ok) throw new Error(`Could not load problem (${res.status}).`);
             currentProblem = await res.json();
         }
@@ -1818,7 +1841,7 @@ async function loadProblem(problemToRender = null) {
         input.value = '';
 
         if (!currentProblem) {
-            const res = await fetch(`/api/problem/normal?topic=${encodeURIComponent(topic)}`);
+            const res = await fetch(`/api/problem/normal?topic=${encodeURIComponent(topic)}&reading_difficulty=${encodeURIComponent(getActiveReadingDifficulty())}`);
             currentProblem = await res.json();
         }
 
@@ -2336,6 +2359,7 @@ async function submitFullFrqResponse() {
         problem: currentProblem,
         attempt: currentFrqAttemptCount + 1,
         retry_mode: activeTaskState.active ? activeTaskState.frqRetryMode : 'revision',
+        reading_difficulty: getActiveReadingDifficulty(),
         response_text: responseText,
         state_text: responseText,
         plan_text: responseText,
@@ -2417,7 +2441,12 @@ async function submitFullFrqResponse() {
                 prompt: currentProblem.prompt,
                 correct: Boolean(result.passed),
                 score: earned,
-                breakdown: { topic: activeTaskState.questionQueue[index]?.topic, sections: result.sections },
+                breakdown: {
+                    q_num: index + 1,
+                    topic: activeTaskState.questionQueue[index]?.topic,
+                    block_id: activeTaskState.questionQueue[index]?.blockId || null,
+                    sections: result.sections
+                },
             };
         }
     } catch (error) {
@@ -3314,6 +3343,7 @@ async function finalizeProblem(isSuccess, answer = null, questionScore = null) {
             step_label: completedQuestion.step_label,
             blueprintStepKey: drill?.key,
             fallback_guided: Boolean(drill?.fallback),
+            reading_difficulty: completedQuestion.reading_difficulty || 'standard',
             allow_frq_conclusion: completedQuestion.allow_frq_conclusion
         });
         const discardRemainingBlockQuestions = () => {
@@ -3463,6 +3493,16 @@ async function finalizeProblem(isSuccess, answer = null, questionScore = null) {
 }
 
 window.addEventListener('load', async () => {
+    const difficultySelect = document.getElementById('reading-difficulty-select');
+    if (difficultySelect) {
+        difficultySelect.value = state.readingDifficulty;
+        difficultySelect.addEventListener('change', () => {
+            if (activeTaskState.active) return;
+            state.readingDifficulty = difficultySelect.value;
+            saveState();
+            if (getActivePracticeView() === 'practice') loadProblem();
+        });
+    }
     const notationSelect = document.getElementById('lsrl-notation-select');
     if (notationSelect) notationSelect.value = state.lsrlNotationStyle;
     const rootView = taskId ? 'tasks' : 'catalog';

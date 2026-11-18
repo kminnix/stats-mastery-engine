@@ -2,6 +2,7 @@ import random
 from typing import Any, Dict, Sequence
 
 from scipy.stats import chi2
+from .reading_difficulty import apply_reading_difficulty
 
 
 def _decision_step(
@@ -183,7 +184,7 @@ def generate_chi_square_gof() -> Dict[str, Any]:
             "M&M color breakdown",
             ["Blue", "Brown", "Green", "Orange", "Red", "Yellow"],
             [0.13, 0.14, 0.13, 0.20, 0.24, 0.16],
-            "a bag of M&M's",
+            "M&M's",
         ),
         (
             "store customer visits by weekday",
@@ -200,6 +201,7 @@ def generate_chi_square_gof() -> Dict[str, Any]:
     ]
     scenario, categories, proportions, sample_description = random.choice(scenarios)
     n = random.randint(100, 300)
+    population_size = n * 20
     observed = [0] * len(categories)
     for selected_category in random.choices(range(len(categories)), weights=proportions, k=n):
         observed[selected_category] += 1
@@ -232,6 +234,7 @@ def generate_chi_square_gof() -> Dict[str, Any]:
     prompt = (
         f"A researcher studies the {scenario}. Under the null hypothesis, the population "
         f"proportions are {null_distribution}. In a random sample of \\(n={n}\\) "
+        f"from a population of \\(N={population_size}\\) "
         f"{sample_description}, the observed counts are shown below. At "
         f"\\(\\alpha={alpha:g}\\), test whether the observed category distribution differs "
         f"from the hypothesized distribution.<br><br>{observed_table}"
@@ -332,6 +335,12 @@ def generate_chi_square_gof() -> Dict[str, Any]:
             "expected_decision": "reject H0" if p_value <= alpha else "fail to reject H0",
             "alternative": "different", "parameter_description": sample_description,
             "alternative_statement": alternative,
+            "null_statement": null,
+            "sample_sizes": [n], "n": n, "population_size": population_size,
+            "df": df, "statistic": chi2_stat, "p_value": p_value, "alpha": alpha,
+            "expected_counts": expected,
+            "minimum_expected_count": min(expected),
+            "row_count": len(categories), "column_count": 1,
         },
         "solution": solution,
     }
@@ -404,6 +413,9 @@ def _generate_chi_square_two_way(kind: str) -> Dict[str, Any]:
         if all(row * col / grand_total >= 5 for row in row_totals for col in column_totals):
             break
     independence = kind == "chi_independence"
+    population_sizes = (
+        [grand_total * 20] if independence else [total * 20 for total in row_totals]
+    )
     if independence:
         title = "Chi-Square Test for Independence"
         sampling = f"A single random sample of {population} is cross-classified by {row_variable} and {response}."
@@ -452,6 +464,12 @@ def _generate_chi_square_two_way(kind: str) -> Dict[str, Any]:
         observed,
         "d",
     )
+    if independence:
+        sampling += f" The population contains \\(N={population_sizes[0]}\\) individuals."
+    else:
+        sampling += " Population sizes for the groups are " + ", ".join(
+            f"\\(N_{index + 1}={size}\\)" for index, size in enumerate(population_sizes)
+        ) + "."
     prompt = (
         f"{sampling} The observed counts are shown below. At \\(\\alpha={alpha:g}\\), "
         f"test whether {alternative}.<br><br>{observed_table}"
@@ -512,6 +530,15 @@ def _generate_chi_square_two_way(kind: str) -> Dict[str, Any]:
             "expected_decision": "reject H0" if p_value <= alpha else "fail to reject H0",
             "alternative": "different", "parameter_description": f"{row_variable} {response} {population}",
             "alternative_statement": alternative + " (the distribution differs from the null hypothesis)",
+            "null_statement": null,
+            "sample_sizes": [grand_total] if independence else row_totals,
+            "population_sizes": population_sizes,
+            "n": grand_total if independence else None,
+            "population_size": population_sizes[0] if independence else None,
+            "df": df, "statistic": chi2_stat, "p_value": p_value, "alpha": alpha,
+            "expected_counts": [value for row in expected for value in row],
+            "minimum_expected_count": min(min(row) for row in expected),
+            "row_count": row_count, "column_count": len(column_labels),
         },
         "solution": f"{observed_table}{solution}",
     }
@@ -532,17 +559,21 @@ def generate_chi_square_two_way() -> Dict[str, Any]:
     return problem
 
 
-def generate_chi_problem(topic: str = "random") -> Dict[str, Any]:
+def generate_chi_problem(
+    topic: str = "random", reading_difficulty: str = "standard"
+) -> Dict[str, Any]:
     if topic == "chi_gof":
-        return generate_chi_square_gof()
-    if topic == "chi_two_way":
-        return generate_chi_square_two_way()
-    if topic == "chi_independence":
-        return generate_chi_square_independence()
-    if topic == "chi_homogeneity":
-        return generate_chi_square_homogeneity()
-    if topic == "random":
-        return random.choice(
+        problem = generate_chi_square_gof()
+    elif topic == "chi_two_way":
+        problem = generate_chi_square_two_way()
+    elif topic == "chi_independence":
+        problem = generate_chi_square_independence()
+    elif topic == "chi_homogeneity":
+        problem = generate_chi_square_homogeneity()
+    elif topic == "random":
+        problem = random.choice(
             [generate_chi_square_gof, generate_chi_square_two_way]
         )()
-    raise ValueError(f"Unknown chi-square topic: {topic}")
+    else:
+        raise ValueError(f"Unknown chi-square topic: {topic}")
+    return apply_reading_difficulty(problem, reading_difficulty)

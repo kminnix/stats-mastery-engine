@@ -279,6 +279,7 @@
         const passes = defaultMasteryPasses();
         assessmentBlocks = blocks.map((block, index) => ({
             ...block,
+            source_block_id: block.source_block_id || block.id,
             id: `correction_${Date.now()}_${index}`,
             count: Number(block.count) || 1,
             mode: 'mastery',
@@ -343,7 +344,9 @@
         { id: 'frq_ci_mean_1samp', title: 'Full FRQ: 1-Sample t-Interval for Mean (μ)', topic: 'Confidence Intervals for Means (μ)', notation: '\\mu' },
         { id: 'ci_mean_t_2samp', title: '2-Sample t-Interval for Means', topic: 'Confidence Intervals for Means (μ)', notation: '\\mu_1 - \\mu_2' },
         { id: 'frq_ci_mean_2samp', title: 'Full FRQ: 2-Sample t-Interval for Means (μ₁ - μ₂)', topic: 'Confidence Intervals for Means (μ)', notation: '\\mu_1 - \\mu_2' },
+        { id: 'drill_proc_matched_pairs', title: 'Naming the Procedure (Matched Pairs)', topic: 'Confidence Intervals for Means (μ)', notation: 'Matched Pairs t' },
         { id: 'ci_matched_pairs_t', title: 'Matched Pairs t-Interval for Mean Difference', topic: 'Confidence Intervals for Means (μ)', notation: '\\mu_{\\text{diff}}' },
+        { id: 'frq_ci_matched_pairs', title: 'Full FRQ: Matched Pairs t-Interval for Mean Difference (μ_diff)', topic: 'Confidence Intervals for Means (μ)', notation: '\\mu_{\\text{diff}}' },
         { id: 'ci_mean_cond', title: 'Checking Conditions for Mean Intervals', topic: 'Confidence Intervals for Means (μ)', notation: 'Conditions' },
         { id: 'ci_mean_crit_se', title: 'Degrees of Freedom, t* & SE for μ', topic: 'Confidence Intervals for Means (μ)', notation: 'df, t^*, SE' },
         { id: 'ci_mean_bounds', title: 'Margin of Error & Interval Bounds for μ', topic: 'Confidence Intervals for Means (μ)', notation: 'E, L, U' },
@@ -357,14 +360,19 @@
         { id: 'ht_mean_t_2samp', title: '2-Sample t-Test for Means', topic: 'Significance Tests for Means (μ)', notation: 'H_0: \\mu_1 = \\mu_2' },
         { id: 'frq_ht_mean_2samp', title: 'Full FRQ: 2-Sample t-Test for Means (μ₁ - μ₂)', topic: 'Significance Tests for Means (μ)', notation: 'H₀, t, P' },
         { id: 'ht_matched_pairs_t', title: 'Matched Pairs t-Test', topic: 'Significance Tests for Means (μ)', notation: 'H_0: \\mu_{\\text{diff}} = 0' },
+        { id: 'frq_ht_matched_pairs', title: 'Full FRQ: Matched Pairs t-Test for Mean Difference (μ_diff)', topic: 'Significance Tests for Means (μ)', notation: '\\mu_{\\text{diff}}, H_0, t, P' },
         { id: 'ht_mean_hypo', title: 'Stating Hypotheses for Means', topic: 'Significance Tests for Means (μ)', notation: 'H_0, H_a' },
         { id: 'ht_mean_cond', title: 'Checking Conditions for Mean Tests', topic: 'Significance Tests for Means (μ)', notation: 'Conditions' },
         { id: 'ht_mean_stat', title: 'Standard Error & t-Statistic for μ', topic: 'Significance Tests for Means (μ)', notation: 'SE, t' },
         { id: 'ht_mean_pval', title: 'P-Value & Interpretation for Means', topic: 'Significance Tests for Means (μ)', notation: 'P' },
         { id: 'ht_mean_conc', title: 'Decision & Contextual Conclusion for μ', topic: 'Significance Tests for Means (μ)', notation: 'P, \\alpha' },
+        { id: 'drill_proc_chi_square', title: 'Naming the Procedure (Chi-Square)', topic: 'Chi-Square Tests (χ²)', notation: 'Chi-Square Tests' },
         { id: 'chi_gof', title: 'Chi-Square Goodness-of-Fit Test', topic: 'Chi-Square Tests (χ²)', notation: 'df = k - 1' },
+        { id: 'frq_chi_gof', title: 'Full FRQ: Chi-Square Goodness-of-Fit Test', topic: 'Chi-Square Tests (χ²)', notation: '\\chi^2, P' },
         { id: 'chi_independence', title: 'Chi-Square Test for Independence', topic: 'Chi-Square Tests (χ²)', notation: 'df = (r-1)(c-1)' },
+        { id: 'frq_chi_independence', title: 'Full FRQ: Chi-Square Test for Independence', topic: 'Chi-Square Tests (χ²)', notation: '\\chi^2, P' },
         { id: 'chi_homogeneity', title: 'Chi-Square Test for Homogeneity', topic: 'Chi-Square Tests (χ²)', notation: 'df = (r-1)(c-1)' },
+        { id: 'frq_chi_homogeneity', title: 'Full FRQ: Chi-Square Test for Homogeneity', topic: 'Chi-Square Tests (χ²)', notation: '\\chi^2, P' },
         { id: 'chi_step_hypo', title: 'Stating Chi-Square Hypotheses', topic: 'Chi-Square Tests (χ²)', notation: 'H_0, H_a' },
         { id: 'chi_step_cond', title: 'Chi-Square Conditions & Minimum Expected Count (E_min)', topic: 'Chi-Square Tests (χ²)', notation: 'E_{min}' },
         { id: 'chi_step_df', title: 'Chi-Square Degrees of Freedom (df)', topic: 'Chi-Square Tests (χ²)', notation: 'df' },
@@ -374,8 +382,11 @@
         { id: 'reg_pred_res', title: 'Predictions & Residual Analysis', topic: 'Linear Regression Analysis', notation: 'e = y - ŷ' },
         { id: 'reg_comp_output', title: 'Reading Regression Computer Output', topic: 'Linear Regression Analysis', notation: 'Coef, SE Coef, T, P' },
         { id: 'reg_raw_data', title: 'Regression from Raw Data Table', topic: 'Linear Regression Analysis', notation: 'Data Table → LSRL' },
+        { id: 'drill_proc_slope', title: 'Naming the Procedure (Regression Slope)', topic: 'Linear Regression Analysis', notation: 'Regression t' },
         { id: 'reg_slope_ci', title: 'Confidence Interval for Slope (β₁)', topic: 'Linear Regression Analysis', notation: 'b_1 ± t*SE_b_1' },
+        { id: 'frq_ci_slope', title: 'Full FRQ: Linear Regression t-Interval for Slope (β₁)', topic: 'Linear Regression Analysis', notation: '\\beta_1, t, df' },
         { id: 'reg_slope_test', title: 'Significance Test for Slope (β₁)', topic: 'Linear Regression Analysis', notation: 'H_0: β_1 = 0' },
+        { id: 'frq_ht_slope', title: 'Full FRQ: Linear Regression t-Test for Slope (β₁)', topic: 'Linear Regression Analysis', notation: '\\beta_1, H_0, t, P' },
         { id: 'reg_step_slope_int', title: 'Calculating Slope & y-Intercept', topic: 'Linear Regression Analysis', notation: 'b_0, b_1' },
         { id: 'reg_step_equation', title: 'Writing the LSRL Equation', topic: 'Linear Regression Analysis', notation: '\\hat{y} = b_0 + b_1x' },
         { id: 'reg_step_pred_res', title: 'Calculating Predicted Value (ŷ) & Residual', topic: 'Linear Regression Analysis', notation: '\\hat{y}, e' },
@@ -504,6 +515,7 @@
             title,
             count: 1,
             mode: 'no_hints',
+            reading_difficulty: 'standard',
             ...(skillId.startsWith('frq_') ? { frq_retry_mode: 'revision' } : {}),
             required_passes: defaultMasteryPasses(),
             required_clean_passes: defaultMasteryPasses(),
@@ -629,7 +641,15 @@
                 updateBlockStepAttempts(block.id, stepAttemptsInput.value)
             );
             stepAttemptsLabel.appendChild(stepAttemptsInput);
-            controls.append(countLabel, modeLabel, stepAttemptsLabel);
+            const difficultyLabel = document.createElement('label');
+            difficultyLabel.textContent = 'Reading Difficulty: ';
+            const difficulty = document.createElement('select');
+            difficulty.add(new Option('Standard', 'standard'));
+            difficulty.add(new Option('Advanced', 'advanced'));
+            difficulty.value = block.reading_difficulty || 'standard';
+            difficulty.addEventListener('change', () => { block.reading_difficulty = difficulty.value; });
+            difficultyLabel.appendChild(difficulty);
+            controls.append(countLabel, modeLabel, difficultyLabel, stepAttemptsLabel);
             if (block.topic.startsWith('frq_')) {
                 const retryLabel = document.createElement('label');
                 retryLabel.textContent = 'FRQ Grading Policy: ';
@@ -897,6 +917,7 @@
                 title: block.title,
                 count: parseInt(block.count, 10) || 1,
                 mode: block.mode,
+                reading_difficulty: block.reading_difficulty || 'standard',
                 ...(block.topic.startsWith('reg_') && block.notation_style ? { notation_style: block.notation_style } : {}),
                 max_attempts: parseInt(block.max_attempts, 10) || 4,
                 required_passes: parseInt(block.required_passes || block.required_clean_passes, 10) || defaultMasteryPasses(),
@@ -911,6 +932,7 @@
         config.questions = config.blocks.flatMap(block =>
             Array.from({ length: block.count }, (_unused, index) => ({
                 topic: block.topic,
+                reading_difficulty: block.reading_difficulty,
                 allow_hints: type === 'test_correction' || (type !== 'test' &&
                     (block.mode === 'all_hints' || (['scaffold', 'mastery'].includes(block.mode) && index === 0))),
                 allow_frq_conclusion: Boolean(block.allow_frq_conclusion),

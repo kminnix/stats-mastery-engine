@@ -3,6 +3,8 @@ import random
 from typing import Any, Dict, List, Sequence, Tuple
 
 from scipy.stats import t
+from .inference_conditions import procedure_name_component
+from .reading_difficulty import apply_reading_difficulty
 
 
 def _sample_statistics(
@@ -613,6 +615,7 @@ def generate_slope_confidence_interval(notation: str = "ab") -> Dict[str, Any]:
     ]
     context, slope_units = random.choice(contexts)
     n = random.choice([15, 20, 25, 30])
+    population_size = n * 20
     df = n - 2
     slope = round(random.choice([-1, 1]) * random.uniform(0.2, 4.0), 3)
     standard_error = round(random.uniform(0.15, 1.5), 3)
@@ -623,26 +626,43 @@ def generate_slope_confidence_interval(notation: str = "ab") -> Dict[str, Any]:
     lower = slope - margin_of_error
     upper = slope + margin_of_error
     prompt = (
-        f"A regression analysis studies {context}. In a sample of \\(n={n}\\), "
-        f"the estimated slope is \\({slope_symbol}={slope:.3f}\\) {slope_units}, with "
+        f"A random sample of \\(n={n}\\) observations is drawn from a population "
+        f"of \\(N={population_size}\\) to study {context}. The scatterplot is "
+        "approximately linear, residuals are approximately normal, and their spread "
+        f"is roughly constant. The estimated slope is "
+        f"\\({slope_symbol}={slope:.3f}\\) {slope_units}, with "
         f"standard error \\(SE_{{{slope_symbol}}}={standard_error:.3f}\\). Construct a "
         f"{100 * confidence_level:g}% confidence interval for the population slope "
         "\\(\\beta_1\\)."
     )
+    procedure_component = procedure_name_component("reg_slope_ci")
+    procedure_step = {
+        "step_num": 1,
+        "label": "Procedure and Degrees of Freedom:",
+        "input_type": "cloze",
+        "components": [
+            procedure_component,
+            {
+                "id": "slope-df",
+                "type": "number",
+                "input_type": "number",
+                "placeholder": "df",
+                "expected": [df],
+                "tolerance": 0.01,
+            },
+        ],
+        "parts": [
+            "Procedure: ", {"component": "procedure-name"},
+            ". Degrees of freedom (df): ", {"component": "slope-df"},
+        ],
+        "hint": r"Name the interval for a population regression slope, then use \(df=n-2\).",
+    }
     return {
         "type": "reg_slope_ci",
         "title": "Confidence Interval for Slope (β₁)",
         "prompt": prompt,
         "steps": [
-            {
-                "step_num": 1,
-                "label": "Degrees of Freedom:",
-                "input_type": "number",
-                "placeholder": "df",
-                "expected": [df],
-                "tolerance": 0.01,
-                "hint": r"For a regression slope, \(df=n-2\).",
-            },
+            procedure_step,
             {
                 "step_num": 2,
                 "label": "Critical Value (t*):",
@@ -706,6 +726,22 @@ def generate_slope_confidence_interval(notation: str = "ab") -> Dict[str, Any]:
             rf"{slope:.3f}+{margin_of_error:.3f})="
             rf"({lower:.3f}, {upper:.3f})\).",
         ),
+        "metadata": {
+            "n": n,
+            "sample_sizes": [n],
+            "population_size": population_size,
+            "degrees_freedom": df,
+            "df": df,
+            "slope": slope,
+            "standard_error": standard_error,
+            "confidence": 100 * confidence_level,
+            "lower": lower,
+            "upper": upper,
+            "parameter_description": (
+                f"the true slope of the population regression line relating {context}"
+            ),
+            "context_keywords": context.replace(" and ", " ").split(),
+        },
     }
 
 
@@ -785,12 +821,28 @@ def generate_slope_significance_test(notation: str = "ab") -> Dict[str, Any]:
         "expected_evidence": expected_evidence,
         "expected_claim": expected_claim,
         "alternative": direction,
-        "parameter_description": context,
+        "direction": direction,
+        "n": n,
+        "sample_sizes": [n],
+        "population_size": population_size,
+        "df": df,
+        "stat": test_statistic,
+        "test_statistic": test_statistic,
+        "stat_name": "t",
+        "p_value": p_value,
+        "p_val": p_value,
+        "alpha": alpha,
+        "null_value": 0,
+        "parameter_description": (
+            f"the true slope of the population regression line relating {explanatory} to {response}"
+        ),
+        "context_keywords": [explanatory, response],
         "alternative_statement": (
             f"the true slope relating {explanatory} to {response} "
             + {">": "is greater than 0", "<": "is less than 0", "!=": "differs from 0"}[direction]
         ),
     }
+    procedure_component = procedure_name_component("reg_slope_test")
     return {
         "type": "reg_slope_test",
         "title": "Significance Test for Slope (β₁)",
@@ -835,6 +887,7 @@ def generate_slope_significance_test(notation: str = "ab") -> Dict[str, Any]:
                             f"The true slope of the population regression line relating {explanatory} to {response} (β₁)"
                         ],
                     },
+                    procedure_component,
                 ],
                 "hint": "Choose the population slope parameter, not a sample statistic or response mean.",
             },
@@ -1156,7 +1209,9 @@ def _notation_symbols(notation: str) -> Tuple[str, str]:
     raise ValueError(f"Unknown LSRL notation style: {notation}")
 
 
-def generate_regression_problem(topic: str, notation: str = "ab") -> Dict[str, Any]:
+def generate_regression_problem(
+    topic: str, notation: str = "ab", reading_difficulty: str = "standard"
+) -> Dict[str, Any]:
     generators = {
         "reg_lsrl": generate_lsrl_equation_problem,
         "reg_pred_res": generate_prediction_residual_problem,
@@ -1169,4 +1224,4 @@ def generate_regression_problem(topic: str, notation: str = "ab") -> Dict[str, A
     generator = generators.get(topic)
     if generator is None:
         raise ValueError(f"Unknown linear-regression topic: {topic}")
-    return generator(notation)
+    return apply_reading_difficulty(generator(notation), reading_difficulty)

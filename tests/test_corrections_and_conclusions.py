@@ -167,6 +167,22 @@ class CorrectionsTests(unittest.TestCase):
         task = self.client.get("/api/student/tasks/student").json()[0]
         self.assertEqual([item["topic"] for item in task["missed_questions"]], ["ht_prop_z"])
 
+    def test_correction_inherits_difficulty_from_the_matching_source_block(self):
+        self.db.rows["assessments"][0]["config"]["blocks"] = [
+            {"id": "first", "topic": "ht_prop_z", "count": 1, "reading_difficulty": "standard"},
+            {"id": "second", "topic": "ht_prop_z", "count": 1, "reading_difficulty": "advanced"},
+        ]
+        self.create_correction()
+        self.db.rows["assessment_submissions"].append({
+            "assessment_id": "parent", "student_id": "student", "status": "submitted",
+            "details": {"question_breakdown": [{
+                "q_num": 2, "topic": "ht_prop_z", "block_id": "second",
+                "points_earned": 0, "max_points": 1,
+            }]},
+        })
+        task = self.client.get("/api/student/tasks/student").json()[0]
+        self.assertEqual(task["missed_questions"][0]["reading_difficulty"], "advanced")
+
     def test_canonical_step_ids_stay_with_their_parent(self):
         self.assertEqual(main.correction_step_topic("ht_prop_z", "step__ht_prop_z__6"), "step__ht_prop_z__6")
         self.assertEqual(main.correction_step_topic("ht_prop_z", {"step_topic": "step__ht_prop_z__7"}), "step__ht_prop_z__7")

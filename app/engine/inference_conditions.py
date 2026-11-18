@@ -11,7 +11,25 @@ PROCEDURE_NAMES = {
     "ht_prop_z_2samp": "2-Sample z-Test for a Difference in Proportions",
     "ht_mean_t": "1-Sample t-Test for a Mean",
     "ht_mean_t_2samp": "2-Sample t-Test for a Difference in Means",
+    "matched_pairs_t": "Matched Pairs t-Interval for Mean Difference",
+    "ht_matched_pairs_t": "Matched Pairs t-Test for Mean Difference",
+    "reg_slope_ci": "Linear Regression t-Interval for Slope",
+    "reg_slope_test": "Linear Regression t-Test for Slope",
 }
+
+
+def procedure_name_component(topic: str) -> Optional[Dict[str, Any]]:
+    procedure = PROCEDURE_NAMES.get(topic)
+    if not procedure:
+        return None
+    return {
+        "id": "procedure-name",
+        "type": "select",
+        "options": [
+            {"value": name, "label": name} for name in PROCEDURE_NAMES.values()
+        ],
+        "expected": [procedure],
+    }
 
 
 def add_inference_conditions(
@@ -52,13 +70,9 @@ def add_inference_conditions(
         "expected": [correct],
     }]
     parts = ["Conditions: ", {"component": "inference-conditions"}]
-    procedure = PROCEDURE_NAMES.get(problem.get("type"))
-    if procedure:
-        components.insert(0, {
-            "id": "procedure-name", "type": "select",
-            "options": [{"value": name, "label": name} for name in PROCEDURE_NAMES.values()],
-            "expected": [procedure],
-        })
+    procedure_component = procedure_name_component(problem.get("type", ""))
+    if procedure_component:
+        components.insert(0, procedure_component)
         parts = ["Procedure: ", {"component": "procedure-name"}, ". ", *parts]
     if is_proportion:
         components.append({

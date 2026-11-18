@@ -2,6 +2,7 @@
 import math
 from scipy.stats import norm, t
 from .inference_conditions import add_inference_conditions
+from .reading_difficulty import apply_reading_difficulty
 
 
 PROPORTION_SCENARIOS = [
@@ -707,8 +708,15 @@ def generate_two_sample_prop_z_interval():
 
 def generate_matched_pairs_t_interval():
     """Generates a matched-pairs t confidence interval for a population mean difference."""
+    scenarios = [
+        ("student exam scores", "before tutoring", "after tutoring", "points"),
+        ("patient pain ratings", "before treatment", "after treatment", "rating points"),
+        ("vehicle stopping distance", "before a brake adjustment", "after the adjustment", "feet"),
+    ]
+    context, before_label, after_label, units = random.choice(scenarios)
     n = random.choice([12, 15, 18, 20, 25])
     df = n - 1
+    population_size = n * 20
     d_bar = round(random.uniform(-8.0, 8.0), 1)
     s_d = round(random.uniform(2.0, 8.0), 1)
     conf_level = random.choice([90, 95, 99])
@@ -742,13 +750,23 @@ def generate_matched_pairs_t_interval():
         "type": "matched_pairs_t",
         "title": f"Matched Pairs t-Interval for μ_diff ({conf_level}%)",
         "metadata": {"se": se, "critical": t_star, "point": d_bar, "margin": moe,
-                     "lower": lower, "upper": upper, "confidence": conf_level, "df": df},
+                     "lower": lower, "upper": upper, "confidence": conf_level, "df": df,
+                     "n": n, "sample_sizes": [n], "population_size": population_size,
+                     "parameter_description": (
+                         f"the true mean paired difference in {context} "
+                         f"({after_label} minus {before_label})"
+                     ),
+                     "context_keywords": ["paired", *context.lower().split()]},
         "prompt": (
-            f"For {n} matched pairs, the sample mean of the paired differences is "
+            f"A random sample of {n} pairs is drawn from a population of "
+            f"\\(N={population_size}\\). The same units' {context} are measured "
+            f"{before_label} and {after_label}. The sample mean of the paired "
+            f"differences ({after_label} minus {before_label}) is "
             f"\\(\\bar{{d}} = {d_bar}\\) and their sample standard deviation is "
             f"\\(s_d = {s_d}\\). Construct a <strong>{conf_level}%</strong> confidence "
             f"interval for the population mean difference \\(\\mu_{{\\text{{diff}}}}\\). Use "
-            f"\\(df = n - 1\\). Round the margin of error and bounds to two decimals."
+            f"\\(df = n - 1\\). The differences show no strong skewness or outliers. "
+            f"Round the margin of error and bounds to two decimals."
         ),
         "steps": [
             {"step_num": 1, "label": "Point Estimate (d̄):", "input_type": "number", "placeholder": "e.g. 2.4",
@@ -770,21 +788,15 @@ def generate_matched_pairs_t_interval():
         "solution": solution_html
     }, [n])
 
-def generate_ci_problem(topic: str = "random"):
-    if topic == "mean_t":
-        return generate_mean_t_interval()
-    elif topic == "prop_z":
-        return generate_proportion_z_interval()
-    elif topic == "mean_t_2samp":
-        return generate_two_sample_mean_t_interval()
-    elif topic == "prop_z_2samp":
-        return generate_two_sample_prop_z_interval()
-    elif topic == "matched_pairs_t":
-        return generate_matched_pairs_t_interval()
-    return random.choice([
-        generate_mean_t_interval,
-        generate_proportion_z_interval,
-        generate_two_sample_mean_t_interval,
-        generate_two_sample_prop_z_interval,
-        generate_matched_pairs_t_interval
-    ])()
+def generate_ci_problem(topic: str = "random", reading_difficulty: str = "standard"):
+    generators = {
+        "mean_t": generate_mean_t_interval,
+        "prop_z": generate_proportion_z_interval,
+        "mean_t_2samp": generate_two_sample_mean_t_interval,
+        "prop_z_2samp": generate_two_sample_prop_z_interval,
+        "matched_pairs_t": generate_matched_pairs_t_interval,
+    }
+    generator = generators.get(topic)
+    if generator is None:
+        generator = random.choice(list(generators.values()))
+    return apply_reading_difficulty(generator(), reading_difficulty)

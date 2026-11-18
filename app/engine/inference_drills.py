@@ -16,6 +16,13 @@ PROCEDURE_NAMES = {
     "ht_prop_2": "2-Sample z-Test for a Difference in Proportions",
     "ht_mean_1": "1-Sample t-Test for a Mean",
     "ht_mean_2": "2-Sample t-Test for a Difference in Means",
+    "ci_matched_pairs": "Matched Pairs t-Interval for Mean Difference",
+    "ht_matched_pairs": "Matched Pairs t-Test for Mean Difference",
+    "chi_gof": "Chi-Square Goodness-of-Fit Test",
+    "chi_independence": "Chi-Square Test for Independence",
+    "chi_homogeneity": "Chi-Square Test for Homogeneity",
+    "reg_slope_ci": "Linear Regression t-Interval for Slope",
+    "reg_slope_test": "Linear Regression t-Test for Slope",
 }
 
 
@@ -25,6 +32,11 @@ def procedure_name_for_topic(topic: str) -> str:
         "ci_mean_t": "ci_mean_1", "ci_mean_t_2samp": "ci_mean_2",
         "ht_prop_z": "ht_prop_1", "ht_prop_z_2samp": "ht_prop_2",
         "ht_mean_t": "ht_mean_1", "ht_mean_t_2samp": "ht_mean_2",
+        "ci_matched_pairs_t": "ci_matched_pairs",
+        "ht_matched_pairs_t": "ht_matched_pairs",
+        "reg_slope_ci": "reg_slope_ci", "reg_slope_test": "reg_slope_test",
+        "chi_gof": "chi_gof", "chi_independence": "chi_independence",
+        "chi_homogeneity": "chi_homogeneity",
     }.get(topic)
     if key is None:
         raise ValueError(f"Unsupported inference procedure: {topic}")
@@ -37,6 +49,9 @@ def generate_procedure_name_drill(category: str = "mixed") -> Dict[str, Any]:
         "ci_mean": ("ci_mean_t", "ci_mean_t_2samp"),
         "ht_prop": ("ht_prop_z", "ht_prop_z_2samp"),
         "ht_mean": ("ht_mean_t", "ht_mean_t_2samp"),
+        "matched_pairs": ("ci_matched_pairs_t", "ht_matched_pairs_t"),
+        "chi_square": ("chi_gof", "chi_independence", "chi_homogeneity"),
+        "regression_slope": ("reg_slope_ci", "reg_slope_test"),
     }
     if category == "mixed":
         choices = tuple(topic for topics in generators.values() for topic in topics)
@@ -45,43 +60,85 @@ def generate_procedure_name_drill(category: str = "mixed") -> Dict[str, Any]:
     else:
         raise ValueError(f"Unsupported procedure-name drill category: {category}")
     topic = random.choice(choices)
-    two_sample = topic.endswith("_2samp")
-    is_test = topic.startswith("ht_")
-    is_proportion = "_prop_" in topic
-    procedure = procedure_name_for_topic(topic)
-    scenario = random.choice([
-        ("the proportion of customers who renew their membership", "customers"),
-        ("the proportion of voters who support the proposal", "voters"),
-    ] if is_proportion else [
-        ("the mean battery runtime, in hours", "batteries"),
-        ("the mean exam score, in points", "students"),
-    ])
-    context, _unit = scenario
-    sample_description = (
-        f"Two independent random samples compare {context} for Group 1 and Group 2."
-        if two_sample else f"A random sample is used to study {context}."
-    )
-    intent = (
-        "The goal is to estimate the parameter with a confidence interval."
-        if not is_test else "The research question tests a claim about the parameter."
-    )
-    prompt = f"{sample_description} {intent} Choose the exact inference procedure."
-    sample_count_explanation = (
-        "two independent groups are compared, so there are \\(n_1\\) and \\(n_2\\) samples"
-        if two_sample else "one sample, \\(n\\), is observed"
-    )
-    response_type_explanation = (
-        "categorical and the parameter is a proportion \\(p\\)"
-        if is_proportion else "quantitative and the parameter is a mean \\(\\mu\\)"
-    )
+    is_test = topic.startswith(("ht_", "reg_slope_test", "chi_"))
+    if topic.startswith("chi_"):
+        procedure = procedure_name_for_topic(topic)
+        prompt = {
+            "chi_gof": "A random sample of candies is classified by color to test whether the population color proportions match a specified distribution.",
+            "chi_independence": "A random sample of students is classified by grade level and preferred study location to test for an association.",
+            "chi_homogeneity": "Independent random samples from several treatment groups are classified by recovery outcome to compare the outcome distributions.",
+        }[topic]
+        sample_count_explanation = "the categorical outcomes and sampling design identify the Chi-Square procedure"
+        response_type_explanation = "categorical counts"
+        sample_description = "categorical count data"
+    elif topic in ("ci_matched_pairs_t", "ht_matched_pairs_t"):
+        procedure = procedure_name_for_topic(topic)
+        context, before, after = random.choice([
+            ("exam scores", "before a tutoring program", "after the program"),
+            ("reaction times", "before caffeine", "after caffeine"),
+            ("tire tread depth", "before rotation", "after rotation"),
+        ])
+        sample_description = (
+            f"The same randomly selected subjects are measured {before} and {after}; "
+            "the paired quantitative differences are analyzed."
+        )
+        intent = (
+            "The goal is to estimate the mean paired difference with a confidence interval."
+            if not is_test else "The research question tests a claim about the mean paired difference."
+        )
+        prompt = f"{sample_description} {intent} Choose the exact inference procedure."
+        sample_count_explanation = "the same subjects are measured twice, producing one sample of paired differences"
+        response_type_explanation = "quantitative paired differences with a population mean difference"
+    elif topic in ("reg_slope_ci", "reg_slope_test"):
+        procedure = procedure_name_for_topic(topic)
+        context = random.choice([
+            "weekly study time and exam score",
+            "vehicle mileage and vehicle price",
+            "work experience and salary",
+        ])
+        sample_description = f"A random sample is used to study the linear relationship between {context}."
+        intent = (
+            "The goal is to estimate the population regression slope with a confidence interval."
+            if not is_test else "The research question tests whether the population regression slope is zero."
+        )
+        prompt = f"{sample_description} {intent} Choose the exact inference procedure."
+        sample_count_explanation = "one sample of paired quantitative x- and y-values is observed"
+        response_type_explanation = "a population regression slope"
+    else:
+        two_sample = topic.endswith("_2samp")
+        is_proportion = "_prop_" in topic
+        procedure = procedure_name_for_topic(topic)
+        scenario = random.choice([
+            ("the proportion of customers who renew their membership", "customers"),
+            ("the proportion of voters who support the proposal", "voters"),
+        ] if is_proportion else [
+            ("the mean battery runtime, in hours", "batteries"),
+            ("the mean exam score, in points", "students"),
+        ])
+        context, _unit = scenario
+        sample_description = (
+            f"Two independent random samples compare {context} for Group 1 and Group 2."
+            if two_sample else f"A random sample is used to study {context}."
+        )
+        intent = (
+            "The goal is to estimate the parameter with a confidence interval."
+            if not is_test else "The research question tests a claim about the parameter."
+        )
+        prompt = f"{sample_description} {intent} Choose the exact inference procedure."
+        sample_count_explanation = (
+            "two independent groups are compared, so there are \\(n_1\\) and \\(n_2\\) samples"
+            if two_sample else "one sample, \\(n\\), is observed"
+        )
+        response_type_explanation = (
+            "categorical and the parameter is a proportion \\(p\\)"
+            if is_proportion else "quantitative and the parameter is a mean \\(\\mu\\)"
+        )
     distractors = list(PROCEDURE_NAMES.values())
     options = [procedure] + [name for name in distractors if name != procedure]
     random.shuffle(options)
     explanation = (
-        f"<p>This is a <strong>{'two' if two_sample else 'one'}-sample</strong> procedure because "
-        f"{sample_count_explanation}.</p>"
-        f"<p>Use <strong>{'z' if is_proportion else 't'}</strong> because the response is "
-        f"{response_type_explanation}.</p>"
+        f"<p>{sample_count_explanation}.</p>"
+        f"<p>The procedure is selected because the response is {response_type_explanation}.</p>"
         f"<p>It is an <strong>{'interval' if not is_test else 'test'}</strong> because "
         f"{'the goal is estimation' if not is_test else 'a claim is being evaluated'}.</p>"
         f"<p>The procedure is <strong>{procedure}</strong>.</p>"

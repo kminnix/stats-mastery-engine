@@ -180,6 +180,12 @@
             <button id="nav-tasks-btn" class="view-nav-btn active" onclick="switchPracticeView('tasks')">📋 Assigned Tasks <span id="tasks-count-badge" style="display: none; background: #ef4444; color: white; border-radius: 9999px; font-size: 0.75rem; padding: 1px 6px; margin-left: 4px;">0</span></button>
             <button id="nav-topics-btn" class="view-nav-btn" title="Browse the topic library" onclick="switchPracticeView('catalog')">📚 Topic Library</button>
             <div class="active-skill-pill">Topic: <strong id="current-skill-name">All Normal Types (Mixed)</strong></div>
+            <label id="reading-difficulty-control" hidden>Reading Difficulty:
+                <select id="reading-difficulty-select" title="Changing the difficulty loads a new problem.">
+                    <option value="standard">Standard</option>
+                    <option value="advanced">Advanced</option>
+                </select>
+            </label>
         </div>
 
         <!-- 1. Assigned Tasks View -->

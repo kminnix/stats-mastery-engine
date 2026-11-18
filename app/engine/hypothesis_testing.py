@@ -4,7 +4,8 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from scipy.stats import norm, t
-from .inference_conditions import add_inference_conditions
+from .inference_conditions import add_inference_conditions, procedure_name_component
+from .reading_difficulty import apply_reading_difficulty
 
 
 ALPHA_LEVELS = [0.01, 0.02, 0.025, 0.04, 0.05, 0.08, 0.10]
@@ -517,6 +518,9 @@ def _test_result(
         alpha=alpha,
         decision=decision,
     )
+    procedure_component = procedure_name_component(test_type)
+    if procedure_component:
+        steps[0]["components"].append(procedure_component)
     return add_inference_conditions({
         "type": test_type,
         "title": title,
@@ -526,10 +530,16 @@ def _test_result(
         "metadata": {
             "parameter_description": parameter_description,
             "null_value": null_value,
+            "sample_sizes": sample_sizes,
+            "n": sample_sizes[0] if len(sample_sizes) == 1 else None,
             "alternative": alternative,
             "alternative_statement": alternative_statement,
+            "stat": statistic,
+            "stat_name": statistic_name,
             "test_statistic": statistic,
+            "df": degrees_freedom,
             "p_value": p_value,
+            "p_val": p_value,
             "alpha": alpha,
             "decision": decision,
             "expected_pval": p_value,
@@ -827,6 +837,7 @@ def generate_matched_pairs_t_test() -> Dict[str, Any]:
     ]
     context_noun, before_label, after_label, units = random.choice(scenarios)
     n = random.choice([12, 15, 18, 20, 25])
+    population_size = n * 20
     df = n - 1
     s_d = round(random.uniform(2.0, 10.0), 1)
     se = s_d / math.sqrt(n)
@@ -843,7 +854,9 @@ def generate_matched_pairs_t_test() -> Dict[str, Any]:
         sample_sizes=[n],
         title="Matched Pairs t-Test",
         prompt=(
-            f"Measure {context_noun} on the same subjects {before_label} and {after_label}; "
+            f"A random sample of {n} subjects is selected from a population of "
+            f"\\(N={population_size}\\). Measure {context_noun} on the same subjects "
+            f"{before_label} and {after_label}; "
             f"define each difference as after minus before. The null claim is "
             f"\\(H_0:\\mu_{{\\text{{diff}}}}=0\\). For \\(n={n}\\) pairs, "
             f"\\(\\bar{{x}}_{{\\text{{diff}}}}={d_bar}\\) and \\(s_d={s_d}\\) {units}. "
@@ -873,10 +886,14 @@ def generate_matched_pairs_t_test() -> Dict[str, Any]:
         p_value_derivation=_t_tail_formula(t_stat, df, alternative),
         alpha=alpha,
         decision=decision,
+        scenario_data={
+            "population_size": population_size,
+            "context_keywords": [context_noun, before_label, after_label],
+        },
     )
 
 
-def generate_ht_problem(topic: str) -> Dict[str, Any]:
+def generate_ht_problem(topic: str, reading_difficulty: str = "standard") -> Dict[str, Any]:
     generators = {
         "ht_prop_z": generate_one_sample_prop_z_test,
         "ht_mean_t": generate_one_sample_mean_t_test,
@@ -889,4 +906,4 @@ def generate_ht_problem(topic: str) -> Dict[str, Any]:
         if topic == "random_ht"
         else generators.get(topic, generate_one_sample_prop_z_test)
     )
-    return generator()
+    return apply_reading_difficulty(generator(), reading_difficulty)

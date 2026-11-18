@@ -8,6 +8,7 @@ from .hypothesis_testing import generate_ht_problem
 from .inference_drills import PROCEDURE_NAMES, procedure_name_for_topic
 from .chi_square import generate_chi_problem
 from .linear_regression import generate_regression_problem
+from .reading_difficulty import ADVANCED_BACKGROUND, apply_reading_difficulty
 
 
 FRQ_TOPICS = {
@@ -320,7 +321,7 @@ def _exemplar(topic: str, data: Dict[str, Any], procedure: str) -> Dict[str, str
     return {"state": state, "plan": plan, "do": do, "conclude": conclude}
 
 
-def generate_frq_problem(topic: str) -> Dict[str, Any]:
+def generate_frq_problem(topic: str, reading_difficulty: str = "standard") -> Dict[str, Any]:
     if topic not in FRQ_TOPICS:
         raise ValueError(f"Unknown full FRQ topic: {topic}")
     source_topic, title = FRQ_TOPICS[topic]
@@ -447,6 +448,7 @@ def generate_frq_problem(topic: str) -> Dict[str, Any]:
             data["ci_lower"] = data["lower"]
             data["ci_upper"] = data["upper"]
     exemplar = _exemplar(analysis_topic, data, data["procedure_name"])
+    apply_reading_difficulty(problem, reading_difficulty)
     prompt = re.sub(
         r"<p>\s*Assume the samples or pairs were randomly selected.*?</p>",
         "",
@@ -850,6 +852,8 @@ def _evaluate_extended_frq(
             problem_value.get("prompt", "")
             if isinstance(problem_value, dict) else ""
         )
+        if isinstance(problem_prompt, str) and problem_prompt.startswith(ADVANCED_BACKGROUND):
+            problem_prompt = problem_prompt[len(ADVANCED_BACKGROUND):]
         context_words.extend(_keywords(problem_prompt))
         context_words.extend(_keywords(data.get("null_statement", "")))
         context_words.extend(_keywords(data.get("alternative_statement", "")))
