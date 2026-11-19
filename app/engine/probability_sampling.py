@@ -107,7 +107,7 @@ def generate_discrete_rv_problem():
     }
 
 
-def generate_binomial_geom_problem():
+def generate_binomial_geom_problem(reading_difficulty: str = "standard"):
     distribution = random.choice(["binomial", "geometric"])
     p = random.choice([0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7])
     if distribution == "binomial":
@@ -178,14 +178,34 @@ def generate_binomial_geom_problem():
             else f"\\operatorname{{geom}}.sf({k-1},{p})"
         )
 
-    return {
-        "type": "prob_binom_geom",
-        "title": f"{distribution_name} Distribution",
-        "prompt": (
-            f"{distribution_details} Let {event_description}. "
+    if reading_difficulty == "advanced":
+        if distribution == "binomial":
+            scenario = (
+                f"A quality inspector checks {n} independently selected items. "
+                f"Each item has probability {p:g} of being defective. "
+                "Let X be the number of defective items among those checked. "
+            )
+        else:
+            scenario = (
+                f"A quality inspector checks items independently until finding the first "
+                f"defective item. Each item has probability {p:g} of being defective. "
+                "Let X be the number of items checked, including the first defective item. "
+            )
+        prompt = scenario + (
+            f"Find the mean and standard deviation of X, then calculate "
+            f"\\(P({event})\\). Round to four decimal places."
+        )
+    else:
+        prompt = (
+            f"{distribution_details} Let X be {event_description}. "
             f"Find the mean and standard deviation, then calculate "
             f"\\(P({event})\\). Round to four decimal places."
-        ),
+        )
+
+    return {
+        "type": "prob_binom_geom",
+        "title": "Probability Distribution" if reading_difficulty == "advanced" else f"{distribution_name} Distribution",
+        "prompt": prompt,
         "steps": [
             {
                 "step_num": 1,
@@ -243,7 +263,7 @@ def generate_binomial_geom_problem():
     }
 
 
-def generate_sampling_dist_problem():
+def generate_sampling_dist_problem(reading_difficulty: str = "standard"):
     distribution = random.choice(["mean", "proportion"])
     if distribution == "mean":
         n = random.choice([20, 30, 35, 40, 50, 64])
@@ -275,12 +295,28 @@ def generate_sampling_dist_problem():
             f"z=\\frac{{{cutoff}-{mu}}}{{{sigma}/\\sqrt{{{n}}}}}"
             f"={z_score:.4f}"
         )
-        prompt = (
-            f"A population has mean \\(\\mu={mu}\\) and standard deviation "
-            f"\\(\\sigma={sigma}\\). Consider samples of size \\(n={n}\\). "
-            f"Find the mean and standard error of \\(\\bar{{x}}\\), then estimate "
-            f"\\(P({event})\\) using a normal model."
-        )
+        if reading_difficulty == "advanced":
+            distribution_context = (
+                "A plot of the population measurements is roughly symmetric, with no "
+                "extreme values. "
+                if population_normal and n < 30
+                else "A plot of the population measurements is strongly skewed. "
+                if not population_normal and n < 30
+                else ""
+            )
+            prompt = (
+                f"A population has mean \\(\\mu={mu}\\) and standard deviation "
+                f"\\(\\sigma={sigma}\\). Consider samples of size \\(n={n}\\). "
+                f"{distribution_context}Find the mean and standard error of "
+                f"\\(\\bar{{x}}\\), then estimate \\(P({event})\\) from its sampling distribution."
+            )
+        else:
+            prompt = (
+                f"A population has mean \\(\\mu={mu}\\) and standard deviation "
+                f"\\(\\sigma={sigma}\\). Consider samples of size \\(n={n}\\). "
+                f"Find the mean and standard error of \\(\\bar{{x}}\\), then estimate "
+                f"\\(P({event})\\) using a normal model."
+            )
         distribution_type = "sampling_mean"
     else:
         n = random.choice([40, 60, 100, 120, 150, 200])
@@ -315,7 +351,12 @@ def generate_sampling_dist_problem():
         prompt = (
             f"A population proportion is \\(p={p}\\), and samples have size "
             f"\\(n={n}\\). Find the mean and standard error of \\(\\hat{{p}}\\), "
-            f"then estimate \\(P({event})\\) using a normal model."
+            f"then estimate \\(P({event})\\) "
+            + (
+                "from its sampling distribution."
+                if reading_difficulty == "advanced"
+                else "using a normal model."
+            )
         )
         distribution_type = "sampling_proportion"
 
@@ -412,11 +453,13 @@ def generate_sampling_dist_problem():
     }
 
 
-def generate_prob_sampling_problem(topic: str):
+def generate_prob_sampling_problem(
+    topic: str, reading_difficulty: str = "standard"
+):
     generators = {
         "prob_discrete_rv": generate_discrete_rv_problem,
-        "prob_binom_geom": generate_binomial_geom_problem,
-        "sampling_dist": generate_sampling_dist_problem,
+        "prob_binom_geom": lambda: generate_binomial_geom_problem(reading_difficulty),
+        "sampling_dist": lambda: generate_sampling_dist_problem(reading_difficulty),
     }
     if topic not in generators:
         raise ValueError(f"Unknown probability and sampling topic: {topic}")

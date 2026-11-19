@@ -39,12 +39,6 @@ function updateEvaluationDisplay(control, rawAnswer, numericAnswer, isCorrect) {
     control.insertAdjacentElement('afterend', badge);
 }
 
-window.addEventListener('wheel', () => {
-    if (document.activeElement?.type === 'number') {
-        document.activeElement.blur();
-    }
-}, { passive: true });
-
 let currentProblem = null;
 let isMultiStage = false;
 let currentFrqAttemptCount = 0;
@@ -1686,27 +1680,11 @@ function drawNormalDistribution(plotData) {
 function renderProblemPrompt(promptEl, problem) {
     const promptTemplate = document.createElement('template');
     promptTemplate.innerHTML = problem.prompt || '';
-    const legacyTable = promptTemplate.content.querySelector('table');
-    let tableData = problem.table_data;
-
-    if (!tableData && legacyTable) {
-        const headerRow = legacyTable.tHead?.rows[0];
-        const tableRows = Array.from(legacyTable.rows);
-        const headers = Array.from(headerRow?.cells || tableRows[0]?.cells || [])
-            .map(cell => cell.textContent.trim());
-        const bodyRows = legacyTable.tBodies.length
-            ? Array.from(legacyTable.tBodies).flatMap(body => Array.from(body.rows))
-            : tableRows.slice(headerRow ? 1 : 0);
-        if (!headerRow) bodyRows.shift();
-        tableData = {
-            headers,
-            rows: bodyRows.map(row =>
-                Array.from(row.cells).map(cell => cell.textContent.trim())
-            )
-        };
-    }
-
-    promptTemplate.content.querySelectorAll('table').forEach(table => table.remove());
+    const stepBox = document.getElementById('problem-step-box');
+    const stepContext = Array.from(promptTemplate.content.querySelectorAll('.problem-step-context'));
+    stepBox.replaceChildren(...stepContext);
+    stepBox.hidden = stepContext.length === 0;
+    const tableData = problem.table_data;
     const promptContent = document.createElement('div');
     promptContent.className = 'problem-prompt-content';
     promptContent.appendChild(promptTemplate.content);
@@ -1755,6 +1733,7 @@ function renderProblemPrompt(promptEl, problem) {
         promptContent.appendChild(table);
     }
     triggerKaTeX(promptEl);
+    triggerKaTeX(stepBox);
 }
 
 function showKeepPracticingButton(afterElement) {

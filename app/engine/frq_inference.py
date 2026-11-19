@@ -8,7 +8,7 @@ from .hypothesis_testing import generate_ht_problem
 from .inference_drills import PROCEDURE_NAMES, procedure_name_for_topic
 from .chi_square import generate_chi_problem
 from .linear_regression import generate_regression_problem
-from .reading_difficulty import ADVANCED_BACKGROUND, apply_reading_difficulty
+from .reading_difficulty import ADVANCED_OPENERS, apply_reading_difficulty
 
 
 FRQ_TOPICS = {
@@ -329,7 +329,9 @@ def generate_frq_problem(topic: str, reading_difficulty: str = "standard") -> Di
         problem = generate_chi_problem(source_topic)
         analysis_topic = source_topic
     elif source_topic.startswith("reg_slope"):
-        problem = generate_regression_problem(source_topic, "b0b1")
+        problem = generate_regression_problem(
+            source_topic, "b0b1", reading_difficulty, apply_reading=False
+        )
         analysis_topic = source_topic
     else:
         problem = (
@@ -460,6 +462,7 @@ def generate_frq_problem(topic: str, reading_difficulty: str = "standard") -> Di
         "title": title,
         "problem_mode": "full_frq",
         "prompt": prompt,
+        **({"table_data": problem["table_data"]} if "table_data" in problem else {}),
         "data": data,
         "procedure_options": list(PROCEDURE_NAMES.values()),
         "exemplar": exemplar,
@@ -852,8 +855,18 @@ def _evaluate_extended_frq(
             problem_value.get("prompt", "")
             if isinstance(problem_value, dict) else ""
         )
-        if isinstance(problem_prompt, str) and problem_prompt.startswith(ADVANCED_BACKGROUND):
-            problem_prompt = problem_prompt[len(ADVANCED_BACKGROUND):]
+        if isinstance(problem_prompt, str):
+            for opener in ADVANCED_OPENERS:
+                if problem_prompt.startswith(opener):
+                    problem_prompt = problem_prompt[len(opener):].lstrip()
+                    break
+            problem_prompt = re.sub(
+                r"\s+The (?:sampling frame contains|respective source populations contain) "
+                r".*? eligible units\.",
+                "",
+                problem_prompt,
+                flags=re.IGNORECASE,
+            )
         context_words.extend(_keywords(problem_prompt))
         context_words.extend(_keywords(data.get("null_statement", "")))
         context_words.extend(_keywords(data.get("alternative_statement", "")))

@@ -1,4 +1,10 @@
 (() => {
+    window.addEventListener('wheel', event => {
+        if (event.target instanceof HTMLInputElement && event.target.type === 'number') {
+            event.preventDefault();
+        }
+    }, { passive: false });
+
     const state = {
         mode: 'one',
         plot: { one: 'histogram', two: 'scatterplot', categorical: 'mosaic' },
@@ -442,6 +448,12 @@
             renderBounds();
         }
         if (procedure.startsWith('chisq_')) renderInferenceTable();
+        if (procedure === 'chisq_gof') {
+            element('inf-expected-mode').addEventListener('change', () => {
+                element('inf-results-container').replaceChildren();
+                element('inf-error').textContent = '';
+            });
+        }
         refreshInferenceData();
         element('inf-error').textContent = '';
         element('inf-results-container').replaceChildren();
@@ -455,9 +467,9 @@
         const heading = gof ? '<th>Category</th><th>Observed</th><th>Expected / proportion</th>'
             : `<th><input type="text" class="inf-corner" aria-label="Row Var / Col Var"></th>${data[0].map((_, i) =>
                 `<th><input type="text" class="inf-column-name" aria-label="Column ${i + 1} label"></th>`).join('')}`;
-        container.innerHTML = `<div class="inf-table-wrap"><table class="inf-table"><thead><tr>${heading}</tr></thead><tbody>${
+        container.innerHTML = `${gof ? '<p>Expected values may use multiplication, such as 266 * 0.13. Select expected proportions when entering proportions.</p>' : ''}<div class="inf-table-wrap"><table class="inf-table"><thead><tr>${heading}</tr></thead><tbody>${
             data.map((row, r) => `<tr><th><input type="text" class="inf-row-name" aria-label="${gof ? 'Category' : 'Row'} ${r + 1} label"></th>${row.map((value, c) =>
-                `<td><input type="number" step="any" aria-label="${gof ? (c ? 'Expected' : 'Observed') : `Row ${r + 1} column ${c + 1}`}"></td>`).join('')}</tr>`).join('')
+                `<td><input type="${gof && c === 1 ? 'text' : 'number'}" ${gof && c === 1 ? '' : 'step="any"'} aria-label="${gof ? (c ? 'Expected' : 'Observed') : `Row ${r + 1} column ${c + 1}`}"></td>`).join('')}</tr>`).join('')
         }</tbody></table></div><div class="inf-actions"></div><div id="inf-expected-preview"></div>`;
         const updateLabels = () => {
             previewExpected();
@@ -720,9 +732,14 @@
         } else if (procedure.startsWith('chisq_')) {
             const gof = procedure === 'chisq_gof';
             const raw = gof ? inference.gof : inference.table;
-            const data = raw.map(row => row.map(value => {
-                if (!numberPattern.test(value.trim()) || !Number.isFinite(Number(value)) || Number(value) < 0) throw new Error('Enter nonnegative finite counts or proportions in every table cell.');
-                return Number(value);
+            const data = raw.map(row => row.map((value, column) => {
+                const factors = gof && column === 1 ? value.split('*') : [value];
+                if (factors.some(factor => !numberPattern.test(factor.trim()) || !Number.isFinite(Number(factor)))) {
+                    throw new Error('Enter nonnegative finite counts or proportions in every table cell; expected values may use multiplication.');
+                }
+                const result = factors.reduce((product, factor) => product * Number(factor), 1);
+                if (!Number.isFinite(result) || result < 0) throw new Error('Enter nonnegative finite counts or proportions in every table cell.');
+                return result;
             }));
             let observed, expected, df;
             if (gof) {

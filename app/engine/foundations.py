@@ -44,8 +44,8 @@ def generate_eda_summary_problem() -> Dict[str, Any]:
         "title": "1-Variable Summary Stats, IQR & Outliers",
         "prompt": (
             f"The following {n} study sessions had durations in minutes: {display}. "
-            "Use the median-of-halves method, excluding the overall median when n is odd. "
-            "Find the five-number summary, fences, number of outliers, mean and sample standard deviation."
+            "Find the five-number summary (Min, Q1, Median, Q3, Max), interquartile range (IQR), "
+            "1.5 × IQR outlier boundaries, number of outliers, mean, and sample standard deviation."
         ),
         "steps": [
             _step(1, "Five-Number Summary:", [
@@ -81,15 +81,22 @@ def generate_eda_summary_problem() -> Dict[str, Any]:
     }
 
 
-def generate_rv_transform_combine_problem() -> Dict[str, Any]:
-    context = random.choice([
-        ("completion times for two independent tasks", "minutes"),
-        ("weights of two independently selected shipments", "kilograms"),
-        ("scores on two independent assessments", "points"),
-    ])
+def generate_rv_transform_combine_problem(
+    reading_difficulty: str = "standard",
+) -> Dict[str, Any]:
+    context = (
+        ("weights of two independently selected shipments", "kilograms")
+        if reading_difficulty == "advanced"
+        else random.choice([
+            ("completion times for two independent tasks", "minutes"),
+            ("weights of two independently selected shipments", "kilograms"),
+            ("scores on two independent assessments", "points"),
+        ])
+    )
     mu_x, mu_y = random.randint(12, 35), random.randint(5, 11)
     sd_x, sd_y = random.randint(2, 6), random.randint(1, 5)
-    a, b = random.randint(5, 15), random.choice([-3, -2, -1, 2, 3])
+    a = random.randint(5, 15)
+    b = random.randint(1, 3) if reading_difficulty == "advanced" else random.choice([-3, -2, -1, 2, 3])
     plus = random.choice([True, False])
     symbol = "+" if plus else "-"
     result_name = "T" if plus else "D"
@@ -97,16 +104,31 @@ def generate_rv_transform_combine_problem() -> Dict[str, Any]:
     transformed_sd = abs(b) * sd_x
     combined_mean = mu_x + mu_y if plus else mu_x - mu_y
     combined_sd = math.sqrt(sd_x ** 2 + sd_y ** 2)
-    return {
-        "type": "rv_transform_combine",
-        "title": "Transforming & Combining Random Variables",
-        "prompt": (
+    if reading_difficulty == "advanced":
+        combination = (
+            "the total combined weight of the two shipments"
+            if plus
+            else "the difference between the two shipment weights"
+        )
+        prompt = (
+            f"A courier charges a fixed handling fee of ${a} plus ${b} per kilogram for a parcel. "
+            f"Its weight has a mean of {mu_x} kilograms and a standard deviation of {sd_x} kilograms. "
+            f"A second independently selected parcel has a mean weight of {mu_y} kilograms "
+            f"and a standard deviation of {sd_y} kilograms. Determine the mean and standard "
+            f"deviation of the first parcel's delivery charge, and of {combination}."
+        )
+    else:
+        prompt = (
             f"Let X and Y represent {context[0]}, measured in {context[1]}. "
             f"They are independent, with \\(\\mu_X={mu_x}\\), \\(\\sigma_X={sd_x}\\), "
             f"\\(\\mu_Y={mu_y}\\), and \\(\\sigma_Y={sd_y}\\). "
             f"Define the transformed quantity \\(W={a}+({b})X\\) and "
             f"\\({result_name}=X{symbol}Y\\). Find their means and standard deviations."
-        ),
+        )
+    return {
+        "type": "rv_transform_combine",
+        "title": "Transforming & Combining Random Variables",
+        "prompt": prompt,
         "steps": [
             _step(1, "Linear Transformation W:", [
                 _field("rv-w-mean", "Mean μW", transformed_mean),
@@ -127,7 +149,9 @@ def generate_rv_transform_combine_problem() -> Dict[str, Any]:
     }
 
 
-def generate_twoway_prob_problem() -> Dict[str, Any]:
+def generate_twoway_prob_problem(
+    reading_difficulty: str = "standard",
+) -> Dict[str, Any]:
     contexts = [
         ("students", ["First year", "Other years"], ["Bus", "Car", "Walk"], "Year", "Commute"),
         ("customers", ["Member", "Nonmember"], ["Online", "In store", "Phone"], "Membership", "Purchase"),
@@ -148,18 +172,39 @@ def generate_twoway_prob_problem() -> Dict[str, Any]:
     joint = counts[0][0]
     p_a, p_joint, p_cond = row_totals[0] / total, joint / total, joint / col_totals[0]
     independent = joint * total == row_totals[0] * col_totals[0]
-    independent_text = "Independent — P(A | B) = P(A)"
-    dependent_text = "Not independent — P(A | B) ≠ P(A)"
+    a_label = row_names[0] if reading_difficulty == "advanced" else "A"
+    b_label = column_names[0] if reading_difficulty == "advanced" else "B"
+    independent_text = f"Independent — P({a_label} | {b_label}) = P({a_label})"
+    dependent_text = f"Not independent — P({a_label} | {b_label}) ≠ P({a_label})"
     answer = independent_text if independent else dependent_text
     relation = "=" if independent else r"\ne"
-    return {
-        "type": "prob_twoway",
-        "title": "Two-Way Tables, Conditional Probability & Independence",
-        "prompt": (
+    if reading_difficulty == "advanced":
+        if population == "students":
+            person = "student"
+            question = (
+                f"whether being a {row_names[0]} student and commuting by "
+                f"{column_names[0]} are independent."
+            )
+        else:
+            person = "customer"
+            question = (
+                f"whether being a {row_names[0]} and purchasing {column_names[0]} "
+                "are independent."
+            )
+        prompt = (
+            f"A survey of {population} produced the table below. Choose one {person} at random. "
+            f"Using appropriate probabilities from the table, determine {question}"
+        )
+    else:
+        prompt = (
             f"A survey of {population} produced the table below. Choose one person at random. "
             f"Let A be {row_names[0]} and B be {column_names[0]}. "
             "Find the requested probabilities and decide whether A and B are independent."
-        ),
+        )
+    return {
+        "type": "prob_twoway",
+        "title": "Two-Way Tables, Conditional Probability & Independence",
+        "prompt": prompt,
         "table_data": {
             "headers": [f"{row_title} / {col_title}", *column_names, "Total"],
             "rows": [
@@ -168,20 +213,35 @@ def generate_twoway_prob_problem() -> Dict[str, Any]:
         },
         "steps": [
             _step(1, "Marginal and Joint Probabilities:", [
-                _field("two-p-a", "P(A)", p_a),
-                _field("two-p-joint", "P(A and B)", p_joint),
-            ], r"Divide the A row total and the A-and-B cell count by the grand total \(N\)."),
+                _field("two-p-a", f"P({a_label})", p_a),
+                _field("two-p-joint", f"P({a_label} and {b_label})", p_joint),
+            ], (
+                f"Divide the {a_label} row total and the joint cell count by the grand total."
+                if reading_difficulty == "advanced"
+                else r"Divide the A row total and the A-and-B cell count by the grand total \(N\)."
+            )),
             _step(2, "Conditional Probability:", [
-                _field("two-p-conditional", "P(A | B)", p_cond),
-            ], r"Restrict the denominator to B: \(P(A\mid B)=P(A\cap B)/P(B)\)."),
+                _field("two-p-conditional", f"P({a_label} | {b_label})", p_cond),
+            ], (
+                f"Divide the joint count by the total for {b_label}."
+                if reading_difficulty == "advanced"
+                else r"Restrict the denominator to B: \(P(A\mid B)=P(A\cap B)/P(B)\)."
+            )),
             {
                 "step_num": 3, "label": "Independence:", "input_type": "select",
                 "options": [{"value": text, "label": text} for text in [independent_text, dependent_text]],
                 "expected": [answer],
-                "hint": r"Compare \(P(A\mid B)\) with \(P(A)\) using exact fractions.",
+                "hint": (
+                    f"Compare P({a_label} | {b_label}) with P({a_label}) using exact fractions."
+                    if reading_difficulty == "advanced"
+                    else r"Compare \(P(A\mid B)\) with \(P(A)\) using exact fractions."
+                ),
             },
         ],
         "solution": (
+            (f"<p>Let A denote {row_names[0]} and B denote {column_names[0]}.</p>"
+             if reading_difficulty == "advanced" else "")
+            +
             f"<p>\\(P(A)={row_totals[0]}/{total}={p_a:.4f}\\) and "
             f"\\(P(A\\cap B)={joint}/{total}={p_joint:.4f}\\).</p>"
             f"<p>\\(P(A\\mid B)={joint}/{col_totals[0]}={p_cond:.4f}\\).</p>"
@@ -192,11 +252,13 @@ def generate_twoway_prob_problem() -> Dict[str, Any]:
     }
 
 
-def generate_foundations_problem(topic: str) -> Dict[str, Any]:
+def generate_foundations_problem(
+    topic: str, reading_difficulty: str = "standard"
+) -> Dict[str, Any]:
     generators = {
-        "eda_summary": generate_eda_summary_problem,
-        "rv_transform_combine": generate_rv_transform_combine_problem,
-        "prob_twoway": generate_twoway_prob_problem,
+        "eda_summary": lambda: generate_eda_summary_problem(),
+        "rv_transform_combine": lambda: generate_rv_transform_combine_problem(reading_difficulty),
+        "prob_twoway": lambda: generate_twoway_prob_problem(reading_difficulty),
     }
     if topic not in generators:
         raise ValueError(f"Unknown foundations topic: {topic}")

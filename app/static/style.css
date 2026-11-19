@@ -64,20 +64,30 @@ body.stats-docked-bottom #page-wrapper {
 }
 
 #problem-prompt.problem-prompt-sticky {
-    position: sticky;
-    top: 8px;
-    z-index: 25;
     padding: 10px 12px;
-    max-height: 34vh;
     overflow: visible;
     background: #fff;
     border: 1px solid #cbd5e1;
     border-radius: 8px;
     box-shadow: 0 3px 10px rgba(15, 23, 42, 0.1);
 }
-#problem-prompt.problem-prompt-sticky .problem-prompt-content {
-    max-height: calc(34vh - 50px);
-    overflow-y: auto;
+#problem-scenario-box {
+    margin-bottom: 16px;
+    overflow-x: auto;
+    clear: both;
+}
+#problem-step-box:not([hidden]) {
+    display: block;
+    margin-top: 12px;
+    margin-bottom: 16px;
+    clear: both;
+}
+.problem-step-context {
+    display: block;
+    padding: 8px 12px;
+    margin: 6px 0;
+    background: #f8fafc;
+    border-radius: 6px;
 }
 .problem-prompt-toggle {
     display: block;

@@ -48,7 +48,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "171"
+STATIC_VERSION = "174"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -412,32 +412,58 @@ def _standalone_prompt(problem: Dict[str, Any], selector: str, context: List[str
     question = ""
     base = ""
     if kind == "eda_summary":
-        base = _before(prompt, ". Use the median-of-halves") + "."
+        base = _before(prompt, ". Find the five-number summary") + "."
         questions = {
             "five_num": "Find the five-number summary (Min, Q1, Median, Q3, Max).",
             "iqr": "Calculate the interquartile range (IQR) and the lower and upper outlier fences.",
             "mean_sd": "Calculate the sample mean (x̄) and sample standard deviation (s_x).",
         }
-        if selector == "five_num":
-            base += " Use the median-of-halves method, excluding the overall median when n is odd."
         question = questions[selector]
     elif kind == "rv_transform_combine":
-        description, remainder = prompt.split(". They are independent, with ", 1)
-        parameters, definitions = remainder.split(". Define the transformed quantity ", 1)
-        transform, combination = definitions.split(" and ", 1)
-        combination = _before(combination, ". Find their means")
-        if selector == "transform":
-            x_parameters = _before(parameters, r", \(\mu_Y")
-            base = description.replace("Let X and Y represent ", "Let X represent one of the ") + "."
-            base += f" Its parameters are {x_parameters}. Define {transform}."
-            question = "Find the mean and standard deviation of W."
+        if prompt.startswith("A courier charges "):
+            if selector == "transform":
+                base = _before(prompt, ". A second independently selected parcel") + "."
+                question = "Find the mean and standard deviation of the first parcel's delivery charge."
+            else:
+                base = _before(
+                    prompt,
+                    " Determine the mean and standard deviation of the first parcel's delivery charge,",
+                )
+                combination = (
+                    "the total combined weight of the two shipments"
+                    if "total combined weight" in prompt
+                    else "the difference between the two shipment weights"
+                )
+                question = f"Find the mean and standard deviation of {combination}."
         else:
-            base = f"{description}. They are independent, with {parameters}. Define {combination}."
-            question = "Find the mean and standard deviation of the combined variable."
+            description, remainder = prompt.split(". They are independent, with ", 1)
+            parameters, definitions = remainder.split(". Define the transformed quantity ", 1)
+            transform, combination = definitions.split(" and ", 1)
+            combination = _before(combination, ". Find their means")
+            if selector == "transform":
+                x_parameters = _before(parameters, r", \(\mu_Y")
+                base = description.replace("Let X and Y represent ", "Let X represent one of the ") + "."
+                base += f" Its parameters are {x_parameters}. Define {transform}."
+                question = "Find the mean and standard deviation of W."
+            else:
+                base = f"{description}. They are independent, with {parameters}. Define {combination}."
+                question = "Find the mean and standard deviation of the combined variable."
     elif kind == "prob_twoway":
-        base = _before(prompt, " Find the requested probabilities")
-        question = ("Find the requested marginal and joint probabilities." if selector == "marginal"
-                    else "Find the conditional probability and determine whether the events are independent.")
+        if "Using appropriate probabilities from the table" in prompt:
+            base, relation = prompt.split(" Using appropriate probabilities from the table", 1)
+            relation = _before(relation.split("determine whether ", 1)[1], " are independent")
+            event_a, event_b = relation.split(" and ", 1)
+            if selector == "marginal":
+                question = f"Find the marginal and joint probabilities for {event_a} and {event_b}."
+            else:
+                question = (
+                    f"Find the probability of {event_a} given {event_b}, "
+                    "and determine whether the events are independent."
+                )
+        else:
+            base = _before(prompt, " Find the requested probabilities")
+            question = ("Find the requested marginal and joint probabilities." if selector == "marginal"
+                        else "Find the conditional probability and determine whether the events are independent.")
     elif kind in {"prop_z", "prop_z_2samp", "mean_t", "mean_t_2samp", "matched_pairs_t"}:
         base = _before(prompt, " Construct a")
         if selector == "cond":
@@ -531,7 +557,10 @@ def _standalone_prompt(problem: Dict[str, Any], selector: str, context: List[str
         question = "Calculate and interpret the confidence interval for the population slope."
     else:
         raise ValueError(f"Unsupported standalone prompt: {kind}, {selector}")
-    return " ".join([base, *context, question])
+    return base + "".join(
+        f'<div class="problem-step-context">{text}</div>'
+        for text in [*context, question] if text
+    )
 
 
 def slice_problem_to_step(problem_dict: Dict[str, Any], step_selector: Union[str, int], context_summary: str = "") -> Dict[str, Any]:
@@ -555,10 +584,21 @@ def slice_problem_to_step(problem_dict: Dict[str, Any], step_selector: Union[str
             for field in fields:
                 expected = field.get("expected")
                 if isinstance(expected, list) and expected:
-                    label = field.get("label") or field.get("placeholder") or field.get("id") or earlier.get("label", "Value")
-                    values.append(f"{html.escape(str(label))}: {html.escape(str(expected[0]))}")
+                    label = field.get("label") or field.get("id") or earlier.get("label", "Value")
+                    label = str(label).strip().rstrip(":")
+                    if field is earlier:
+                        probability = re.search(r"(\\\(P\(X\s*=.*?\)\\\))", label)
+                        if probability:
+                            label = probability.group(1)
+                    label = label.replace("Lower fence", "Lower outlier boundary").replace(
+                        "Upper fence", "Upper outlier boundary"
+                    )
+                    value = expected[0]
+                    if isinstance(value, float):
+                        value = f"{round(value, 4):.4f}".rstrip("0").rstrip(".")
+                    values.append(f"{html.escape(label)} = {html.escape(str(value))}")
             if values:
-                context.append(f"Given from {html.escape(str(earlier.get('label', 'an earlier step')))} " + "; ".join(values) + ".")
+                context.append("Given: " + "; ".join(values) + ".")
         context.append(f"Solve only this step: {html.escape(str(selected.get('label', '')))}")
     elif step_selector == "cond":
         selected = find("Check Conditions")
@@ -695,7 +735,7 @@ def slice_problem_to_step(problem_dict: Dict[str, Any], step_selector: Union[str
     if isinstance(step_selector, str):
         problem["prompt"] = _standalone_prompt(problem, step_selector, context)
     else:
-        problem["prompt"] += "".join(f"<p>{text}</p>" for text in context)
+        problem["prompt"] += "".join(f'<div class="problem-step-context">{text}</div>' for text in context)
     problem["steps"] = [selected]
     return problem
 
@@ -716,12 +756,14 @@ def generate_single_step(
             parent = random.choice(parents)
             break
     generators = {
-        "foundations": lambda: generate_foundations_problem(parent),
+        "foundations": lambda: generate_foundations_problem(parent, reading_difficulty),
         "ci": lambda: generate_ci_problem(parent),
         "ht": lambda: generate_ht_problem(parent),
         "chi": lambda: generate_chi_problem(parent),
-        "regression": lambda: generate_regression_problem(parent, notation),
-        "prob_sampling": lambda: generate_prob_sampling_problem(parent),
+        "regression": lambda: generate_regression_problem(
+            parent, notation, reading_difficulty, apply_reading=False
+        ),
+        "prob_sampling": lambda: generate_prob_sampling_problem(parent, reading_difficulty),
     }
     if topic == "reg_step_slope_conc":
         parent = random.choice(["reg_slope_ci", "reg_slope_test"])
@@ -786,8 +828,10 @@ async def get_regression_problem(
 async def get_prob_sampling_problem(
     topic: str, reading_difficulty: Literal["standard", "advanced"] = "standard"
 ):
+    if topic in SINGLE_STEP_TOPICS:
+        return generate_single_step(topic, reading_difficulty=reading_difficulty)
     return tag_problem_input_types(apply_reading_difficulty(
-        generate_prob_sampling_problem(topic), reading_difficulty
+        generate_prob_sampling_problem(topic, reading_difficulty), reading_difficulty
     ))
 
 @app.get("/api/problem/foundations")
@@ -798,7 +842,7 @@ async def get_foundations_problem(
         if topic in SINGLE_STEP_TOPICS:
             return generate_single_step(topic, reading_difficulty=reading_difficulty)
         return tag_problem_input_types(apply_reading_difficulty(
-            generate_foundations_problem(topic), reading_difficulty
+            generate_foundations_problem(topic, reading_difficulty), reading_difficulty
         ))
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error

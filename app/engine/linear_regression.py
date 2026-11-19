@@ -30,6 +30,54 @@ def _solution_paragraphs(*paragraphs: str) -> str:
     return "".join(f"<p>{paragraph}</p>" for paragraph in paragraphs)
 
 
+def _generate_slope_sample(
+    n: int, trend: int
+) -> Tuple[List[int], List[float], float, float]:
+    x_values = sorted(random.sample(range(1, 13), n))
+    target_slope = trend * random.uniform(0.8, 2.4)
+    intercept = random.uniform(25.0, 55.0)
+    y_values = [
+        round(intercept + target_slope * x + random.uniform(-3.0, 3.0), 1)
+        for x in x_values
+    ]
+    x_mean = sum(x_values) / n
+    y_mean = sum(y_values) / n
+    x_ss = sum((x - x_mean) ** 2 for x in x_values)
+    cross_product = sum(
+        (x - x_mean) * (y - y_mean)
+        for x, y in zip(x_values, y_values)
+    )
+    slope = cross_product / x_ss
+    fitted_intercept = y_mean - slope * x_mean
+    residual_ss = sum(
+        (y - fitted_intercept - slope * x) ** 2
+        for x, y in zip(x_values, y_values)
+    )
+    standard_error = math.sqrt((residual_ss / (n - 2)) / x_ss)
+    return x_values, y_values, slope, standard_error
+
+
+def _slope_table(
+    x_name: str, y_name: str, x_values: Sequence[float], y_values: Sequence[float]
+) -> Dict[str, Any]:
+    labels = {
+        "weekly study time": "Weekly study time (hours)",
+        "exam score": "Exam score (points)",
+        "car weight": "Car weight (1,000 lb)",
+        "fuel economy": "Fuel economy (mpg)",
+        "temperature": "Temperature (°C)",
+        "ice cream sales": "Ice cream sales (hundreds of dollars)",
+        "work experience": "Work experience (years)",
+        "salary": "Salary (thousands of dollars)",
+        "vehicle mileage": "Vehicle mileage (1,000 miles)",
+        "vehicle price": "Vehicle price (dollars)",
+    }
+    return {
+        "headers": [labels[x_name], labels[y_name]],
+        "rows": [[f"{x:g}", f"{y:.1f}"] for x, y in zip(x_values, y_values)],
+    }
+
+
 def generate_lsrl_equation_problem(notation: str = "ab") -> Dict[str, Any]:
     if notation not in {"ab", "b0b1"}:
         raise ValueError(f"Unknown LSRL notation style: {notation}")
@@ -605,36 +653,52 @@ def generate_raw_data_regression_problem(notation: str = "ab") -> Dict[str, Any]
     }
 
 
-def generate_slope_confidence_interval(notation: str = "ab") -> Dict[str, Any]:
+def generate_slope_confidence_interval(
+    notation: str = "ab", reading_difficulty: str = "standard"
+) -> Dict[str, Any]:
     _, slope_symbol = _notation_symbols(notation)
     contexts = [
-        ("weekly study time and exam score", "points per additional study hour"),
-        ("car weight and fuel economy", "mpg per additional 1000 lb"),
-        ("temperature and ice cream sales", "hundreds of dollars per °C"),
-        ("work experience and salary", "thousands of dollars per additional year"),
+        ("weekly study time and exam score", "points per additional study hour", 1),
+        ("car weight and fuel economy", "mpg per additional 1000 lb", -1),
+        ("temperature and ice cream sales", "hundreds of dollars per °C", 1),
+        ("work experience and salary", "thousands of dollars per additional year", 1),
     ]
-    context, slope_units = random.choice(contexts)
-    n = random.choice([15, 20, 25, 30])
+    context, slope_units, trend = random.choice(contexts)
+    observed_pairs = None
+    if reading_difficulty == "advanced":
+        n = random.randint(6, 8)
+        x_values, y_values, slope, standard_error = _generate_slope_sample(n, trend)
+        observed_pairs = list(zip(x_values, y_values))
+    else:
+        n = random.choice([15, 20, 25, 30])
+        slope = round(random.choice([-1, 1]) * random.uniform(0.2, 4.0), 3)
+        standard_error = round(random.uniform(0.15, 1.5), 3)
     population_size = n * 20
     df = n - 2
-    slope = round(random.choice([-1, 1]) * random.uniform(0.2, 4.0), 3)
-    standard_error = round(random.uniform(0.15, 1.5), 3)
     confidence_level = random.choice([0.90, 0.95, 0.99])
     alpha = 1 - confidence_level
     critical_t = float(t.ppf(1 - alpha / 2, df))
     margin_of_error = critical_t * standard_error
     lower = slope - margin_of_error
     upper = slope + margin_of_error
-    prompt = (
-        f"A random sample of \\(n={n}\\) observations is drawn from a population "
-        f"of \\(N={population_size}\\) to study {context}. The scatterplot is "
-        "approximately linear, residuals are approximately normal, and their spread "
-        f"is roughly constant. The estimated slope is "
-        f"\\({slope_symbol}={slope:.3f}\\) {slope_units}, with "
-        f"standard error \\(SE_{{{slope_symbol}}}={standard_error:.3f}\\). Construct a "
-        f"{100 * confidence_level:g}% confidence interval for the population slope "
-        "\\(\\beta_1\\)."
-    )
+    if reading_difficulty == "advanced":
+        prompt = (
+            f"A random sample of {n} observations from a population of {population_size:,} "
+            f"is used to study {context}. The data are shown in the table. "
+            f"Construct a {100 * confidence_level:g}% confidence interval "
+            "for the population slope \\(\\beta_1\\)."
+        )
+    else:
+        prompt = (
+            f"A random sample of \\(n={n}\\) observations is drawn from a population "
+            f"of \\(N={population_size}\\) to study {context}. The scatterplot is "
+            "approximately linear, residuals are approximately normal, and their spread "
+            f"is roughly constant. The estimated slope is "
+            f"\\({slope_symbol}={slope:.3f}\\) {slope_units}, with "
+            f"standard error \\(SE_{{{slope_symbol}}}={standard_error:.3f}\\). Construct a "
+            f"{100 * confidence_level:g}% confidence interval for the population slope "
+            "\\(\\beta_1\\)."
+        )
     procedure_component = procedure_name_component("reg_slope_ci")
     procedure_step = {
         "step_num": 1,
@@ -661,6 +725,10 @@ def generate_slope_confidence_interval(notation: str = "ab") -> Dict[str, Any]:
         "type": "reg_slope_ci",
         "title": "Confidence Interval for Slope (β₁)",
         "prompt": prompt,
+        **(
+            {"table_data": _slope_table(*context.split(" and "), x_values, y_values)}
+            if observed_pairs is not None else {}
+        ),
         "steps": [
             procedure_step,
             {
@@ -741,11 +809,18 @@ def generate_slope_confidence_interval(notation: str = "ab") -> Dict[str, Any]:
                 f"the true slope of the population regression line relating {context}"
             ),
             "context_keywords": context.replace(" and ", " ").split(),
+            **(
+                {"observed_pairs": list(zip(x_values, y_values))}
+                if observed_pairs is not None
+                else {}
+            ),
         },
     }
 
 
-def generate_slope_significance_test(notation: str = "ab") -> Dict[str, Any]:
+def generate_slope_significance_test(
+    notation: str = "ab", reading_difficulty: str = "standard"
+) -> Dict[str, Any]:
     _, slope_symbol = _notation_symbols(notation)
     contexts = {
         ">": [
@@ -779,10 +854,17 @@ def generate_slope_significance_test(notation: str = "ab") -> Dict[str, Any]:
             claim_by_direction["!="],
         )
     ]
-    n = random.choice([15, 20, 25, 30])
+    observed_pairs = None
+    if reading_difficulty == "advanced":
+        n = random.randint(6, 8)
+        trend = 1 if direction == ">" else -1 if direction == "<" else random.choice([-1, 1])
+        x_values, y_values, slope, standard_error = _generate_slope_sample(n, trend)
+        observed_pairs = list(zip(x_values, y_values))
+    else:
+        n = random.choice([15, 20, 25, 30])
+        slope = round(random.choice([-1, 1]) * random.uniform(0.2, 4.0), 3)
+        standard_error = round(random.uniform(0.15, 1.5), 3)
     df = n - 2
-    slope = round(random.choice([-1, 1]) * random.uniform(0.2, 4.0), 3)
-    standard_error = round(random.uniform(0.15, 1.5), 3)
     alpha = random.choice([0.01, 0.05, 0.10])
     test_statistic = slope / standard_error
     if direction == ">":
@@ -797,22 +879,30 @@ def generate_slope_significance_test(notation: str = "ab") -> Dict[str, Any]:
     expected_evidence = "is convincing" if reject else "is not convincing"
     expected_assumption = "H₀ is true"
     population_size = n * 20
-    prompt = (
-        f"A random sample of \\(n={n}\\) observations from a population of "
-        f"\\(N={population_size}\\) is used to study {context}. The residual plot "
-        "shows no curved pattern, the residuals are approximately normal, and their "
-        "spread is roughly constant. "
-        + (
-            f"Test whether increased {explanatory} leads to higher {response}"
-            if direction == ">"
-            else f"Test whether higher {explanatory} is associated with lower {response}"
-            if direction == "<"
-            else f"Test whether there is a linear relationship between {explanatory} and {response}"
-        )
-        + f" at \\(\\alpha={alpha:g}\\). The estimated slope is "
-        f"\\({slope_symbol}={slope:.3f}\\) {slope_units}, with standard error "
-        f"\\(SE_{{{slope_symbol}}}={standard_error:.3f}\\)."
+    research_question = (
+        f"Test whether increased {explanatory} leads to higher {response}"
+        if direction == ">"
+        else f"Test whether higher {explanatory} is associated with lower {response}"
+        if direction == "<"
+        else f"Test whether there is a linear relationship between {explanatory} and {response}"
     )
+    if reading_difficulty == "advanced":
+        prompt = (
+            f"A random sample of {n} observations from a population of {population_size:,} "
+            f"is used to study {context}. The data are shown in the table. "
+            "The residual plot can be constructed from these observations. "
+            f"{research_question} at \\(\\alpha={alpha:g}\\)."
+        )
+    else:
+        prompt = (
+            f"A random sample of \\(n={n}\\) observations from a population of "
+            f"\\(N={population_size}\\) is used to study {context}. The residual plot "
+            "shows no curved pattern, the residuals are approximately normal, and their "
+            "spread is roughly constant. "
+            f"{research_question} at \\(\\alpha={alpha:g}\\). The estimated slope is "
+            f"\\({slope_symbol}={slope:.3f}\\) {slope_units}, with standard error "
+            f"\\(SE_{{{slope_symbol}}}={standard_error:.3f}\\)."
+        )
     step_metadata = {
         "expected_pval": p_value,
         "expected_alpha": alpha,
@@ -837,6 +927,16 @@ def generate_slope_significance_test(notation: str = "ab") -> Dict[str, Any]:
             f"the true slope of the population regression line relating {explanatory} to {response}"
         ),
         "context_keywords": [explanatory, response],
+        **(
+            {"slope": slope, "standard_error": standard_error}
+            if observed_pairs is not None
+            else {}
+        ),
+        **(
+            {"observed_pairs": list(zip(x_values, y_values))}
+            if observed_pairs is not None
+            else {}
+        ),
         "alternative_statement": (
             f"the true slope relating {explanatory} to {response} "
             + {">": "is greater than 0", "<": "is less than 0", "!=": "differs from 0"}[direction]
@@ -847,6 +947,10 @@ def generate_slope_significance_test(notation: str = "ab") -> Dict[str, Any]:
         "type": "reg_slope_test",
         "title": "Significance Test for Slope (β₁)",
         "prompt": prompt,
+        **(
+            {"table_data": _slope_table(explanatory, response, x_values, y_values)}
+            if observed_pairs is not None else {}
+        ),
         "steps": [
             {
                 "step_num": 1,
@@ -1210,8 +1314,13 @@ def _notation_symbols(notation: str) -> Tuple[str, str]:
 
 
 def generate_regression_problem(
-    topic: str, notation: str = "ab", reading_difficulty: str = "standard"
+    topic: str,
+    notation: str = "ab",
+    reading_difficulty: str = "standard",
+    apply_reading: bool = True,
 ) -> Dict[str, Any]:
+    if reading_difficulty not in ("standard", "advanced"):
+        raise ValueError(f"Unknown reading difficulty: {reading_difficulty}")
     generators = {
         "reg_lsrl": generate_lsrl_equation_problem,
         "reg_pred_res": generate_prediction_residual_problem,
@@ -1224,4 +1333,8 @@ def generate_regression_problem(
     generator = generators.get(topic)
     if generator is None:
         raise ValueError(f"Unknown linear-regression topic: {topic}")
-    return apply_reading_difficulty(generator(notation), reading_difficulty)
+    if topic in ("reg_slope_ci", "reg_slope_test"):
+        problem = generator(notation, reading_difficulty=reading_difficulty)
+    else:
+        problem = generator(notation)
+    return apply_reading_difficulty(problem, reading_difficulty) if apply_reading else problem

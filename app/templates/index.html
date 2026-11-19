@@ -251,12 +251,14 @@
                         <button id="btn-task-next" class="btn-secondary" onclick="jumpToTaskQuestion(activeTaskState.blocks.length ? activeTaskState.currentBlockIndex + 1 : activeTaskState.currentIndex + 1)" style="font-size: 0.8rem; padding: 5px 10px;">Next →</button>
                     </div>
                 </div>
-                <div id="problem-prompt" class="problem-text">Loading procedural problem...</div>
-
+                <div id="problem-scenario-box">
+                    <div id="problem-prompt" class="problem-text">Loading procedural problem...</div>
+                </div>
                 <div class="graph-container" id="graph-wrapper">
                     <svg id="normal-curve-svg" viewBox="0 0 600 200" preserveAspectRatio="xMidYMid meet"></svg>
                 </div>
 
+                <div id="problem-step-box" hidden></div>
                 <div id="single-input-panel">
                     <div class="input-row">
                         <label id="input-label" for="answer-input">Answer:</label>
