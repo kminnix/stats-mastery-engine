@@ -16,7 +16,7 @@ class FoundationsTests(unittest.TestCase):
             lengths, directions = set(), set()
             for _ in range(300):
                 problem = tag_problem_input_types(generate_foundations_problem("eda_summary"))
-                values = [float(value) for value in problem["prompt"].split("minutes: ")[1].split(". Use")[0].split(", ")]
+                values = [float(value) for value in problem["prompt"].split("minutes: ")[1].split(". Find")[0].split(", ")]
                 ordered = sorted(values)
                 n = len(values)
                 lengths.add(n)
@@ -97,6 +97,34 @@ class FoundationsTests(unittest.TestCase):
                 self.assertEqual(steps[2]["expected"][0].startswith("Independent"), independent)
             self.assertEqual(outcomes, {True, False})
             self.assertEqual(widths, {4, 5})
+        finally:
+            random.setstate(state)
+
+    def test_advanced_foundation_prompts_use_context_without_formula_scaffolding(self):
+        state = random.getstate()
+        try:
+            random.seed(404)
+            standard_table = generate_foundations_problem("prob_twoway")
+            random.seed(404)
+            advanced_table = generate_foundations_problem("prob_twoway", "advanced")
+            self.assertIn("Let A be", standard_table["prompt"])
+            self.assertNotIn("Let A be", advanced_table["prompt"])
+            self.assertIn("Using appropriate probabilities from the table", advanced_table["prompt"])
+            row_name = advanced_table["table_data"]["rows"][0][0]
+            column_name = advanced_table["table_data"]["headers"][1]
+            self.assertEqual(
+                advanced_table["steps"][1]["inputs"][0]["label"],
+                f"P({row_name} | {column_name})",
+            )
+
+            random.seed(405)
+            standard_rv = generate_foundations_problem("rv_transform_combine")
+            random.seed(405)
+            advanced_rv = generate_foundations_problem("rv_transform_combine", "advanced")
+            self.assertIn("W=", standard_rv["prompt"])
+            self.assertNotIn("W=", advanced_rv["prompt"])
+            self.assertIn("fixed handling fee", advanced_rv["prompt"])
+            self.assertIn("shipment", advanced_rv["prompt"])
         finally:
             random.setstate(state)
 

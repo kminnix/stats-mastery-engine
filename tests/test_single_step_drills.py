@@ -1,5 +1,6 @@
 import re
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -158,7 +159,7 @@ class SingleStepDrillTests(unittest.TestCase):
                     self.assertNotIn("Find their means and standard deviations", prompt)
                     self.assertNotIn("then determine whether the model", prompt)
                     if topic in endings:
-                        self.assertTrue(prompt.endswith(endings[topic]), prompt)
+                        self.assertTrue(prompt.endswith(endings[topic] + "</div>"), prompt)
                     if topic == "rv_transform":
                         self.assertNotIn(r"\mu_Y", prompt)
                         self.assertNotIn(r"\sigma_Y", prompt)
@@ -172,6 +173,50 @@ class SingleStepDrillTests(unittest.TestCase):
                         self.assertIn("Use P-value =", prompt)
                     if topic.endswith("_interp"):
                         self.assertIn("confidence interval is (", prompt)
+
+    def test_sliced_context_rounds_values_and_uses_clear_labels(self):
+        problem = {
+            "type": "eda_summary",
+            "prompt": "Data.",
+            "steps": [
+                {"label": "Missing probability \\(P(X=2)\\):", "expected": [0.26]},
+                {"label": "Boundaries:", "inputs": [
+                    {"label": "Lower fence", "expected": [27.200000000000003]},
+                    {"label": "Upper fence", "expected": [3.599999999999998]},
+                ]},
+                {"label": "Next:", "expected": [1]},
+            ],
+        }
+        prompt = main.slice_problem_to_step(problem, 3)["prompt"]
+        self.assertIn(r"Given: \(P(X=2)\) = 0.26.", prompt)
+        self.assertIn("Lower outlier boundary = 27.2", prompt)
+        self.assertIn("Upper outlier boundary = 3.6", prompt)
+        self.assertNotIn("Missing probability", prompt)
+        self.assertIn('class="problem-step-context"', prompt)
+
+    def test_distribution_prompts_are_contextual_in_advanced_mode(self):
+        for distribution in ("binomial", "geometric"):
+            with self.subTest(distribution=distribution):
+                with patch("app.engine.probability_sampling.random.choice", side_effect=lambda values: (
+                    distribution if values == ["binomial", "geometric"] else values[0]
+                )):
+                    standard = generate_binomial_geom_problem()
+                    advanced = generate_binomial_geom_problem("advanced")
+                self.assertIn("Let X be the number", standard["prompt"])
+                self.assertIn("inspector", advanced["prompt"])
+                self.assertNotIn(r"\operatorname", advanced["prompt"])
+                self.assertEqual(advanced["title"], "Probability Distribution")
+
+    def test_targeted_distribution_endpoint_keeps_advanced_scenario(self):
+        response = TestClient(main.app).get(
+            "/api/problem/prob_sampling",
+            params={"topic": "step__prob_binom_geom__2", "reading_difficulty": "advanced"},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        problem = response.json()
+        self.assertIn("inspector", problem["prompt"])
+        self.assertIn("Solve only this step:", problem["prompt"])
+        self.assertEqual(len(problem["steps"]), 1)
 
     def test_proportion_large_count_calculations(self):
         for _ in range(50):
