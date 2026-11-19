@@ -478,11 +478,13 @@
                             Due Date <span id="sort-indicator-due_date" class="sort-arrow">↕</span>
                         </th>
                         <th>Submissions</th>
-                        <th style="min-width: 260px; text-align: center;">Actions</th>
+                        <th style="text-align: center;">Results</th>
+                        <th style="text-align: center;">Duplicate</th>
+                        <th style="width: 64px; text-align: center;" title="Archive / Move to Trash">🗑</th>
                     </tr>
                 </thead>
                 <tbody id="assess-tbody">
-                    <tr><td colspan="5" style="color: #94a3b8; padding: 24px;">Loading assessments...</td></tr>
+                    <tr><td colspan="7" style="color: #94a3b8; padding: 24px;">Loading assessments...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -619,6 +621,7 @@
     };
     const teacherRequests = { roster: null, assessments: null, gradebook: null };
     const teacherRequestVersions = { roster: 0, assessments: 0, gradebook: 0 };
+    const pendingAssessmentChanges = new Map();
     let assessSortField = 'created_at';
     let assessSortAsc = false;
     let activeView = 'gradebook';
@@ -1060,8 +1063,11 @@
             try {
                 const response = await fetch(url, { headers: getAuthHeaders() });
                 if (!response.ok) throw new Error(`Could not load ${field} (${response.status}).`);
-                const data = await response.json();
+                let data = await response.json();
                 if (teacherCache.classId !== classId || teacherRequestVersions[field] !== version) return null;
+                if (field === 'assessments') {
+                    data = data.filter(item => !pendingAssessmentChanges.has(item.id));
+                }
                 teacherCache[field] = data;
                 return data;
             } catch (error) {
@@ -1499,7 +1505,7 @@
         const tbody = document.getElementById('assess-tbody');
         if (!classId) {
             currentAssessments = [];
-            tbody.innerHTML = `<tr><td colspan="5" style="color: #94a3b8; padding: 24px;">Select a class to view assessments.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" style="color: #94a3b8; padding: 24px;">Select a class to view assessments.</td></tr>`;
             return;
         }
         if (!force && teacherCache.assessments !== null) {
@@ -1512,7 +1518,7 @@
 
         try {
             if (force || teacherCache.assessments === null) {
-                tbody.innerHTML = `<tr><td colspan="5" style="color: #94a3b8; padding: 24px;">Loading assessments...</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" style="color: #94a3b8; padding: 24px;">Loading assessments...</td></tr>`;
             }
             const assessments = await fetchTeacherData(
                 'assessments', classId,
@@ -1527,7 +1533,7 @@
             renderAssessmentsList();
         } catch (e) {
             if (teacherCache.classId !== classId) return;
-            tbody.innerHTML = `<tr><td colspan="5" style="color: #ef4444; padding: 24px;">Failed to load assessments.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" style="color: #ef4444; padding: 24px;">Failed to load assessments.</td></tr>`;
         }
     }
 
@@ -1540,7 +1546,7 @@
             const message = showArchivedAssessments
                 ? 'No archived assignments or tests.'
                 : 'No active assignments or tests created yet.';
-            tbody.innerHTML = `<tr><td colspan="5" style="color: #94a3b8; padding: 24px;">${message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" style="color: #94a3b8; padding: 24px;">${message}</td></tr>`;
             return;
         }
 
@@ -1551,37 +1557,36 @@
             const itemType = String(item.type || 'assignment');
             const count = item.assessment_submissions?.[0]?.count || 0;
             tr.innerHTML = `
-                <td class="col-left"><strong>${escapeHtml(title)}</strong></td>
+                <td class="col-left"><span class="title-cell-wrap"><strong>${escapeHtml(title)}</strong></span></td>
                 <td><span class="badge-type ${badgeClass}">${escapeHtml(itemType.replace('_', ' '))}</span></td>
                 <td style="font-size: 0.85rem;">${item.due_date ? new Date(item.due_date).toLocaleDateString() : 'None'}</td>
                 <td>${count} completed</td>
-                <td class="action-cell"></td>
+                <td class="results-cell"></td>
+                <td class="duplicate-cell"></td>
+                <td class="archive-cell"></td>
             `;
-            const group = document.createElement('div');
-            group.className = 'table-btn-group';
-
-            const addActionButton = (label, className, titleText, onClick) => {
+            const addActionButton = (container, label, className, titleText, onClick) => {
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.className = className;
                 button.textContent = label;
                 if (titleText) button.title = titleText;
                 button.addEventListener('click', onClick);
-                group.appendChild(button);
+                container.appendChild(button);
             };
 
-            addActionButton('Results', 'btn-primary btn-sm', '', () => viewAssessmentResults(item.id, title));
-            if (count > 0) {
-                addActionButton('🩹 Create Corrections', 'btn-secondary btn-sm', '', () => createTestCorrections(item.id, title));
+            const titleCell = tr.querySelector('.title-cell-wrap');
+            addActionButton(titleCell, '✏ Edit', 'btn-secondary btn-sm btn-icon-inline', 'Edit assignment', () => editAssessment(item.id));
+            if (!showArchivedAssessments && item.type === 'test') {
+                addActionButton(titleCell, '🩹 Corrections', 'btn-secondary btn-sm btn-icon-inline', 'Create test corrections', () => createTestCorrections(item.id, title));
             }
+            addActionButton(tr.querySelector('.results-cell'), 'Results', 'btn-primary btn-sm', '', () => viewAssessmentResults(item.id, title));
+            addActionButton(tr.querySelector('.duplicate-cell'), '📋', 'btn-secondary btn-sm', 'Duplicate assignment', () => duplicateAssessment(item.id));
             if (!showArchivedAssessments) {
-                addActionButton('✏ Edit', 'btn-secondary btn-sm', 'Edit assignment', () => editAssessment(item.id));
-                addActionButton('📋 Duplicate', 'btn-secondary btn-sm', 'Duplicate assignment', () => duplicateAssessment(item.id));
-                addActionButton('🗑', 'btn-danger-subtle btn-sm', 'Archive / Move to Trash', () => archiveAssessment(item.id, title));
+                addActionButton(tr.querySelector('.archive-cell'), '🗑', 'btn-danger-subtle btn-sm', 'Move to Trash', () => archiveAssessment(item.id, title));
             } else {
-                addActionButton('♻ Restore', 'btn-secondary btn-sm', 'Restore assignment', () => restoreAssessment(item.id, title));
+                addActionButton(tr.querySelector('.archive-cell'), '♻', 'btn-secondary btn-sm', 'Restore', () => restoreAssessment(item.id, title));
             }
-            tr.querySelector('.action-cell').appendChild(group);
             tbody.appendChild(tr);
         });
     }
@@ -1602,42 +1607,78 @@
         loadAssessments(false);
     }
 
-    async function archiveAssessment(assessmentId, title) {
-        if (!confirm(`Archive "${title}"? Students will no longer be able to access it.`)) return;
+    async function changeAssessmentArchiveState(assessmentId, makeActive) {
         const classId = teacherCache.classId;
+        const item = currentAssessments.find(assessment => assessment.id === assessmentId);
+        if (!item || pendingAssessmentChanges.has(assessmentId)) return;
+        pendingAssessmentChanges.set(assessmentId, classId);
+        currentAssessments = currentAssessments.filter(assessment => assessment.id !== assessmentId);
+        if (teacherCache.assessments !== null) {
+            teacherCache.assessments = teacherCache.assessments.filter(assessment => assessment.id !== assessmentId);
+        }
+        teacherRequests.assessments = null;
+        teacherRequestVersions.assessments += 1;
+        invalidateTeacherCache('gradebook');
+        renderAssessmentsList();
+
+        const action = makeActive ? 'restore' : 'archive';
+        let updatedItem = item;
+        let failure = null;
+        let reloadAssessments = false;
         try {
             const response = await fetch(
-                `/api/teacher/assessments/${encodeURIComponent(assessmentId)}/archive`,
+                `/api/teacher/assessments/${encodeURIComponent(assessmentId)}/${action}`,
                 { method: 'PATCH', headers: getAuthHeaders() }
             );
-            const result = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(result.detail || 'Could not archive this assessment.');
-            if (teacherCache.classId === classId) {
-                invalidateTeacherCache('assessments', 'gradebook');
-                await Promise.all([loadAssessments(false), loadGradebook(false)]);
+            if (!response.ok) {
+                let detail;
+                try {
+                    const result = await response.json();
+                    detail = typeof result.detail === 'string' ? result.detail : null;
+                } catch (error) {
+                    console.warn(`Could not read ${action} error response:`, error);
+                }
+                throw new Error(detail || `Could not ${action} this assessment (${response.status}).`);
             }
+            updatedItem = { ...item, is_active: makeActive };
         } catch (error) {
-            alert(error.message || 'Could not archive this assessment.');
+            failure = error;
+        } finally {
+            pendingAssessmentChanges.delete(assessmentId);
+            if (teacherCache.classId === classId) {
+                teacherRequests.assessments = null;
+                teacherRequestVersions.assessments += 1;
+                if (teacherCache.assessments !== null) {
+                    teacherCache.assessments = [
+                        ...teacherCache.assessments.filter(assessment => assessment.id !== assessmentId),
+                        updatedItem
+                    ];
+                    currentAssessments = teacherCache.assessments.filter(assessment =>
+                        Boolean(assessment.is_active) !== showArchivedAssessments
+                    );
+                    renderAssessmentsList();
+                } else {
+                    currentAssessments = currentAssessments.filter(assessment => assessment.id !== assessmentId);
+                    if (Boolean(updatedItem.is_active) !== showArchivedAssessments) currentAssessments.push(updatedItem);
+                    renderAssessmentsList();
+                    reloadAssessments = activeView === 'assessments';
+                }
+                invalidateTeacherCache('gradebook');
+                if (activeView === 'gradebook') loadGradebook(false);
+            }
         }
+        if (failure) alert(failure.message || `Could not ${action} this assessment.`);
+        if (reloadAssessments) loadAssessments(false);
     }
 
-    async function restoreAssessment(assessmentId, title) {
+    function archiveAssessment(assessmentId, title) {
+        if (!confirm(`Archive "${title}"? Students will no longer be able to access it.`)) return;
+        return changeAssessmentArchiveState(assessmentId, false);
+    }
+
+    function restoreAssessment(assessmentId, title) {
         if (!confirm(`Restore "${title}" to active assignments?`)) return;
-        const classId = teacherCache.classId;
-        try {
-            const response = await fetch(
-                `/api/teacher/assessments/${encodeURIComponent(assessmentId)}/restore`,
-                { method: 'PATCH', headers: getAuthHeaders() }
-            );
-            const result = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(result.detail || 'Could not restore this assessment.');
-            if (teacherCache.classId === classId) {
-                invalidateTeacherCache('assessments', 'gradebook');
-                await Promise.all([loadAssessments(false), loadGradebook(false)]);
-            }
-        } catch (error) {
-            alert(error.message || 'Could not restore this assessment.');
-        }
+        return changeAssessmentArchiveState(assessmentId, true);
     }
 
     async function exportGradebookCSV() {

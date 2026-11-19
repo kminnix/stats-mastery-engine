@@ -267,6 +267,17 @@ header {
     cursor: pointer;
 }
 .btn-secondary:hover { background: #f8fafc; }
+.title-cell-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.btn-icon-inline {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+}
 .table-btn-group {
     display: flex;
     align-items: center;
