@@ -1,4 +1,5 @@
 import re
+import statistics
 import unittest
 from unittest.mock import patch
 
@@ -127,6 +128,25 @@ class SingleStepDrillTests(unittest.TestCase):
                 self.assertNotIn("The estimated slope", regression["prompt"])
             self.assertNotIn("Separately", regression["prompt"])
         self.assertEqual(seen, {"reg_slope_ci", "reg_slope_test"})
+
+    def test_advanced_mean_sd_drill_uses_frequency_table(self):
+        problem = main.generate_single_step("eda_mean_sd", reading_difficulty="advanced")
+        rows = re.findall(
+            r"<tr><td[^>]*>(\d+)</td><td[^>]*>(\d+)</td></tr>",
+            problem["prompt"],
+        )
+        self.assertIn(len(rows), (4, 5))
+        values = [
+            int(value)
+            for value, frequency in rows
+            for _ in range(int(frequency))
+        ]
+        self.assertTrue(10 <= len(values) <= 14)
+        self.assertIn("Calculate the sample mean", problem["prompt"])
+        fields = problem["steps"][0]["inputs"]
+        self.assertEqual(len(fields), 2)
+        self.assertAlmostEqual(fields[0]["expected"][0], statistics.mean(values))
+        self.assertAlmostEqual(fields[1]["expected"][0], statistics.stdev(values))
 
     def test_targeted_prompts_across_parent_families(self):
         endings = {

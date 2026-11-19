@@ -190,6 +190,19 @@ const TOPIC_REGISTRY = [
     { id: 'reg_step_slope_conc', title: 'Slope CI Bounds & Test Conclusion', topic: 'Linear Regression Analysis', notation: 'P-value, α' }
 ];
 
+const ADVANCED_SUPPORTED_TOPICS = new Set([
+    'eda_summary', 'eda_mean_sd', 'prob_twoway', 'prob_conditional',
+    'rv_transform_combine', 'prob_binom_geom', 'sampling_dist',
+    ...TOPIC_REGISTRY.filter(topic => /^(ci|ht|chi|reg|frq)_/.test(topic.id))
+        .map(topic => topic.id)
+]);
+
+function supportsAdvancedReading(topic) {
+    const targetedStep = /^step__(.+)__\d+$/.exec(topic);
+    const parentTopic = targetedStep ? targetedStep[1] : topic;
+    return ADVANCED_SUPPORTED_TOPICS.has(parentTopic) || /^(ci|ht|chi|reg|frq)_/.test(parentTopic);
+}
+
 // Helper to merge tool permissions: students always have full access unless a policy explicitly denies
 function mergeStudentToolPermissions(assignmentPolicy = null, classPolicy = null) {
     const defaultFull = {
@@ -259,7 +272,15 @@ function getActiveReadingDifficulty() {
 
 function updateReadingDifficultyControl() {
     const control = document.getElementById('reading-difficulty-control');
-    if (control) control.hidden = activeTaskState.active || getActivePracticeView() !== 'practice';
+    if (control) control.hidden = activeTaskState.active || getActivePracticeView() !== 'practice' ||
+        !supportsAdvancedReading(state.selectedTopic);
+}
+
+function syncFreePracticeDifficulty() {
+    if (!supportsAdvancedReading(state.selectedTopic)) state.readingDifficulty = 'standard';
+    const select = document.getElementById('reading-difficulty-select');
+    if (select) select.value = state.readingDifficulty;
+    updateReadingDifficultyControl();
 }
 
 function applyStudentToolPermissions(policy = {}) {
@@ -512,6 +533,7 @@ function startPracticingTopic(topicId, title) {
     if (activeTaskState.active) return;
 
     state.selectedTopic = topicId;
+    syncFreePracticeDifficulty();
     const topicName = document.getElementById('current-skill-name');
     const topic = TOPIC_REGISTRY.find(item => item.id === topicId);
     if (topicName) topicName.textContent = title || topic?.title || 'All Normal Types (Mixed)';
@@ -1598,8 +1620,7 @@ function loadSavedState() {
         console.warn('localStorage not accessible');
     }
     updateCurrentTopicName();
-    const difficultySelect = document.getElementById('reading-difficulty-select');
-    if (difficultySelect) difficultySelect.value = state.readingDifficulty;
+    syncFreePracticeDifficulty();
     saveState();
 }
 
@@ -1615,6 +1636,7 @@ function saveState() {
 function onTopicChange() {
     const topicSelect = document.getElementById('topic-select');
     state.selectedTopic = topicSelect?.value || state.selectedTopic || 'random';
+    syncFreePracticeDifficulty();
     updateCurrentTopicName();
     saveState();
     loadProblem();

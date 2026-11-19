@@ -16,17 +16,45 @@ def _step(number: int, label: str, fields: list[Dict[str, Any]], hint: str) -> D
     return {"step_num": number, "label": label, "input_type": "compound", "inputs": fields, "hint": hint}
 
 
-def generate_eda_summary_problem() -> Dict[str, Any]:
-    n = random.choice([8, 9])
-    decimal = random.choice([True, False])
-    center = random.randint(25, 45)
-    if decimal:
-        ordinary = [center + offset / 10 for offset in random.sample(range(-30, 31), n - 1)]
+def generate_eda_summary_problem(reading_difficulty: str = "standard") -> Dict[str, Any]:
+    if reading_difficulty == "advanced":
+        n = random.randint(10, 14)
+        distinct_values = sorted(random.sample(range(2, 13), random.choice([4, 5])))
+        frequencies = [1] * len(distinct_values)
+        for _ in range(n - len(distinct_values)):
+            frequencies[random.randrange(len(frequencies))] += 1
+        values = [
+            value
+            for value, frequency in zip(distinct_values, frequencies)
+            for _ in range(frequency)
+        ]
+        rows = "".join(
+            f'<tr><td style="border: 1px solid #cbd5e1; padding: 6px 12px; text-align: center;">{value}</td>'
+            f'<td style="border: 1px solid #cbd5e1; padding: 6px 12px; text-align: center;">{frequency}</td></tr>'
+            for value, frequency in zip(distinct_values, frequencies)
+        )
+        data_prompt = (
+            f"The frequency table below summarizes the number of support tickets resolved "
+            f"per shift across {n} shifts."
+            '<table style="border-collapse: collapse; margin: 12px 0;">'
+            '<caption>Frequency Table</caption><thead><tr>'
+            '<th scope="col" style="border: 1px solid #cbd5e1; padding: 6px 12px;">Value</th>'
+            '<th scope="col" style="border: 1px solid #cbd5e1; padding: 6px 12px;">Frequency</th>'
+            f"</tr></thead><tbody>{rows}</tbody></table>"
+        )
     else:
-        ordinary = [center + offset for offset in random.choices(range(-3, 4), k=n - 1)]
-    outlier = center + random.choice([-20, 20])
-    values = ordinary + [outlier]
-    random.shuffle(values)
+        n = random.choice([8, 9])
+        decimal = random.choice([True, False])
+        center = random.randint(25, 45)
+        if decimal:
+            ordinary = [center + offset / 10 for offset in random.sample(range(-30, 31), n - 1)]
+        else:
+            ordinary = [center + offset for offset in random.choices(range(-3, 4), k=n - 1)]
+        outlier = center + random.choice([-20, 20])
+        values = ordinary + [outlier]
+        random.shuffle(values)
+        display = ", ".join(f"{value:g}" for value in values)
+        data_prompt = f"The following {n} study sessions had durations in minutes: {display}."
     ordered = sorted(values)
     middle = n // 2
     q1 = median(ordered[:middle])
@@ -36,14 +64,13 @@ def generate_eda_summary_problem() -> Dict[str, Any]:
     lower, upper = q1 - 1.5 * iqr, q3 + 1.5 * iqr
     outliers = [value for value in ordered if value < lower or value > upper]
     avg, sd = mean(values), stdev(values)
-    display = ", ".join(f"{value:g}" for value in values)
     sorted_display = ", ".join(f"{value:g}" for value in ordered)
-    outlier_display = ", ".join(f"{value:g}" for value in outliers)
+    outlier_display = ", ".join(f"{value:g}" for value in outliers) or "None"
     return {
         "type": "eda_summary",
         "title": "1-Variable Summary Stats, IQR & Outliers",
         "prompt": (
-            f"The following {n} study sessions had durations in minutes: {display}. "
+            f"{data_prompt} "
             "Find the five-number summary (Min, Q1, Median, Q3, Max), interquartile range (IQR), "
             "1.5 × IQR outlier boundaries, number of outliers, mean, and sample standard deviation."
         ),
@@ -256,7 +283,7 @@ def generate_foundations_problem(
     topic: str, reading_difficulty: str = "standard"
 ) -> Dict[str, Any]:
     generators = {
-        "eda_summary": lambda: generate_eda_summary_problem(),
+        "eda_summary": lambda: generate_eda_summary_problem(reading_difficulty),
         "rv_transform_combine": lambda: generate_rv_transform_combine_problem(reading_difficulty),
         "prob_twoway": lambda: generate_twoway_prob_problem(reading_difficulty),
     }

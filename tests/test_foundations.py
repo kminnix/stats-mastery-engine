@@ -41,6 +41,47 @@ class FoundationsTests(unittest.TestCase):
         finally:
             random.setstate(state)
 
+    def test_advanced_summary_frequency_table_statistics(self):
+        state = random.getstate()
+        try:
+            random.seed(102)
+            for _ in range(50):
+                problem = generate_foundations_problem("eda_summary", "advanced")
+                prompt = problem["prompt"]
+                self.assertIn("<caption>Frequency Table</caption>", prompt)
+                self.assertIn(">Value</th>", prompt)
+                self.assertIn(">Frequency</th>", prompt)
+                rows = re.findall(
+                    r"<tr><td[^>]*>(\d+)</td><td[^>]*>(\d+)</td></tr>",
+                    prompt,
+                )
+                self.assertIn(len(rows), (4, 5))
+                self.assertEqual(len({value for value, _ in rows}), len(rows))
+                values = [
+                    int(value)
+                    for value, frequency in rows
+                    for _ in range(int(frequency))
+                ]
+                self.assertTrue(all(int(frequency) > 0 for _, frequency in rows))
+                self.assertTrue(10 <= len(values) <= 14)
+                ordered = sorted(values)
+                n = len(values)
+                q1 = statistics.median(ordered[:n // 2])
+                q3 = statistics.median(ordered[(n + 1) // 2:])
+                iqr = q3 - q1
+                lower, upper = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+                expected = [
+                    [ordered[0], q1, statistics.median(ordered), q3, ordered[-1]],
+                    [iqr, lower, upper],
+                    [sum(value < lower or value > upper for value in values),
+                     statistics.mean(values), statistics.stdev(values)],
+                ]
+                for step, answers in zip(problem["steps"], expected):
+                    for field, value in zip(step["inputs"], answers):
+                        self.assertAlmostEqual(field["expected"][0], value)
+        finally:
+            random.setstate(state)
+
     def test_transformations_and_independent_combinations(self):
         state = random.getstate()
         try:

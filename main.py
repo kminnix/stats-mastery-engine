@@ -48,7 +48,7 @@ app = FastAPI(title="Qederam Engine")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-STATIC_VERSION = "174"
+STATIC_VERSION = "175"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("SUPABASE_PUBLISHABLE_KEY", ""))
 SUPABASE_ANON_KEY = SUPABASE_KEY
@@ -412,7 +412,7 @@ def _standalone_prompt(problem: Dict[str, Any], selector: str, context: List[str
     question = ""
     base = ""
     if kind == "eda_summary":
-        base = _before(prompt, ". Find the five-number summary") + "."
+        base = _before(prompt, " Find the five-number summary")
         questions = {
             "five_num": "Find the five-number summary (Min, Q1, Median, Q3, Max).",
             "iqr": "Calculate the interquartile range (IQR) and the lower and upper outlier fences.",
