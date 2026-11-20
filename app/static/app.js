@@ -1587,24 +1587,21 @@ async function handleSession(session) {
 }
 
 async function toggleAuth() {
-    if (!supabaseClient) {
-        alert("Supabase is not configured.");
-        return;
-    }
     if (currentUser) {
+        if (!supabaseClient) {
+            alert("Supabase is not configured.");
+            return;
+        }
         if (confirm("Sign out of your account?")) {
-            await supabaseClient.auth.signOut();
+            const { error } = await supabaseClient.auth.signOut();
+            if (error) {
+                alert(`Unable to sign out: ${error.message}`);
+                return;
+            }
             window.location.reload();
         }
     } else {
-        const redirectTarget = window.location.hostname.includes('127.0.0.1') || window.location.hostname.includes('localhost')
-            ? window.location.origin + '/practice'
-            : 'https://qederam.org/practice';
-
-        await supabaseClient.auth.signInWithOAuth({
-            provider: 'google',
-            options: { redirectTo: redirectTarget }
-        });
+        window.location.href = '/';
     }
 }
 
