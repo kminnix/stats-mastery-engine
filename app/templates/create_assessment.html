@@ -394,6 +394,20 @@
         { id: 'reg_step_slope_conc', title: 'Slope CI Bounds & Test Conclusion', topic: 'Linear Regression Analysis', notation: 'P, \\alpha' }
     ];
 
+    const ADVANCED_SUPPORTED_TOPICS = new Set([
+        'eda_summary', 'eda_mean_sd', 'prob_twoway', 'prob_conditional',
+        'rv_transform_combine', 'prob_binom_geom', 'sampling_dist',
+        ...ASSESSABLE_SKILLS.filter(skill => /^(ci|ht|chi|reg|frq)_/.test(skill.id))
+            .map(skill => skill.id)
+    ]);
+
+    function supportsAdvancedReading(topicId) {
+        const targetedStep = /^step__(.+)__\d+$/.exec(topicId);
+        const parentTopic = targetedStep ? targetedStep[1] : topicId;
+        return ADVANCED_SUPPORTED_TOPICS.has(parentTopic) ||
+            /^(ci|ht|chi|reg|frq)_/.test(parentTopic);
+    }
+
     Object.entries(window.TARGETED_STEP_LABELS || {}).forEach(([parentId, labels]) => {
         const parent = ASSESSABLE_SKILLS.find(skill => skill.id === parentId);
         if (!parent) return;
@@ -473,12 +487,25 @@
                 const title = document.createElement('div');
                 title.textContent = skill.title;
                 info.append(title);
-                const add = document.createElement('button');
-                add.type = 'button';
-                add.className = 'btn-subtle';
-                add.textContent = '+ Add Block';
-                add.addEventListener('click', () => addSkillBlock(skill.id, skill.title));
-                row.append(info, add);
+                const actions = document.createElement('div');
+                actions.className = 'catalog-level-actions';
+                const addButton = (label, className, difficulty) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = className;
+                    button.textContent = label;
+                    button.addEventListener('click', () =>
+                        addSkillBlock(skill.id, skill.title, difficulty)
+                    );
+                    actions.appendChild(button);
+                };
+                if (supportsAdvancedReading(skill.id)) {
+                    addButton('+ Guided', 'btn-secondary btn-sm', 'standard');
+                    addButton('+ Applied', 'btn-primary btn-sm', 'advanced');
+                } else {
+                    addButton('+ Add', 'btn-primary btn-sm', 'standard');
+                }
+                row.append(info, actions);
                 rows.appendChild(row);
             });
             category.appendChild(rows);
@@ -508,14 +535,16 @@
         });
     }
 
-    function addSkillBlock(skillId, title) {
+    function addSkillBlock(skillId, title, difficulty = 'standard') {
         assessmentBlocks.push({
             id: `blk_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
             topic: skillId,
             title,
             count: 1,
             mode: 'no_hints',
-            reading_difficulty: 'standard',
+            reading_difficulty: supportsAdvancedReading(skillId) && difficulty === 'advanced'
+                ? 'advanced'
+                : 'standard',
             ...(skillId.startsWith('frq_') ? { frq_retry_mode: 'revision' } : {}),
             required_passes: defaultMasteryPasses(),
             required_clean_passes: defaultMasteryPasses(),
@@ -552,6 +581,11 @@
             title.className = 'problem-block-title';
             title.textContent = block.title;
             const skill = ASSESSABLE_SKILLS.find(item => item.id === block.topic);
+            const levelBadge = document.createElement('span');
+            if (supportsAdvancedReading(block.topic)) {
+                levelBadge.className = `level-pill${block.reading_difficulty === 'advanced' ? ' level-2' : ''}`;
+                levelBadge.textContent = block.reading_difficulty === 'advanced' ? '(Applied)' : '(Guided)';
+            }
             const notation = document.createElement('span');
             notation.className = 'math-pill';
             notation.textContent = skill ? `\\(${skill.notation}\\)` : '';
@@ -594,7 +628,9 @@
             remove.title = 'Remove block';
             remove.addEventListener('click', () => removeBlock(block.id));
             actions.appendChild(remove);
-            header.append(title, notation, modeBadge, actions);
+            header.append(title);
+            if (supportsAdvancedReading(block.topic)) header.appendChild(levelBadge);
+            header.append(notation, modeBadge, actions);
 
             const controls = document.createElement('div');
             controls.className = 'problem-block-controls';
@@ -641,15 +677,7 @@
                 updateBlockStepAttempts(block.id, stepAttemptsInput.value)
             );
             stepAttemptsLabel.appendChild(stepAttemptsInput);
-            const difficultyLabel = document.createElement('label');
-            difficultyLabel.textContent = 'Reading Difficulty: ';
-            const difficulty = document.createElement('select');
-            difficulty.add(new Option('Standard', 'standard'));
-            difficulty.add(new Option('Advanced', 'advanced'));
-            difficulty.value = block.reading_difficulty || 'standard';
-            difficulty.addEventListener('change', () => { block.reading_difficulty = difficulty.value; });
-            difficultyLabel.appendChild(difficulty);
-            controls.append(countLabel, modeLabel, difficultyLabel, stepAttemptsLabel);
+            controls.append(countLabel, modeLabel, stepAttemptsLabel);
             if (block.topic.startsWith('frq_')) {
                 const retryLabel = document.createElement('label');
                 retryLabel.textContent = 'FRQ Grading Policy: ';

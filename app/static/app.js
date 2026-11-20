@@ -270,17 +270,22 @@ function getActiveReadingDifficulty() {
     return question?.reading_difficulty || activeTaskState.currentBlock?.reading_difficulty || 'standard';
 }
 
-function updateReadingDifficultyControl() {
-    const control = document.getElementById('reading-difficulty-control');
-    if (control) control.hidden = activeTaskState.active || getActivePracticeView() !== 'practice' ||
-        !supportsAdvancedReading(state.selectedTopic);
+function updateActiveLevelBadge() {
+    const badge = document.getElementById('active-level-badge');
+    if (!badge) return;
+    if (!supportsAdvancedReading(state.selectedTopic)) {
+        badge.hidden = true;
+        return;
+    }
+    const difficulty = getActiveReadingDifficulty();
+    badge.textContent = difficulty === 'advanced' ? 'Applied' : 'Guided';
+    badge.classList.toggle('level-2', difficulty === 'advanced');
+    badge.hidden = false;
 }
 
 function syncFreePracticeDifficulty() {
     if (!supportsAdvancedReading(state.selectedTopic)) state.readingDifficulty = 'standard';
-    const select = document.getElementById('reading-difficulty-select');
-    if (select) select.value = state.readingDifficulty;
-    updateReadingDifficultyControl();
+    updateActiveLevelBadge();
 }
 
 function applyStudentToolPermissions(policy = {}) {
@@ -331,6 +336,7 @@ function updateCurrentTopicName() {
     const topicName = document.getElementById('current-skill-name');
     const topic = TOPIC_REGISTRY.find(item => item.id === state.selectedTopic);
     if (topicName) topicName.textContent = topic?.title || LEGACY_TOPIC_TITLES[state.selectedTopic] || 'All Normal Types (Mixed)';
+    updateActiveLevelBadge();
 }
 
 function renderTopicCatalog() {
@@ -394,13 +400,34 @@ function renderTopicCatalog() {
             title.className = 'catalog-item-title';
             title.textContent = topic.title;
 
-            const practiceButton = document.createElement('button');
-            practiceButton.type = 'button';
-            practiceButton.className = 'btn-primary catalog-practice-btn';
-            practiceButton.textContent = 'Practice →';
-            practiceButton.addEventListener('click', () => startPracticingTopic(topic.id, topic.title));
-
-            row.append(title, practiceButton);
+            if (supportsAdvancedReading(topic.id)) {
+                const actions = document.createElement('div');
+                actions.className = 'catalog-level-actions';
+                [
+                    ['btn-secondary btn-sm', 'Guided →', 'Explicit setup and direct notation', 'standard'],
+                    ['btn-primary btn-sm', 'Applied →', 'Real-world context, tables, and implied setup', 'advanced']
+                ].forEach(([className, label, tooltip, difficulty]) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = className;
+                    button.textContent = label;
+                    button.title = tooltip;
+                    button.addEventListener('click', () =>
+                        startPracticingTopic(topic.id, topic.title, difficulty)
+                    );
+                    actions.appendChild(button);
+                });
+                row.append(title, actions);
+            } else {
+                const practiceButton = document.createElement('button');
+                practiceButton.type = 'button';
+                practiceButton.className = 'btn-primary btn-sm catalog-practice-btn';
+                practiceButton.textContent = 'Practice →';
+                practiceButton.addEventListener('click', () =>
+                    startPracticingTopic(topic.id, topic.title, 'standard')
+                );
+                row.append(title, practiceButton);
+            }
             skillsInner.appendChild(row);
         });
         skills.appendChild(skillsInner);
@@ -481,7 +508,7 @@ function switchPracticeView(targetView, skipHistoryPush = false) {
     Object.entries(buttons).forEach(([name, button]) => {
         if (button) button.classList.toggle('active', name === targetView);
     });
-    updateReadingDifficultyControl();
+    updateActiveLevelBadge();
     if (targetView === 'tasks' && !skipHistoryPush && typeof fetchStudentTasks === 'function') {
         fetchStudentTasks();
     } else if (targetView === 'catalog') {
@@ -529,10 +556,13 @@ window.addEventListener('popstate', event => {
     }
 });
 
-function startPracticingTopic(topicId, title) {
+function startPracticingTopic(topicId, title, difficulty = 'standard') {
     if (activeTaskState.active) return;
 
     state.selectedTopic = topicId;
+    state.readingDifficulty = supportsAdvancedReading(topicId) && difficulty === 'advanced'
+        ? 'advanced'
+        : 'standard';
     syncFreePracticeDifficulty();
     const topicName = document.getElementById('current-skill-name');
     const topic = TOPIC_REGISTRY.find(item => item.id === topicId);
@@ -543,7 +573,7 @@ function startPracticingTopic(topicId, title) {
 }
 
 function updateTaskRunnerUI() {
-    updateReadingDifficultyControl();
+    updateActiveLevelBadge();
     const banner = document.getElementById('task-runner-banner');
     const topicsButton = document.getElementById('nav-topics-btn');
     const tasksButton = document.getElementById('nav-tasks-btn');
@@ -3491,16 +3521,6 @@ async function finalizeProblem(isSuccess, answer = null, questionScore = null) {
 }
 
 window.addEventListener('load', async () => {
-    const difficultySelect = document.getElementById('reading-difficulty-select');
-    if (difficultySelect) {
-        difficultySelect.value = state.readingDifficulty;
-        difficultySelect.addEventListener('change', () => {
-            if (activeTaskState.active) return;
-            state.readingDifficulty = difficultySelect.value;
-            saveState();
-            if (getActivePracticeView() === 'practice') loadProblem();
-        });
-    }
     const notationSelect = document.getElementById('lsrl-notation-select');
     if (notationSelect) notationSelect.value = state.lsrlNotationStyle;
     const rootView = taskId ? 'tasks' : 'catalog';

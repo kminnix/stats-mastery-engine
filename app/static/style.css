@@ -291,6 +291,30 @@ header {
     line-height: 1.2 !important;
     white-space: nowrap;
 }
+.catalog-level-actions {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    flex-shrink: 0;
+}
+.level-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 9px;
+    border: 1px solid #cbd5e1;
+    border-radius: 9999px;
+    background: #f8fafc;
+    color: #475569;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+.level-pill.level-2 {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+    color: #1d4ed8;
+}
 .btn-danger-subtle {
     background: transparent;
     border: 1px solid #fecaca;
@@ -709,6 +733,7 @@ header {
 }
 .catalog-item-title { flex: 1 1 auto; min-width: 0; color: #334155; font-weight: 600; }
 .catalog-practice-btn { flex: 0 0 auto; }
+.topic-header .active-skill-pill { margin-left: 0; }
 
 .solution-panel {
     margin-top: 24px;
@@ -721,7 +746,8 @@ header {
         align-items: stretch;
         flex-direction: column;
     }
-    .catalog-practice-btn { align-self: flex-start; }
+    .catalog-practice-btn,
+    .catalog-level-actions { align-self: flex-start; }
 }
 
 /* ========================================================= */
